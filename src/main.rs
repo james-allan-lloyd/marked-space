@@ -1,4 +1,5 @@
 use std::env;
+use std::fmt;
 
 use dotenvy::dotenv;
 use serde::Deserialize;
@@ -59,37 +60,42 @@ struct ConfluenceError {
     message: String,
 }
 
+impl std::error::Error for ConfluenceError {}
+
+impl fmt::Display for ConfluenceError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "error {}", self.message.as_str())
+    }
+}
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn get_homepage(host: &str, space_id: &str) -> Result<String> {
     let confluence_client = ConfluenceClient::new(host);
 
-    let resp = confluence_client.get_space_id(space_id).and_then(|resp| {
-        if resp.status().is_success() {
-            Ok(resp)
-        } else {
-            Err(ConfluenceError {
-                message: "Failed to get space id",
-            })
+    let resp = match confluence_client.get_space_id(space_id) {
+        Ok(resp) => resp,
+        Err(err) => {
+            return Err(ConfluenceError {
+                message: String::from("Failed to get space id"),
+            }
+            .into());
         }
-    });
-    if let Err(err) = resp {
-        return Err(err);
-    } else if let Ok(resp) = resp {
-        if resp.status().is_success() {
-            let json = resp.json::<serde_json::Value>()?;
+    };
 
-            println!("{:#?}", json);
+    if resp.status().is_success() {
+        let json = resp.json::<serde_json::Value>()?;
 
-            let space = serde_json::from_value::<Space>(json["results"][0].clone());
-            println!("{:#?}", space);
-        }
+        println!("{:#?}", json);
+
+        let space = serde_json::from_value::<Space>(json["results"][0].clone());
+        println!("{:#?}", space);
     }
 
     return Ok(String::from("foo"));
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
     dotenv().expect(".env file not found");
 
     match (env::var("API_USER"), env::var("API_TOKEN")) {
