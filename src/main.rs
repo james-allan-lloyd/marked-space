@@ -107,7 +107,7 @@ mod responses {
     }
 }
 
-fn create_page(
+fn sync_page(
     confluence_client: &ConfluenceClient,
     space: responses::Space,
     page: Page,
@@ -127,8 +127,6 @@ fn create_page(
         Ok(resp) => resp,
         Err(_) => todo!(),
     };
-
-    println!("{}", existing_page.status());
 
     let json: responses::MultiEntityResult =
         match serde_json::from_str(existing_page.text().unwrap_or_default().as_str()) {
@@ -159,7 +157,7 @@ fn create_page(
     } else {
         println!("Updating");
 
-        println!("body {:#?}", json.results[0].body);
+        // println!("body {:#?}", json.results[0].body);
         let existing_content = match &json.results[0].body {
             responses::BodyBulk::Storage {
                 representation: _,
@@ -177,7 +175,6 @@ fn create_page(
         }
         let id = json.results[0].id.clone();
         payload["id"] = id.clone().into();
-        // let new_version = json.results[0].version.clone();
         payload["version"] = json!({
             "message": "updated automatically",
             "number": json.results[0].version.number + 1
@@ -226,14 +223,15 @@ fn main() -> Result<()> {
         Err(err) => return Err(err),
     };
 
-    println!("Home page id {}", space.homepage_id);
+    // println!("Home page id {}", space.homepage_id);
 
     let page = Page {
         title: "Hello World".into(),
-        content: "<h1>from markdown-confluence</h1>".into(),
+        content: "<h1>from markdown-confluence</h1><p>this is some extra text</p>".into(),
     };
-    match create_page(&confluence_client, space, page) {
-        Ok(_) => println!("Page created"),
+
+    match sync_page(&confluence_client, space, page) {
+        Ok(_) => println!("Page synced"),
         Err(err) => return Err(err),
     }
 
