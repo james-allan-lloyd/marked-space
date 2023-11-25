@@ -3,24 +3,21 @@ use std::fmt;
 
 use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
-use reqwest::StatusCode;
-use serde::Deserialize;
 use serde_json::json;
 
 mod confluence_client;
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct Space {
-    _id: String,
-    _key: String,
-    _name: String,
-    homepage_id: String,
-}
-
 #[derive(Debug, Clone)]
 struct ConfluenceError {
     message: String,
+}
+
+impl ConfluenceError {
+    fn new(message: impl Into<String>) -> ConfluenceError {
+        ConfluenceError {
+            message: message.into(),
+        }
+    }
 }
 
 impl std::error::Error for ConfluenceError {}
@@ -33,36 +30,26 @@ impl fmt::Display for ConfluenceError {
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<Space> {
+fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<responses::Space> {
     let resp = match confluence_client.get_space_by_key(space_id) {
         Ok(resp) => resp,
         Err(_) => {
-            return Err(ConfluenceError {
-                message: String::from("Failed to get space id"),
-            }
-            .into());
+            return Err(ConfluenceError::new("Failed to get space id").into());
         }
     };
 
     if !resp.status().is_success() {
-        return Err(ConfluenceError {
-            message: format!(
-                "Failed: {}",
-                resp.text().unwrap_or("no text content".into())
-            ),
-        }
+        return Err(ConfluenceError::new(format!(
+            "Failed: {}",
+            resp.text().unwrap_or("no text content".into())
+        ))
         .into());
     }
     let json = resp.json::<serde_json::Value>()?;
 
-    match serde_json::from_value::<Space>(json["results"][0].clone()) {
+    match serde_json::from_value::<responses::Space>(json["results"][0].clone()) {
         Ok(parsed_space) => return Ok(parsed_space),
-        Err(_) => {
-            return Err(ConfluenceError {
-                message: "Failed to parse response.".into(),
-            }
-            .into())
-        }
+        Err(_) => return Err(ConfluenceError::new("Failed to parse response.").into()),
     };
 }
 
@@ -71,9 +58,62 @@ struct Page {
     content: String,
 }
 
-fn create_page(confluence_client: &ConfluenceClient, space: Space, page: Page) -> Result<()> {
-    let payload = json!({
-        "spaceId": space._id,
+mod responses {
+    use serde::Deserialize;
+
+    #[derive(Deserialize, Debug)]
+    pub enum BodyBulk {
+        #[serde(rename = "storage")]
+        Storage {
+            representation: String,
+            value: String,
+        },
+        #[serde(rename = "atlas_doc_format")]
+        AtlasDocFormat {
+            representation: String,
+            value: String,
+        },
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Version {
+        pub message: String,
+        pub number: i32,
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct PageBulk {
+        pub id: String,
+        pub title: String,
+        pub version: Version,
+        pub body: BodyBulk,
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct MultiEntityResult {
+        pub results: Vec<PageBulk>,
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Space {
+        pub id: String,
+        pub _key: String,
+        pub _name: String,
+        pub homepage_id: String,
+    }
+}
+
+fn create_page(
+    confluence_client: &ConfluenceClient,
+    space: responses::Space,
+    page: Page,
+) -> Result<()> {
+    let mut payload = json!({
+        "spaceId": space.id,
         "status": "current",
         "title": page.title,
         "parentId": space.homepage_id,
@@ -83,31 +123,81 @@ fn create_page(confluence_client: &ConfluenceClient, space: Space, page: Page) -
         }
     });
 
-    let resp = match confluence_client.create_page(payload) {
-        Ok(r) => r,
-        Err(_) => {
-            return Err(ConfluenceError {
-                message: "Failed to create page".into(),
-            }
-            .into())
-        }
-    };
-
-    let status = resp.status();
-    let content = resp.text().unwrap_or_default();
-    let json = match serde_json::from_str::<serde_json::Value>(content.as_str()) {
-        Ok(j) => j,
+    let existing_page = match confluence_client.get_page_by_title(&space.id, page.title.as_str()) {
+        Ok(resp) => resp,
         Err(_) => todo!(),
     };
 
-    if status == StatusCode::BAD_REQUEST {
-        println!("Updating page");
-        println!("{:#?}", json);
-    } else if !status.is_success() {
-        return Err(ConfluenceError {
-            message: format!("Failed to create page: {}", content).into(),
+    println!("{}", existing_page.status());
+
+    let json: responses::MultiEntityResult =
+        match serde_json::from_str(existing_page.text().unwrap_or_default().as_str()) {
+            Ok(j) => j,
+            Err(_) => todo!(),
+        };
+
+    if json.results.is_empty() {
+        println!("Page doesn't exist, creating");
+        let resp = match confluence_client.create_page(payload) {
+            Ok(r) => r,
+            Err(_) => {
+                return Err(ConfluenceError {
+                    message: "Failed to create page".into(),
+                }
+                .into())
+            }
+        };
+
+        let status = resp.status();
+        let content = resp.text().unwrap_or_default();
+        if !status.is_success() {
+            return Err(ConfluenceError {
+                message: format!("Failed to create page: {}", content).into(),
+            }
+            .into());
         }
-        .into());
+    } else {
+        println!("Updating");
+
+        println!("body {:#?}", json.results[0].body);
+        let existing_content = match &json.results[0].body {
+            responses::BodyBulk::Storage {
+                representation: _,
+                value,
+            } => value,
+            responses::BodyBulk::AtlasDocFormat {
+                representation: _,
+                value: _,
+            } => todo!(),
+        };
+
+        if *existing_content == page.content {
+            println!("Already up to date");
+            return Ok(());
+        }
+        let id = json.results[0].id.clone();
+        payload["id"] = id.clone().into();
+        // let new_version = json.results[0].version.clone();
+        payload["version"] = json!({
+            "message": "updated automatically",
+            "number": json.results[0].version.number + 1
+        });
+        let resp = match confluence_client.update_page(id, payload) {
+            Ok(r) => r,
+            Err(_) => {
+                return Err(ConfluenceError {
+                    message: "Failed to update page".into(),
+                }
+                .into())
+            }
+        };
+
+        if !resp.status().is_success() {
+            return Err(ConfluenceError {
+                message: format!("Failed to update page: {:?}", resp.text()).into(),
+            }
+            .into());
+        }
     }
 
     Ok(())
@@ -140,7 +230,7 @@ fn main() -> Result<()> {
 
     let page = Page {
         title: "Hello World".into(),
-        content: "<h1>Hello world</h1>".into(),
+        content: "<h1>from markdown-confluence</h1>".into(),
     };
     match create_page(&confluence_client, space, page) {
         Ok(_) => println!("Page created"),
