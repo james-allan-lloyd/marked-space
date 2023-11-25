@@ -1,6 +1,8 @@
 use std::env;
 use std::fmt;
 
+use comrak::markdown_to_html;
+use comrak::Options;
 use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
 use serde_json::json;
@@ -223,11 +225,12 @@ fn main() -> Result<()> {
         Err(err) => return Err(err),
     };
 
-    // println!("Home page id {}", space.homepage_id);
-
     let page = Page {
         title: "Hello World".into(),
-        content: "<h1>from markdown-confluence</h1><p>this is some extra text</p>".into(),
+        content: markdown_to_html(
+            "Hello, **世界**!\n\n## Heading 2\n\nSome subsection.",
+            &Options::default(),
+        ),
     };
 
     match sync_page(&confluence_client, space, page) {
