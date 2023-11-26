@@ -8,6 +8,7 @@ use dotenvy::dotenv;
 use serde_json::json;
 
 mod confluence_client;
+mod responses;
 
 #[derive(Debug, Clone)]
 struct ConfluenceError {
@@ -58,55 +59,6 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
 struct Page {
     title: String,
     content: String,
-}
-
-mod responses {
-    use serde::Deserialize;
-
-    #[derive(Deserialize, Debug)]
-    pub enum BodyBulk {
-        #[serde(rename = "storage")]
-        Storage {
-            representation: String,
-            value: String,
-        },
-        #[serde(rename = "atlas_doc_format")]
-        AtlasDocFormat {
-            representation: String,
-            value: String,
-        },
-    }
-
-    #[derive(Deserialize, Debug)]
-    #[serde(rename_all = "camelCase")]
-    pub struct Version {
-        pub message: String,
-        pub number: i32,
-    }
-
-    #[derive(Deserialize, Debug)]
-    #[serde(rename_all = "camelCase")]
-    pub struct PageBulk {
-        pub id: String,
-        pub title: String,
-        pub version: Version,
-        pub body: BodyBulk,
-    }
-
-    #[derive(Deserialize, Debug)]
-    #[serde(rename_all = "camelCase")]
-    pub struct MultiEntityResult {
-        pub results: Vec<PageBulk>,
-    }
-
-    #[derive(Deserialize, Debug)]
-    #[serde(rename_all = "camelCase")]
-    pub struct Space {
-        pub id: String,
-        pub _key: String,
-        pub _name: String,
-        pub homepage_id: String,
-    }
 }
 
 fn sync_page(
@@ -181,21 +133,16 @@ fn sync_page(
             "message": "updated automatically",
             "number": json.results[0].version.number + 1
         });
+
         let resp = match confluence_client.update_page(id, payload) {
             Ok(r) => r,
-            Err(_) => {
-                return Err(ConfluenceError {
-                    message: "Failed to update page".into(),
-                }
-                .into())
-            }
+            Err(_) => return Err(ConfluenceError::new("Failed to update page").into()),
         };
 
         if !resp.status().is_success() {
-            return Err(ConfluenceError {
-                message: format!("Failed to update page: {:?}", resp.text()).into(),
-            }
-            .into());
+            return Err(
+                ConfluenceError::new(format!("Failed to update page: {:?}", resp.text())).into(),
+            );
         }
     }
 
