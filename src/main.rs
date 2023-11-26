@@ -3,6 +3,7 @@ use std::fmt;
 use std::process::ExitCode;
 use std::process::Termination;
 
+use clap::Parser;
 use comrak::markdown_to_html;
 use comrak::Options;
 use confluence_client::ConfluenceClient;
@@ -87,6 +88,11 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
     }
 
     let json = resp.json::<serde_json::Value>()?;
+
+    println!("{:#?}", json);
+    if json["results"].as_array().unwrap().is_empty() {
+        return Err(ConfluenceError::new("No such space."));
+    }
 
     match serde_json::from_value::<responses::Space>(json["results"][0].clone()) {
         Ok(parsed_space) => return Ok(parsed_space),
@@ -179,9 +185,48 @@ fn sync_page(
     Ok(())
 }
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Path to the space to update
+    #[arg(short, long)]
+    space: String,
+}
+
 fn main() -> Result<()> {
     dotenv().expect(".env file not found");
 
+    let args = Args::parse();
+
+    check_environment_vars()?;
+
+    let confluence_client = ConfluenceClient::new("jimjim256.atlassian.net");
+
+    sync_space(confluence_client, &args.space)?;
+
+    Ok(())
+}
+
+fn sync_space(confluence_client: ConfluenceClient, space_key: &String) -> Result<()> {
+    println!("Updating space {}...", space_key);
+    let space = get_space(&confluence_client, space_key)?;
+
+    let page = Page {
+        title: "Hello World".into(),
+        content: markdown_to_html(
+            "Hello, **世界**!\n\n## Heading 2\n\nSome subsection.",
+            &Options::default(),
+        ),
+    };
+
+    sync_page(&confluence_client, space, page)?;
+
+    println!("Page synced");
+
+    Ok(())
+}
+
+fn check_environment_vars() -> Result<()> {
     match (env::var("API_USER"), env::var("API_TOKEN")) {
         (Err(_), Err(_)) => {
             return Err(ConfluenceError::new("Missing API_USER and API_TOKEN"));
@@ -192,28 +237,6 @@ fn main() -> Result<()> {
         (Ok(_), Err(_)) => {
             return Err(ConfluenceError::new("Missing API_TOKEN"));
         }
-        (Ok(_), Ok(_)) => (),
+        (Ok(_), Ok(_)) => Ok(()),
     }
-
-    let confluence_client = ConfluenceClient::new("jimjim256.atlassian.net");
-
-    let space = match get_space(&confluence_client, "TEAM") {
-        Ok(s) => s,
-        Err(err) => return Err(err),
-    };
-
-    let page = Page {
-        title: "Hello World".into(),
-        content: markdown_to_html(
-            "Hello, **世界**!\n\n## Heading 2\n\nSome subsection.",
-            &Options::default(),
-        ),
-    };
-
-    match sync_page(&confluence_client, space, page) {
-        Ok(_) => println!("Page synced"),
-        Err(err) => return Err(err),
-    }
-
-    Ok(())
 }
