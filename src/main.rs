@@ -1,37 +1,78 @@
 use std::env;
 use std::fmt;
+use std::process::ExitCode;
+use std::process::Termination;
 
 use comrak::markdown_to_html;
 use comrak::Options;
 use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
+use reqwest::blocking::Response;
+use reqwest::StatusCode;
 use serde_json::json;
 
 mod confluence_client;
 mod responses;
 
-#[derive(Debug, Clone)]
-struct ConfluenceError {
-    message: String,
+#[derive(Debug)]
+enum ConfluenceError {
+    GenericError(String),
+    FailedRequest {
+        status: StatusCode,
+        body_content: String,
+    },
 }
 
 impl ConfluenceError {
     fn new(message: impl Into<String>) -> ConfluenceError {
-        ConfluenceError {
-            message: message.into(),
+        ConfluenceError::GenericError(message.into())
+    }
+
+    fn failed_request(response: Response) -> ConfluenceError {
+        let status = response.status();
+        let body_content = match status {
+            StatusCode::UNAUTHORIZED => {
+                String::from("Unauthorized. Check your API_USER/API_TOKEN and try again.")
+            }
+            _ => response.text().unwrap_or("No content".into()),
+        };
+        ConfluenceError::FailedRequest {
+            status,
+            body_content,
         }
     }
 }
 
 impl std::error::Error for ConfluenceError {}
 
-impl fmt::Display for ConfluenceError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "error {}", self.message.as_str())
+impl Termination for ConfluenceError {
+    fn report(self) -> std::process::ExitCode {
+        println!("** Error: {}", self);
+        return ExitCode::FAILURE;
     }
 }
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+impl fmt::Display for ConfluenceError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ConfluenceError::GenericError(message) => write!(f, "error: {}", message.as_str()),
+            ConfluenceError::FailedRequest {
+                status,
+                body_content,
+            } => {
+                write!(f, "failed request: {}: {}", status, body_content)
+            }
+        }
+    }
+}
+
+type Result<T> = std::result::Result<T, ConfluenceError>;
+
+impl From<reqwest::Error> for ConfluenceError {
+    fn from(value: reqwest::Error) -> Self {
+        ConfluenceError::GenericError(format!("reqwest error: {:#?}", value))
+    }
+}
 
 fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<responses::Space> {
     let resp = match confluence_client.get_space_by_key(space_id) {
@@ -42,12 +83,9 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
     };
 
     if !resp.status().is_success() {
-        return Err(ConfluenceError::new(format!(
-            "Failed: {}",
-            resp.text().unwrap_or("no text content".into())
-        ))
-        .into());
+        return Err(ConfluenceError::failed_request(resp));
     }
+
     let json = resp.json::<serde_json::Value>()?;
 
     match serde_json::from_value::<responses::Space>(json["results"][0].clone()) {
@@ -92,21 +130,13 @@ fn sync_page(
         println!("Page doesn't exist, creating");
         let resp = match confluence_client.create_page(payload) {
             Ok(r) => r,
-            Err(_) => {
-                return Err(ConfluenceError {
-                    message: "Failed to create page".into(),
-                }
-                .into())
-            }
+            Err(_) => return Err(ConfluenceError::new("Failed to create page").into()),
         };
 
         let status = resp.status();
         let content = resp.text().unwrap_or_default();
         if !status.is_success() {
-            return Err(ConfluenceError {
-                message: format!("Failed to create page: {}", content).into(),
-            }
-            .into());
+            return Err(ConfluenceError::new(format!("Failed to create page: {}", content)).into());
         }
     } else {
         println!("Updating");
@@ -154,13 +184,13 @@ fn main() -> Result<()> {
 
     match (env::var("API_USER"), env::var("API_TOKEN")) {
         (Err(_), Err(_)) => {
-            return Err(Box::from("Missing API_USER and API_TOKEN"));
+            return Err(ConfluenceError::new("Missing API_USER and API_TOKEN"));
         }
         (Err(_), Ok(_)) => {
-            return Err(Box::from("Missing API_USER"));
+            return Err(ConfluenceError::new("Missing API_USER"));
         }
         (Ok(_), Err(_)) => {
-            return Err(Box::from("Missing API_TOKEN"));
+            return Err(ConfluenceError::new("Missing API_TOKEN"));
         }
         (Ok(_), Ok(_)) => (),
     }
