@@ -1,79 +1,18 @@
 use std::env;
-use std::fmt;
-use std::process::ExitCode;
-use std::process::Termination;
 
 use clap::Parser;
 use comrak::markdown_to_html;
 use comrak::Options;
 use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
-use reqwest::blocking::Response;
-use reqwest::StatusCode;
 use serde_json::json;
 
 mod confluence_client;
+mod error;
+mod markdown_space;
 mod responses;
 
-#[derive(Debug)]
-enum ConfluenceError {
-    GenericError(String),
-    FailedRequest {
-        status: StatusCode,
-        body_content: String,
-    },
-}
-
-impl ConfluenceError {
-    fn new(message: impl Into<String>) -> ConfluenceError {
-        ConfluenceError::GenericError(message.into())
-    }
-
-    fn failed_request(response: Response) -> ConfluenceError {
-        let status = response.status();
-        let body_content = match status {
-            StatusCode::UNAUTHORIZED => {
-                String::from("Unauthorized. Check your API_USER/API_TOKEN and try again.")
-            }
-            _ => response.text().unwrap_or("No content".into()),
-        };
-        ConfluenceError::FailedRequest {
-            status,
-            body_content,
-        }
-    }
-}
-
-impl std::error::Error for ConfluenceError {}
-
-impl Termination for ConfluenceError {
-    fn report(self) -> std::process::ExitCode {
-        println!("** Error: {}", self);
-        return ExitCode::FAILURE;
-    }
-}
-
-impl fmt::Display for ConfluenceError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ConfluenceError::GenericError(message) => write!(f, "error: {}", message.as_str()),
-            ConfluenceError::FailedRequest {
-                status,
-                body_content,
-            } => {
-                write!(f, "failed request: {}: {}", status, body_content)
-            }
-        }
-    }
-}
-
-type Result<T> = std::result::Result<T, ConfluenceError>;
-
-impl From<reqwest::Error> for ConfluenceError {
-    fn from(value: reqwest::Error) -> Self {
-        ConfluenceError::GenericError(format!("reqwest error: {:#?}", value))
-    }
-}
+use crate::error::{ConfluenceError, Result};
 
 fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<responses::Space> {
     let resp = match confluence_client.get_space_by_key(space_id) {
@@ -185,28 +124,6 @@ fn sync_page(
     Ok(())
 }
 
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Path to the space to update
-    #[arg(short, long)]
-    space: String,
-}
-
-fn main() -> Result<()> {
-    dotenv().expect(".env file not found");
-
-    let args = Args::parse();
-
-    check_environment_vars()?;
-
-    let confluence_client = ConfluenceClient::new("jimjim256.atlassian.net");
-
-    sync_space(confluence_client, &args.space)?;
-
-    Ok(())
-}
-
 fn sync_space(confluence_client: ConfluenceClient, space_key: &String) -> Result<()> {
     println!("Updating space {}...", space_key);
     let space = get_space(&confluence_client, space_key)?;
@@ -239,4 +156,26 @@ fn check_environment_vars() -> Result<()> {
         }
         (Ok(_), Ok(_)) => Ok(()),
     }
+}
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Path to the space to update
+    #[arg(short, long)]
+    space: String,
+}
+
+fn main() -> Result<()> {
+    dotenv().expect(".env file not found");
+
+    let args = Args::parse();
+
+    check_environment_vars()?;
+
+    let confluence_client = ConfluenceClient::new("jimjim256.atlassian.net");
+
+    sync_space(confluence_client, &args.space)?;
+
+    Ok(())
 }
