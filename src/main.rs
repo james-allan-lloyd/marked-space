@@ -1,10 +1,14 @@
 use std::env;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
 
 use clap::Parser;
-use comrak::markdown_to_html;
-use comrak::Options;
+use comrak::nodes::{AstNode, NodeValue};
+use comrak::{format_html, parse_document, Arena, Options};
 use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
+use markdown_space::MarkdownSpace;
 use serde_json::json;
 
 mod confluence_client;
@@ -28,9 +32,8 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
 
     let json = resp.json::<serde_json::Value>()?;
 
-    println!("{:#?}", json);
     if json["results"].as_array().unwrap().is_empty() {
-        return Err(ConfluenceError::new("No such space."));
+        return Err(ConfluenceError::new(format!("No such space: {}", space_id)));
     }
 
     match serde_json::from_value::<responses::Space>(json["results"][0].clone()) {
@@ -42,11 +45,12 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
 struct Page {
     title: String,
     content: String,
+    source: String,
 }
 
 fn sync_page(
     confluence_client: &ConfluenceClient,
-    space: responses::Space,
+    space: &responses::Space,
     page: Page,
 ) -> Result<()> {
     let mut payload = json!({
@@ -84,7 +88,8 @@ fn sync_page(
             return Err(ConfluenceError::new(format!("Failed to create page: {}", content)).into());
         }
     } else {
-        println!("Updating");
+        let id = json.results[0].id.clone();
+        println!("Updating \"{}\" ({}) from {}", page.title, id, page.source);
 
         // println!("body {:#?}", json.results[0].body);
         let existing_content = match &json.results[0].body {
@@ -102,7 +107,6 @@ fn sync_page(
             println!("Already up to date");
             return Ok(());
         }
-        let id = json.results[0].id.clone();
         payload["id"] = id.clone().into();
         payload["version"] = json!({
             "message": "updated automatically",
@@ -121,24 +125,89 @@ fn sync_page(
         }
     }
 
+    println!("Page synced");
     Ok(())
 }
 
-fn sync_space(confluence_client: ConfluenceClient, space_key: &String) -> Result<()> {
-    println!("Updating space {}...", space_key);
-    let space = get_space(&confluence_client, space_key)?;
-
-    let page = Page {
-        title: "Hello World".into(),
-        content: markdown_to_html(
-            "Hello, **世界**!\n\n## Heading 2\n\nSome subsection.",
-            &Options::default(),
-        ),
+fn parse_page(markdown_page: &Path) -> Result<Page> {
+    // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
+    let content = match fs::read_to_string(markdown_page) {
+        Ok(c) => c,
+        Err(err) => {
+            return Err(ConfluenceError::new(format!(
+                "Failed to read file {}: {}",
+                markdown_page.display(),
+                err.to_string()
+            )))
+        }
     };
 
-    sync_page(&confluence_client, space, page)?;
+    let arena = Arena::new();
 
-    println!("Page synced");
+    let root = parse_document(&arena, content.as_str(), &Options::default());
+
+    fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
+    where
+        F: FnMut(&'a AstNode<'a>),
+    {
+        f(node);
+        for c in node.children() {
+            iter_nodes(c, f);
+        }
+    }
+
+    let mut first_heading: Option<String> = None;
+
+    iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
+        NodeValue::Heading(_heading) => {
+            if first_heading.is_none() {
+                let mut heading_text = String::default();
+                // TODO: this is a double iteration of children
+                for c in node.children() {
+                    iter_nodes(c, &mut |child| match &mut child.data.borrow_mut().value {
+                        NodeValue::Text(text) => {
+                            println!("heading text {}", text);
+                            heading_text += text
+                        }
+                        _ => (),
+                    });
+                }
+                first_heading = Some(heading_text);
+            }
+        }
+        &mut NodeValue::Text(ref mut text) => {
+            let orig = std::mem::replace(text, String::default());
+            *text = orig.clone().replace("my", "your");
+        }
+        _ => (),
+    });
+
+    println!("{:#?}", first_heading);
+
+    if first_heading.is_none() {
+        return Err(ConfluenceError::new("Missing first heading"));
+    }
+
+    let mut html = vec![];
+    format_html(root, &Options::default(), &mut html).unwrap();
+
+    Ok(Page {
+        title: first_heading.unwrap(),
+        content: String::from_utf8(html).unwrap(),
+        source: markdown_page.display().to_string(),
+    })
+}
+
+fn sync_space(confluence_client: ConfluenceClient, markdown_space: &MarkdownSpace) -> Result<()> {
+    let space_key = markdown_space.key.clone();
+    println!("Updating space {}...", space_key);
+    let space = get_space(&confluence_client, space_key.as_str())?;
+
+    for markdown_page in markdown_space.markdown_pages.iter() {
+        let page = parse_page(markdown_page)?;
+
+        sync_page(&confluence_client, &space, page)?;
+    }
 
     Ok(())
 }
@@ -173,9 +242,18 @@ fn main() -> Result<()> {
 
     check_environment_vars()?;
 
+    let dir = PathBuf::from(args.space.clone());
+    let markdown_space = MarkdownSpace::from_directory(&dir)?;
+
+    println!(
+        "Syncing {} from space {}",
+        markdown_space.markdown_pages.len(),
+        args.space
+    );
+
     let confluence_client = ConfluenceClient::new("jimjim256.atlassian.net");
 
-    sync_space(confluence_client, &args.space)?;
+    sync_space(confluence_client, &markdown_space)?;
 
     Ok(())
 }
