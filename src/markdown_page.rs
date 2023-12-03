@@ -157,4 +157,7 @@ mod tests {
 
         Ok(())
     }
+
+    fn _it_warns_if_title_and_filename_dont_agree() {}
+    fn _it_fails_if_first_non_frontmatter_element_is_not_h1() {}
 }
