@@ -1,18 +1,17 @@
 use std::env;
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
 use clap::Parser;
-use comrak::nodes::{AstNode, NodeValue};
-use comrak::{format_html, parse_document, Arena, Options};
 use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
+use markdown_page::MarkdownPage;
 use markdown_space::MarkdownSpace;
 use serde_json::json;
 
 mod confluence_client;
 mod error;
+mod markdown_page;
 mod markdown_space;
 mod responses;
 
@@ -46,6 +45,20 @@ struct Page {
     title: String,
     content: String,
     source: String,
+}
+
+fn parse_page(markdown_page: &Path) -> Result<Page> {
+    // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
+
+    let markdown_page = MarkdownPage::parse(markdown_page)?;
+
+    let content = markdown_page.to_html_string()?.clone();
+
+    Ok(Page {
+        title: markdown_page.title.clone(),
+        content,
+        source: markdown_page.source.clone(),
+    })
 }
 
 fn sync_page(
@@ -127,75 +140,6 @@ fn sync_page(
 
     println!("Page synced");
     Ok(())
-}
-
-fn parse_page(markdown_page: &Path) -> Result<Page> {
-    // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
-    let content = match fs::read_to_string(markdown_page) {
-        Ok(c) => c,
-        Err(err) => {
-            return Err(ConfluenceError::new(format!(
-                "Failed to read file {}: {}",
-                markdown_page.display(),
-                err.to_string()
-            )))
-        }
-    };
-
-    let arena = Arena::new();
-
-    let root = parse_document(&arena, content.as_str(), &Options::default());
-
-    fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
-    where
-        F: FnMut(&'a AstNode<'a>),
-    {
-        f(node);
-        for c in node.children() {
-            iter_nodes(c, f);
-        }
-    }
-
-    let mut first_heading: Option<String> = None;
-
-    iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
-        NodeValue::Heading(_heading) => {
-            if first_heading.is_none() {
-                let mut heading_text = String::default();
-                // TODO: this is a double iteration of children
-                for c in node.children() {
-                    iter_nodes(c, &mut |child| match &mut child.data.borrow_mut().value {
-                        NodeValue::Text(text) => {
-                            println!("heading text {}", text);
-                            heading_text += text
-                        }
-                        _ => (),
-                    });
-                }
-                first_heading = Some(heading_text);
-            }
-        }
-        &mut NodeValue::Text(ref mut text) => {
-            let orig = std::mem::replace(text, String::default());
-            *text = orig.clone().replace("my", "your");
-        }
-        _ => (),
-    });
-
-    println!("{:#?}", first_heading);
-
-    if first_heading.is_none() {
-        return Err(ConfluenceError::new("Missing first heading"));
-    }
-
-    let mut html = vec![];
-    format_html(root, &Options::default(), &mut html).unwrap();
-
-    Ok(Page {
-        title: first_heading.unwrap(),
-        content: String::from_utf8(html).unwrap(),
-        source: markdown_page.display().to_string(),
-    })
 }
 
 fn sync_space(confluence_client: ConfluenceClient, markdown_space: &MarkdownSpace) -> Result<()> {
