@@ -75,7 +75,10 @@ impl<'a> MarkdownPage<'a> {
         });
 
         if first_heading.is_none() {
-            return Err(ConfluenceError::new("Missing first heading"));
+            return Err(ConfluenceError::new(format!(
+                "Couldn't find heading in [{}]",
+                source
+            )));
         }
 
         let title = first_heading.unwrap();
@@ -133,6 +136,24 @@ mod tests {
         let content = page.to_html_string()?;
 
         assert!(content.contains("<h1>My Page Title</h1>"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_errors_if_no_heading() -> Result<()> {
+        let arena = Arena::<AstNode>::new();
+        let page = MarkdownPage::parse_content(
+            PathBuf::from("page.md").as_path(),
+            &String::from("My page content"),
+            &arena,
+        );
+
+        assert!(page.is_err());
+        assert_eq!(
+            page.err().unwrap().to_string(),
+            "error: Couldn't find heading in [page.md]"
+        );
 
         Ok(())
     }
