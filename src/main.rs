@@ -3,6 +3,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use clap::Parser;
+use comrak::nodes::AstNode;
+use comrak::Arena;
 use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
 use markdown_page::MarkdownPage;
@@ -50,7 +52,9 @@ struct Page {
 fn parse_page(markdown_page: &Path) -> Result<Page> {
     // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
 
-    let markdown_page = MarkdownPage::parse(markdown_page)?;
+    let arena = Arena::<AstNode>::new();
+
+    let markdown_page = MarkdownPage::parse(markdown_page, &arena)?;
 
     let content = markdown_page.to_html_string()?.clone();
 
