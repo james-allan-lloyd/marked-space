@@ -11,7 +11,7 @@ pub struct MarkdownSpace {
 
 impl From<walkdir::Error> for ConfluenceError {
     fn from(value: walkdir::Error) -> Self {
-        ConfluenceError::new(format!(
+        ConfluenceError::generic_error(format!(
             "Failed to iterate space files: {}",
             value.to_string()
         ))
@@ -35,7 +35,7 @@ impl MarkdownSpace {
                 key,
             })
         } else {
-            Err(crate::error::ConfluenceError::new(
+            Err(crate::error::ConfluenceError::generic_error(
                 "Space directory does not exist",
             ))
         }
@@ -56,7 +56,7 @@ mod tests {
 
     impl From<std::io::Error> for ConfluenceError {
         fn from(value: std::io::Error) -> Self {
-            ConfluenceError::new(value.to_string())
+            ConfluenceError::generic_error(value.to_string())
         }
     }
 
@@ -98,5 +98,5 @@ mod tests {
         Ok(())
     }
 
-    fn _it_fails_if_space_directory_is_invalid_space_key() {}
+    fn _it_fails_if_space_directory_is_invalid_spacek_key() {}
 }

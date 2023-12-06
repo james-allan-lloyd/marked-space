@@ -13,7 +13,7 @@ pub enum ConfluenceError {
 }
 
 impl ConfluenceError {
-    pub fn new(message: impl Into<String>) -> ConfluenceError {
+    pub fn generic_error(message: impl Into<String>) -> ConfluenceError {
         ConfluenceError::GenericError(message.into())
     }
 

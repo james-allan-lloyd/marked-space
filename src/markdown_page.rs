@@ -19,7 +19,7 @@ impl<'a> MarkdownPage<'a> {
         let content = match fs::read_to_string(markdown_page) {
             Ok(c) => c,
             Err(err) => {
-                return Err(ConfluenceError::new(format!(
+                return Err(ConfluenceError::generic_error(format!(
                     "Failed to read file {}: {}",
                     markdown_page.display(),
                     err.to_string()
@@ -75,7 +75,7 @@ impl<'a> MarkdownPage<'a> {
         });
 
         if first_heading.is_none() {
-            return Err(ConfluenceError::new(format!(
+            return Err(ConfluenceError::generic_error(format!(
                 "Couldn't find heading in [{}]",
                 source
             )));
@@ -96,7 +96,7 @@ impl<'a> MarkdownPage<'a> {
 
         match String::from_utf8(html) {
             Ok(content) => Ok(content),
-            Err(_err) => Err(ConfluenceError::new("Failed to convert to utf8")),
+            Err(_err) => Err(ConfluenceError::generic_error("Failed to convert to utf8")),
         }
     }
 }

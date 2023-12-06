@@ -39,6 +39,16 @@ impl ConfluenceClient {
             .send()
     }
 
+    pub fn get_page_by_id(&self, page_id: &str) -> Result {
+        let url = format!("https://{}/wiki/api/v2/pages/{}", self.hostname, page_id);
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .query(&[("body-format", "storage")])
+            .send()
+    }
+
     pub fn get_page_by_title(&self, space_id: &str, title: &str) -> Result {
         let url = format!(
             "https://{}/wiki/api/v2/spaces/{}/pages",

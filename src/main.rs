@@ -20,13 +20,15 @@ use crate::sync::sync_space;
 fn check_environment_vars() -> Result<()> {
     match (env::var("API_USER"), env::var("API_TOKEN")) {
         (Err(_), Err(_)) => {
-            return Err(ConfluenceError::new("Missing API_USER and API_TOKEN"));
+            return Err(ConfluenceError::generic_error(
+                "Missing API_USER and API_TOKEN",
+            ));
         }
         (Err(_), Ok(_)) => {
-            return Err(ConfluenceError::new("Missing API_USER"));
+            return Err(ConfluenceError::generic_error("Missing API_USER"));
         }
         (Ok(_), Err(_)) => {
-            return Err(ConfluenceError::new("Missing API_TOKEN"));
+            return Err(ConfluenceError::generic_error("Missing API_TOKEN"));
         }
         (Ok(_), Ok(_)) => Ok(()),
     }

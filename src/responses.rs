@@ -1,24 +1,25 @@
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
-pub enum BodyBulk {
-    #[serde(rename = "storage")]
-    Storage {
-        representation: String,
-        value: String,
-    },
-    #[serde(rename = "atlas_doc_format")]
-    AtlasDocFormat {
-        representation: String,
-        value: String,
-    },
-}
-
-#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Version {
     pub message: String,
     pub number: i32,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BodyType {
+    pub representation: String,
+    pub value: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub enum BodyBulk {
+    #[serde(rename = "storage")]
+    Storage(BodyType),
+    #[serde(rename = "atlas_doc_format")]
+    AtlasDocFormat(BodyType),
 }
 
 #[derive(Deserialize, Debug)]
@@ -31,6 +32,25 @@ pub struct PageBulk {
 }
 
 #[derive(Deserialize, Debug)]
+pub enum BodySingle {
+    #[serde(rename = "storage")]
+    Storage(BodyType),
+    #[serde(rename = "atlas_doc_format")]
+    AtlasDocFormat(BodyType),
+    #[serde(rename = "view")]
+    View(BodyType),
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PageSingle {
+    pub id: String,
+    pub title: String,
+    pub version: Version,
+    pub body: BodySingle,
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MultiEntityResult {
     pub results: Vec<PageBulk>,
@@ -40,7 +60,7 @@ pub struct MultiEntityResult {
 #[serde(rename_all = "camelCase")]
 pub struct Space {
     pub id: String,
-    pub _key: String,
+    pub key: String,
     pub _name: String,
     pub homepage_id: String,
 }
