@@ -49,6 +49,7 @@ impl<'a> MarkdownPage<'a> {
         }
 
         let mut first_heading: Option<String> = None;
+        // TODO: get reference to node during iteration, then remove it
 
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
             NodeValue::Heading(_heading) => {
@@ -66,10 +67,6 @@ impl<'a> MarkdownPage<'a> {
                     }
                     first_heading = Some(heading_text);
                 }
-            }
-            &mut NodeValue::Text(ref mut text) => {
-                let orig = std::mem::replace(text, String::default());
-                *text = orig.clone().replace("my", "your");
             }
             _ => (),
         });
