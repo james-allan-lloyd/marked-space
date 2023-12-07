@@ -48,24 +48,11 @@ impl<'a> MarkdownPage<'a> {
             }
         }
 
-        let mut first_heading: Option<String> = None;
-        // TODO: get reference to node during iteration, then remove it
-
+        let mut first_heading: Option<&AstNode> = None;
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
             NodeValue::Heading(_heading) => {
                 if first_heading.is_none() {
-                    let mut heading_text = String::default();
-                    // TODO: this is a double iteration of children
-                    for c in node.children() {
-                        iter_nodes(c, &mut |child| match &mut child.data.borrow_mut().value {
-                            NodeValue::Text(text) => {
-                                println!("heading text {}", text);
-                                heading_text += text
-                            }
-                            _ => (),
-                        });
-                    }
-                    first_heading = Some(heading_text);
+                    first_heading = Some(node);
                 }
             }
             _ => (),
@@ -78,7 +65,20 @@ impl<'a> MarkdownPage<'a> {
             )));
         }
 
-        let title = first_heading.unwrap();
+        let heading_node = first_heading.unwrap();
+        let mut title = String::default();
+        for c in heading_node.children() {
+            iter_nodes(c, &mut |child| match &mut child.data.borrow_mut().value {
+                NodeValue::Text(text) => {
+                    println!("heading text {}", text);
+                    title += text
+                }
+                _ => (),
+            });
+        }
+
+        // TODO: it's still allocated tho...
+        heading_node.detach();
 
         Ok(MarkdownPage {
             title,
@@ -122,7 +122,7 @@ mod tests {
     }
 
     #[test]
-    fn it_renders_content() -> Result<()> {
+    fn it_removes_title_heading_and_renders_content() -> Result<()> {
         let arena = Arena::<AstNode>::new();
         let page = MarkdownPage::parse_content(
             PathBuf::from("page.md").as_path(),
@@ -132,7 +132,8 @@ mod tests {
 
         let content = page.to_html_string()?;
 
-        assert!(content.contains("<h1>My Page Title</h1>"));
+        assert!(content.contains("My page content"));
+        assert!(!content.contains("<h1>My Page Title</h1>"));
 
         Ok(())
     }
