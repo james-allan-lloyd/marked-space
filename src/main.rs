@@ -9,6 +9,7 @@ use markdown_space::MarkdownSpace;
 
 mod confluence_client;
 mod error;
+mod html;
 mod markdown_page;
 mod markdown_space;
 mod responses;

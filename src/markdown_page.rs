@@ -1,9 +1,9 @@
 use std::{fs, path::Path};
 
 use comrak::{
-    format_html,
+    format_html, format_html_with_plugins,
     nodes::{AstNode, NodeValue},
-    parse_document, Arena, Options,
+    parse_document, Arena, Options, Plugins,
 };
 
 use crate::{error::ConfluenceError, Result};
@@ -88,8 +88,13 @@ impl<'a> MarkdownPage<'a> {
     }
 
     pub fn to_html_string(&self) -> Result<String> {
+        // let adapter = ConfluenceLinkAdapter;
+        let mut options = Options::default();
+        let mut plugins = Plugins::default();
+        // plugins.render.heading_adapter = Some(&adapter);
+
         let mut html = vec![];
-        format_html(&self.root, &Options::default(), &mut html).unwrap();
+        format_html_with_plugins(&self.root, &options, &mut html, &plugins).unwrap();
 
         match String::from_utf8(html) {
             Ok(content) => Ok(content),
@@ -107,8 +112,10 @@ mod tests {
     use crate::markdown_page::MarkdownPage;
     use crate::Result;
 
+    type TestResult = Result<()>;
+
     #[test]
-    fn it_get_first_heading_as_title() -> Result<()> {
+    fn it_get_first_heading_as_title() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let page = MarkdownPage::parse_content(
             PathBuf::from("page.md").as_path(),
@@ -122,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn it_removes_title_heading_and_renders_content() -> Result<()> {
+    fn it_removes_title_heading_and_renders_content() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let page = MarkdownPage::parse_content(
             PathBuf::from("page.md").as_path(),
@@ -139,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn it_errors_if_no_heading() -> Result<()> {
+    fn it_errors_if_no_heading() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let page = MarkdownPage::parse_content(
             PathBuf::from("page.md").as_path(),
@@ -158,4 +165,22 @@ mod tests {
 
     fn _it_warns_if_title_and_filename_dont_agree() {}
     fn _it_fails_if_first_non_frontmatter_element_is_not_h1() {}
+
+    #[test]
+    fn it_translates_file_links_to_title_links() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let page = MarkdownPage::parse_content(
+            PathBuf::from("page.md").as_path(),
+            &String::from("# My Page Title\n\nMy page content: [Hello World](hello-world.md)"),
+            &arena,
+        )?;
+
+        let content = page.to_html_string()?;
+
+        println!("{}", content);
+
+        assert!(content.contains("ri:content-title=\"Hello World\""));
+
+        Ok(())
+    }
 }
