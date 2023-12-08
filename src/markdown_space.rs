@@ -14,7 +14,7 @@ impl From<walkdir::Error> for ConfluenceError {
     fn from(value: walkdir::Error) -> Self {
         ConfluenceError::generic_error(format!(
             "Failed to iterate space files: {}",
-            value.to_string()
+            value
         ))
     }
 }
@@ -76,8 +76,8 @@ mod tests {
     #[test]
     fn it_find_markdown_files_in_space_directory() -> Result {
         let temp = assert_fs::TempDir::new().unwrap();
-        let _markdown1 = temp.child("test/markdown1.md").touch().unwrap();
-        let _markdown2 = temp.child("test/markdown2.md").touch().unwrap();
+        temp.child("test/markdown1.md").touch().unwrap();
+        temp.child("test/markdown2.md").touch().unwrap();
         let space = MarkdownSpace::from_directory(temp.child("test").path())?;
 
         assert_eq!(space.markdown_pages.len(), 2);
@@ -88,8 +88,8 @@ mod tests {
     #[test]
     fn it_uses_the_basename_of_current_directory_if_not_full_path() -> Result {
         let temp = assert_fs::TempDir::new().unwrap();
-        let _markdown1 = temp.child("test/markdown1.md").touch().unwrap();
-        let _markdown2 = temp.child("test/markdown2.md").touch().unwrap();
+        temp.child("test/markdown1.md").touch().unwrap();
+        temp.child("test/markdown2.md").touch().unwrap();
 
         let old_pwd = std::env::current_dir().unwrap();
         std::env::set_current_dir(temp.path())?;

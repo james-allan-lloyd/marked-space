@@ -51,7 +51,7 @@ impl std::error::Error for ConfluenceError {}
 impl Termination for ConfluenceError {
     fn report(self) -> std::process::ExitCode {
         println!("** Error: {}", self);
-        return ExitCode::FAILURE;
+        ExitCode::FAILURE
     }
 }
 

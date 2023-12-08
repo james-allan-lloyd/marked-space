@@ -22,7 +22,7 @@ impl<'a> MarkdownPage<'a> {
                 return Err(ConfluenceError::generic_error(format!(
                     "Failed to read file {}: {}",
                     markdown_page.display(),
-                    err.to_string()
+                    err
                 )))
             }
         };
@@ -94,7 +94,7 @@ impl<'a> MarkdownPage<'a> {
         // plugins.render.heading_adapter = Some(&adapter);
 
         let mut html = vec![];
-        format_document_with_plugins(&self.root, &options, &mut html, &plugins, link_generator)
+        format_document_with_plugins(self.root, &options, &mut html, &plugins, link_generator)
             .unwrap();
 
         match String::from_utf8(html) {
@@ -179,7 +179,7 @@ mod tests {
             &format!(
                 "# My Page Title\n\nMy page content: [{}]({})",
                 link_text,
-                link_filename.display().to_string()
+                link_filename.display()
             ),
             &arena,
         )?;

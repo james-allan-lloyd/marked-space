@@ -13,7 +13,7 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
     let resp = match confluence_client.get_space_by_key(space_id) {
         Ok(resp) => resp,
         Err(_) => {
-            return Err(ConfluenceError::generic_error("Failed to get space id").into());
+            return Err(ConfluenceError::generic_error("Failed to get space id"));
         }
     };
 
@@ -31,9 +31,9 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
     }
 
     match serde_json::from_value::<responses::Space>(json["results"][0].clone()) {
-        Ok(parsed_space) => return Ok(parsed_space),
-        Err(_) => return Err(ConfluenceError::generic_error("Failed to parse response.").into()),
-    };
+        Ok(parsed_space) => Ok(parsed_space),
+        Err(_) => Err(ConfluenceError::generic_error("Failed to parse response.")),
+    }
 }
 
 struct Page {
@@ -141,7 +141,7 @@ fn sync_page(
             let resp = match confluence_client.create_page(payload) {
                 Ok(r) => r,
                 Err(_) => {
-                    return Err(ConfluenceError::generic_error("Failed to create page").into())
+                    return Err(ConfluenceError::generic_error("Failed to create page"))
                 }
             };
 
@@ -151,8 +151,7 @@ fn sync_page(
                 return Err(ConfluenceError::generic_error(format!(
                     "Failed to create page: {}",
                     content
-                ))
-                .into());
+                )));
             } else {
                 return Ok(()); // FIXME: return early
             }
@@ -187,15 +186,14 @@ fn sync_page(
 
     let resp = match confluence_client.update_page(id, payload) {
         Ok(r) => r,
-        Err(_) => return Err(ConfluenceError::generic_error("Failed to update page").into()),
+        Err(_) => return Err(ConfluenceError::generic_error("Failed to update page")),
     };
 
     if !resp.status().is_success() {
         return Err(ConfluenceError::generic_error(format!(
             "Failed to update page: {:?}",
             resp.text()
-        ))
-        .into());
+        )));
     }
 
     println!("Page synced");
@@ -272,7 +270,7 @@ mod tests {
     #[test]
     fn it_parses_page() -> TestResult {
         let temp = assert_fs::TempDir::new().unwrap();
-        let _markdown1 = temp
+        temp
             .child("test/markdown1.md")
             .write_str("# Page Title")
             .unwrap();
@@ -295,7 +293,7 @@ mod tests {
     #[test]
     fn it_uses_index_md_as_homepage() -> TestResult {
         let temp = assert_fs::TempDir::new().unwrap();
-        let _markdown1 = temp
+        temp
             .child("test/index.md")
             .write_str("# Page Title")
             .unwrap();
@@ -310,7 +308,7 @@ mod tests {
     #[test]
     fn it_errors_when_not_able_to_parse_a_file() -> TestResult {
         let temp = assert_fs::TempDir::new().unwrap();
-        let _markdown1 = temp
+        temp
             .child("test/index.md")
             .write_str("Missing title should cause error")
             .unwrap();
