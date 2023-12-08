@@ -1,4 +1,4 @@
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, PathBuf};
 
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
