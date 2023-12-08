@@ -13,8 +13,8 @@ type Result = std::result::Result<reqwest::blocking::Response, reqwest::Error>;
 impl ConfluenceClient {
     pub fn new(hostname: &str) -> ConfluenceClient {
         ConfluenceClient {
-            api_user: env::var("API_USER").expect("API_USER not set"),
-            api_token: env::var("API_TOKEN").expect("API_TOKEN not set"),
+            api_user: env::var("API_USER").unwrap_or_default(),
+            api_token: env::var("API_TOKEN").unwrap_or_default(),
             client: reqwest::blocking::Client::new(),
             hostname: String::from(hostname),
         }

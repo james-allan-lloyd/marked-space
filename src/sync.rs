@@ -1,12 +1,12 @@
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
 use serde_json::json;
 
 use crate::{
-    confluence_client::ConfluenceClient, error::ConfluenceError, markdown_page::MarkdownPage,
-    markdown_space::MarkdownSpace, responses, Result,
+    confluence_client::ConfluenceClient, error::ConfluenceError, html::LinkGenerator,
+    markdown_page::MarkdownPage, markdown_space::MarkdownSpace, responses, Result,
 };
 
 fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<responses::Space> {
@@ -43,15 +43,16 @@ struct Page {
     destination: String,
 }
 
-fn parse_page(space_key: &String, markdown_page_path: &Path) -> Result<Page> {
-    // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
-    let arena = Arena::<AstNode>::new();
-
-    let markdown_page = MarkdownPage::parse(markdown_page_path, &arena)?;
-
-    let content = markdown_page.to_html_string()?.clone();
+fn render_page(
+    space_key: &String,
+    markdown_page: &MarkdownPage,
+    link_generator: &LinkGenerator,
+) -> Result<Page> {
+    let content = markdown_page.to_html_string(link_generator)?.clone();
     let title = markdown_page.title.clone();
-    let destination = if markdown_page_path.components().last()
+    let destination = if PathBuf::from(markdown_page.source.clone())
+        .components()
+        .last()
         == Some(Component::Normal(&OsStr::from("index.md")))
     {
         space_key.clone().to_uppercase()
@@ -78,6 +79,7 @@ fn sync_page(
     space: &responses::Space,
     page: Page,
 ) -> Result<()> {
+    println!("{}", page.content);
     let mut payload = json!({
         "spaceId": space.id,
         "status": "current",
@@ -205,12 +207,44 @@ pub fn sync_space(
     markdown_space: &MarkdownSpace,
 ) -> Result<()> {
     let space_key = markdown_space.key.clone();
-    println!("Updating space {}...", space_key);
+    println!("Parsing space {}...", space_key);
+    let arena = Arena::<AstNode>::new();
+
+    let mut parse_errors = Vec::<ConfluenceError>::default();
+
+    let markdown_pages: Vec<MarkdownPage> = markdown_space
+        .markdown_pages
+        .iter()
+        .map(|markdown_page_path| MarkdownPage::parse(markdown_page_path, &arena))
+        .filter_map(|r| r.map_err(|e| parse_errors.push(e)).ok())
+        .collect();
+
+    if !parse_errors.is_empty() {
+        let error_string: String = parse_errors
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+        return Err(ConfluenceError::generic_error(
+            String::from("Error parsing space: ") + &error_string,
+        ));
+    }
+
+    let mut link_generator = LinkGenerator::new();
+
+    markdown_pages.iter().for_each(|markdown_page| {
+        link_generator.add_file_title(
+            markdown_space
+                .relative_page_path(&PathBuf::from(markdown_page.source.clone()))
+                .as_path(),
+            &markdown_page.title,
+        )
+    });
+
+    println!("Synchronizing space...");
     let space = get_space(&confluence_client, space_key.as_str())?;
-
-    for markdown_page in markdown_space.markdown_pages.iter() {
-        let page = parse_page(&space_key, markdown_page)?;
-
+    for markdown_page in markdown_pages.iter() {
+        let page = render_page(&space_key, markdown_page, &link_generator)?;
         sync_page(&confluence_client, &space, page)?;
     }
 
@@ -219,11 +253,21 @@ pub fn sync_space(
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
 
     use assert_fs::fixture::{FileWriteStr, PathChild};
 
     type TestResult = std::result::Result<(), ConfluenceError>;
+
+    // TODO: we're really only testing the destination pathing here...
+    fn parse_page(space_key: &String, markdown_page_path: &Path) -> Result<Page> {
+        // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
+        let arena = Arena::<AstNode>::new();
+        let markdown_page = MarkdownPage::parse(markdown_page_path, &arena)?;
+        render_page(space_key, &markdown_page, &LinkGenerator::new())
+    }
 
     #[test]
     fn it_parses_page() -> TestResult {
@@ -259,6 +303,33 @@ mod tests {
         let parsed_page = parse_page(&String::from("test"), temp.child("test/index.md").path())?;
 
         assert_eq!(parsed_page.destination, "TEST");
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_errors_when_not_able_to_parse_a_file() -> TestResult {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let _markdown1 = temp
+            .child("test/index.md")
+            .write_str("Missing title should cause error")
+            .unwrap();
+
+        let confluence_client = ConfluenceClient::new("host.example.com");
+        let space = MarkdownSpace::from_directory(temp.child("test").path())?;
+        let sync_result = sync_space(confluence_client, &space);
+
+        assert!(sync_result.is_err());
+
+        let expected_string = String::from("Failed to parse");
+        let error_string = sync_result.unwrap_err().to_string();
+
+        assert!(
+            error_string.contains(&expected_string),
+            "Unexpected error: [{}], should contain [{}]",
+            error_string,
+            expected_string
+        );
 
         Ok(())
     }

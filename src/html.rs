@@ -1,12 +1,14 @@
 //! The HTML renderer for the CommonMark AST, as well as helper functions.
 use comrak::nodes::{
-    AstNode, ListType, NodeCode, NodeFootnoteDefinition, NodeTable, NodeValue, TableAlignment,
+    AstNode, ListType, NodeCode, NodeFootnoteDefinition, NodeLink, NodeTable, NodeValue,
+    TableAlignment,
 };
 use comrak::{Options, Plugins};
 use std::borrow::Cow;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
+use std::path::Path;
 use std::str;
 
 use once_cell::sync::Lazy;
@@ -39,30 +41,30 @@ pub fn isspace(ch: u8) -> bool {
     CMARK_CTYPE_CLASS[ch as usize] == 1
 }
 
-pub fn ispunct(ch: u8) -> bool {
-    CMARK_CTYPE_CLASS[ch as usize] == 2
-}
+// pub fn ispunct(ch: u8) -> bool {
+//     CMARK_CTYPE_CLASS[ch as usize] == 2
+// }
 
-pub fn isdigit(ch: u8) -> bool {
-    CMARK_CTYPE_CLASS[ch as usize] == 3
-}
+// pub fn isdigit(ch: u8) -> bool {
+//     CMARK_CTYPE_CLASS[ch as usize] == 3
+// }
 
-pub fn isalpha(ch: u8) -> bool {
-    CMARK_CTYPE_CLASS[ch as usize] == 4
-}
+// pub fn isalpha(ch: u8) -> bool {
+//     CMARK_CTYPE_CLASS[ch as usize] == 4
+// }
 
-pub fn isalnum(ch: u8) -> bool {
-    CMARK_CTYPE_CLASS[ch as usize] == 3 || CMARK_CTYPE_CLASS[ch as usize] == 4
-}
+// pub fn isalnum(ch: u8) -> bool {
+//     CMARK_CTYPE_CLASS[ch as usize] == 3 || CMARK_CTYPE_CLASS[ch as usize] == 4
+// }
 
 /// Formats an AST as HTML, modified by the given options.
-pub fn format_document<'a>(
-    root: &'a AstNode<'a>,
-    options: &Options,
-    output: &mut dyn Write,
-) -> io::Result<()> {
-    format_document_with_plugins(root, options, output, &Plugins::default())
-}
+// pub fn format_document<'a>(
+//     root: &'a AstNode<'a>,
+//     options: &Options,
+//     output: &mut dyn Write,
+// ) -> io::Result<()> {
+//     format_document_with_plugins(root, options, output, &Plugins::default())
+// }
 
 /// Formats an AST as HTML, modified by the given options. Accepts custom plugins.
 pub fn format_document_with_plugins<'a>(
@@ -70,12 +72,13 @@ pub fn format_document_with_plugins<'a>(
     options: &Options,
     output: &mut dyn Write,
     plugins: &Plugins,
+    link_generator: &LinkGenerator,
 ) -> io::Result<()> {
     let mut writer = WriteWithLast {
         output,
         last_was_lf: Cell::new(true),
     };
-    let mut f = HtmlFormatter::new(options, &mut writer, plugins);
+    let mut f = ConfluenceFormatter::new(options, &mut writer, plugins, link_generator);
     f.format(root, false)?;
     if f.footnote_ix > 0 {
         f.output.write_all(b"</ol>\n</section>\n")?;
@@ -169,13 +172,14 @@ impl Anchorizer {
     }
 }
 
-struct HtmlFormatter<'o> {
+struct ConfluenceFormatter<'o> {
     output: &'o mut WriteWithLast<'o>,
     options: &'o Options,
     anchorizer: Anchorizer,
     footnote_ix: u32,
     written_footnote_ix: u32,
     plugins: &'o Plugins<'o>,
+    link_generator: &'o LinkGenerator,
 }
 
 #[rustfmt::skip]
@@ -277,10 +281,6 @@ fn tagfilter_block(input: &[u8], o: &mut dyn Write) -> io::Result<()> {
     }
 
     Ok(())
-}
-
-fn dangerous_url(input: &[u8]) -> bool {
-    scanners::dangerous_url(input).is_some()
 }
 
 /// Writes buffer to output, escaping anything that could be interpreted as an
@@ -404,15 +404,82 @@ where
     Ok(())
 }
 
-impl<'o> HtmlFormatter<'o> {
-    fn new(options: &'o Options, output: &'o mut WriteWithLast<'o>, plugins: &'o Plugins) -> Self {
-        HtmlFormatter {
+pub struct LinkGenerator {
+    filename_to_title: HashMap<String, String>,
+}
+
+impl LinkGenerator {
+    pub fn new() -> Self {
+        LinkGenerator {
+            filename_to_title: HashMap::default(),
+        }
+    }
+
+    pub fn add_file_title(&mut self, filename: &Path, title: &String) {
+        self.filename_to_title
+            .insert(filename.display().to_string(), title.clone());
+    }
+
+    fn enter(
+        &self,
+        nl: &NodeLink,
+        confluence_formatter: &mut ConfluenceFormatter,
+    ) -> io::Result<()> {
+        println!("{:#?}", nl);
+
+        if let Some(confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
+            confluence_formatter
+                .output
+                .write_all(b"<ac:link>\n<ri:page")?;
+            confluence_formatter
+                .output
+                .write_all(b" ri:content-title=\"")?;
+            confluence_formatter.escape(confluence_title_for_file.as_bytes())?;
+            confluence_formatter.output.write_all(b"\"/>")?;
+
+            confluence_formatter.output.write_all(
+                b"<ac:plain-text-link-body>
+        <![CDATA[",
+            )?;
+        } else {
+            confluence_formatter
+                .output
+                .write_all(b"<!-- skipping unknown local link type -->")?;
+        }
+
+        Ok(())
+    }
+
+    fn exit(
+        &self,
+        nl: &NodeLink,
+        confluence_formatter: &mut ConfluenceFormatter,
+    ) -> io::Result<()> {
+        if let Some(_confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
+            confluence_formatter
+                .output
+                .write_all(b"]]></ac:plain-text-link-body></ac:link>")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<'o> ConfluenceFormatter<'o> {
+    fn new(
+        options: &'o Options,
+        output: &'o mut WriteWithLast<'o>,
+        plugins: &'o Plugins,
+        link_generator: &'o LinkGenerator,
+    ) -> Self {
+        ConfluenceFormatter {
             options,
             output,
             anchorizer: Anchorizer::new(),
             footnote_ix: 0,
             written_footnote_ix: 0,
             plugins,
+            link_generator,
         }
     }
 
@@ -841,21 +908,11 @@ impl<'o> HtmlFormatter<'o> {
                 }
             }
             NodeValue::Link(ref nl) => {
+                let link_generator = self.link_generator;
                 if entering {
-                    self.output.write_all(b"<a")?;
-                    self.render_sourcepos(node)?;
-                    self.output.write_all(b" href=\"")?;
-                    let url = nl.url.as_bytes();
-                    if self.options.render.unsafe_ || !dangerous_url(url) {
-                        self.escape_href(url)?;
-                    }
-                    if !nl.title.is_empty() {
-                        self.output.write_all(b"\" title=\"")?;
-                        self.escape(nl.title.as_bytes())?;
-                    }
-                    self.output.write_all(b"\">")?;
+                    link_generator.enter(nl, self)?;
                 } else {
-                    self.output.write_all(b"</a>")?;
+                    link_generator.exit(nl, self)?;
                 }
             }
             NodeValue::Image(ref nl) => {
@@ -864,7 +921,7 @@ impl<'o> HtmlFormatter<'o> {
                     self.render_sourcepos(node)?;
                     self.output.write_all(b" src=\"")?;
                     let url = nl.url.as_bytes();
-                    if self.options.render.unsafe_ || !dangerous_url(url) {
+                    if self.options.render.unsafe_ {
                         self.escape_href(url)?;
                     }
                     self.output.write_all(b"\" alt=\"")?;

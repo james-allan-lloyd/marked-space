@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct MarkdownSpace {
     pub key: String,
     pub markdown_pages: Vec<PathBuf>,
+    pub dir: PathBuf,
 }
 
 impl From<walkdir::Error> for ConfluenceError {
@@ -33,12 +34,17 @@ impl MarkdownSpace {
             Ok(MarkdownSpace {
                 markdown_pages,
                 key,
+                dir: PathBuf::from(dir),
             })
         } else {
             Err(crate::error::ConfluenceError::generic_error(
                 "Space directory does not exist",
             ))
         }
+    }
+
+    pub fn relative_page_path(&self, page_path: &Path) -> PathBuf {
+        page_path.strip_prefix(&self.dir).unwrap().into()
     }
 }
 

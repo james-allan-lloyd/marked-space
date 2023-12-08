@@ -10,6 +10,10 @@ pub enum ConfluenceError {
         status: StatusCode,
         body_content: String,
     },
+    ParsingError {
+        filename: String,
+        message: String,
+    },
 }
 
 impl ConfluenceError {
@@ -30,6 +34,16 @@ impl ConfluenceError {
             body_content,
         }
     }
+
+    pub fn parsing_error(
+        filename: impl Into<String>,
+        message: impl Into<String>,
+    ) -> ConfluenceError {
+        ConfluenceError::ParsingError {
+            filename: filename.into(),
+            message: message.into(),
+        }
+    }
 }
 
 impl std::error::Error for ConfluenceError {}
@@ -44,12 +58,15 @@ impl Termination for ConfluenceError {
 impl fmt::Display for ConfluenceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ConfluenceError::GenericError(message) => write!(f, "error: {}", message.as_str()),
+            ConfluenceError::GenericError(message) => write!(f, "{}", message.as_str()),
             ConfluenceError::FailedRequest {
                 status,
                 body_content,
             } => {
-                write!(f, "failed request: {}: {}", status, body_content)
+                write!(f, "Failed request: {}: {}", status, body_content)
+            }
+            ConfluenceError::ParsingError { filename, message } => {
+                write!(f, "Failed to parse {}: {}", filename, message)
             }
         }
     }

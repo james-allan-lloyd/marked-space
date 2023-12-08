@@ -1,7 +1,7 @@
 use std::{fs, path::Path};
 
+use crate::html::{format_document_with_plugins, LinkGenerator};
 use comrak::{
-    format_html, format_html_with_plugins,
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options, Plugins,
 };
@@ -59,10 +59,10 @@ impl<'a> MarkdownPage<'a> {
         });
 
         if first_heading.is_none() {
-            return Err(ConfluenceError::generic_error(format!(
-                "Couldn't find heading in [{}]",
-                source
-            )));
+            return Err(ConfluenceError::parsing_error(
+                source,
+                "missing first heading for title",
+            ));
         }
 
         let heading_node = first_heading.unwrap();
@@ -87,14 +87,15 @@ impl<'a> MarkdownPage<'a> {
         })
     }
 
-    pub fn to_html_string(&self) -> Result<String> {
+    pub fn to_html_string(&self, link_generator: &LinkGenerator) -> Result<String> {
         // let adapter = ConfluenceLinkAdapter;
-        let mut options = Options::default();
-        let mut plugins = Plugins::default();
+        let options = Options::default();
+        let plugins = Plugins::default();
         // plugins.render.heading_adapter = Some(&adapter);
 
         let mut html = vec![];
-        format_html_with_plugins(&self.root, &options, &mut html, &plugins).unwrap();
+        format_document_with_plugins(&self.root, &options, &mut html, &plugins, link_generator)
+            .unwrap();
 
         match String::from_utf8(html) {
             Ok(content) => Ok(content),
@@ -109,6 +110,7 @@ mod tests {
 
     use comrak::{nodes::AstNode, Arena};
 
+    use crate::html::LinkGenerator;
     use crate::markdown_page::MarkdownPage;
     use crate::Result;
 
@@ -137,7 +139,7 @@ mod tests {
             &arena,
         )?;
 
-        let content = page.to_html_string()?;
+        let content = page.to_html_string(&LinkGenerator::new())?;
 
         assert!(content.contains("My page content"));
         assert!(!content.contains("<h1>My Page Title</h1>"));
@@ -157,7 +159,7 @@ mod tests {
         assert!(page.is_err());
         assert_eq!(
             page.err().unwrap().to_string(),
-            "error: Couldn't find heading in [page.md]"
+            "Failed to parse page.md: missing first heading for title"
         );
 
         Ok(())
@@ -168,19 +170,34 @@ mod tests {
 
     #[test]
     fn it_translates_file_links_to_title_links() -> TestResult {
+        let link_filename = PathBuf::from("hello-world.md");
+        let link_file_title = String::from("This is the title parsed from the linked file");
+        let link_text = String::from("Link text");
         let arena = Arena::<AstNode>::new();
         let page = MarkdownPage::parse_content(
             PathBuf::from("page.md").as_path(),
-            &String::from("# My Page Title\n\nMy page content: [Hello World](hello-world.md)"),
+            &format!(
+                "# My Page Title\n\nMy page content: [{}]({})",
+                link_text,
+                link_filename.display().to_string()
+            ),
             &arena,
         )?;
 
-        let content = page.to_html_string()?;
+        let mut link_generator = LinkGenerator::new();
+
+        link_generator.add_file_title(&link_filename, &link_file_title);
+
+        let content = page.to_html_string(&link_generator)?;
 
         println!("{}", content);
 
-        assert!(content.contains("ri:content-title=\"Hello World\""));
+        assert!(content.contains(format!("ri:content-title=\"{}\"", link_file_title).as_str()));
+        assert!(content.contains(format!("<![CDATA[{}]]>", link_text).as_str()));
 
         Ok(())
     }
+
+    #[test]
+    fn it_skips_unknown_local_links() {}
 }
