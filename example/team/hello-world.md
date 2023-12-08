@@ -11,3 +11,5 @@ Some subsection.
 some other text.
 
 my life is the best
+
+Check out the home page here: [](index.md)
