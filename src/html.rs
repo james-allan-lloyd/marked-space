@@ -762,7 +762,8 @@ impl<'o> ConfluenceFormatter<'o> {
                         self.render_sourcepos(node)?;
                         self.output.write_all(b" />\n")?;
                     } else {
-                        self.output.write_all(b"\n")?;
+                        // confluence will keep the \n as a hard break anyways... replace with space
+                        self.output.write_all(b" ")?;
                     }
                 }
             }

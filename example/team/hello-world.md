@@ -8,9 +8,8 @@ Some subsection.
 
 ### Heading 3
 
-some other text.
-
-my life is the best
+Some other text,
+with a soft break
 
 Check out the home page here: [](index.md)
 
