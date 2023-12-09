@@ -10,11 +10,11 @@ pub struct MarkdownSpace {
     pub dir: PathBuf,
 }
 
-impl From<walkdir::Error> for ConfluenceError {
-    fn from(value: walkdir::Error) -> Self {
-        ConfluenceError::generic_error(format!("Failed to iterate space files: {}", value))
-    }
-}
+// impl From<walkdir::Error> for ConfluenceError {
+//     fn from(value: walkdir::Error) -> Self {
+//         ConfluenceError::generic_error(format!("Failed to iterate space files: {}", value))
+//     }
+// }
 
 impl MarkdownSpace {
     pub fn from_directory(dir: &Path) -> Result<MarkdownSpace> {
@@ -50,11 +50,9 @@ mod tests {
 
     use assert_fs::fixture::{FileTouch, PathChild};
 
-    use crate::error::ConfluenceError;
-
     use super::MarkdownSpace;
 
-    type Result = std::result::Result<(), ConfluenceError>;
+    type Result = std::result::Result<(), anyhow::Error>;
 
     #[test]
     fn it_fails_if_space_directory_doesnt_exist() {

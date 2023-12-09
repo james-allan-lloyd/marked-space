@@ -1,6 +1,4 @@
-use std::{
-    path::{Component, PathBuf},
-};
+use std::path::{Component, PathBuf};
 
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
@@ -106,12 +104,14 @@ fn sync_page(
             responses::BodySingle::AtlasDocFormat(_) => {
                 return Err(ConfluenceError::UnsupportedStorageFormat {
                     message: "atlas doc format".into(),
-                })
+                }
+                .into())
             }
             responses::BodySingle::View(_) => {
                 return Err(ConfluenceError::UnsupportedStorageFormat {
                     message: "view format".into(),
-                })
+                }
+                .into())
             }
         };
         ConfluencePage {
@@ -137,7 +137,8 @@ fn sync_page(
             responses::BodyBulk::AtlasDocFormat(_) => {
                 return Err(ConfluenceError::UnsupportedStorageFormat {
                     message: "atlas doc format".into(),
-                })
+                }
+                .into())
             }
         };
         ConfluencePage {
@@ -180,7 +181,7 @@ pub fn sync_space(
     println!("Parsing space {}...", space_key);
     let arena = Arena::<AstNode>::new();
 
-    let mut parse_errors = Vec::<ConfluenceError>::default();
+    let mut parse_errors = Vec::<anyhow::Error>::default();
 
     let markdown_pages: Vec<MarkdownPage> = markdown_space
         .markdown_pages
@@ -229,7 +230,7 @@ mod tests {
 
     use assert_fs::fixture::{FileWriteStr, PathChild};
 
-    type TestResult = std::result::Result<(), ConfluenceError>;
+    type TestResult = std::result::Result<(), anyhow::Error>;
 
     // TODO: we're really only testing the destination pathing here...
     fn parse_page(space_key: &String, markdown_page_path: &Path) -> Result<Page> {

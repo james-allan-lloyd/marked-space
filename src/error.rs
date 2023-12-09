@@ -1,30 +1,32 @@
 use std::fmt;
 
-
 use reqwest::{blocking::Response, StatusCode};
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ConfluenceError {
+    #[error("{0}")]
     GenericError(String),
+
+    #[error("Failed request {status:?}: {body_content:?}")]
     FailedRequest {
         status: StatusCode,
         body_content: String,
     },
-    ParsingError {
-        filename: String,
-        message: String,
-    },
-    UnsupportedStorageFormat {
-        message: String,
-    },
+
+    #[error("Failed to parse {filename}: {message}")]
+    ParsingError { filename: String, message: String },
+
+    #[error("Unsupported format: {message:?}")]
+    UnsupportedStorageFormat { message: String },
 }
 
 impl ConfluenceError {
-    pub fn generic_error(message: impl Into<String>) -> ConfluenceError {
-        ConfluenceError::GenericError(message.into())
+    pub fn generic_error(message: impl Into<String>) -> anyhow::Error {
+        ConfluenceError::GenericError(message.into()).into()
     }
 
-    pub fn failed_request(response: Response) -> ConfluenceError {
+    pub fn failed_request(response: Response) -> anyhow::Error {
         let status = response.status();
         let body_content = match status {
             StatusCode::UNAUTHORIZED => {
@@ -42,38 +44,37 @@ impl ConfluenceError {
             status,
             body_content,
         }
+        .into()
     }
 
-    pub fn parsing_error(
-        filename: impl Into<String>,
-        message: impl Into<String>,
-    ) -> ConfluenceError {
+    pub fn parsing_error(filename: impl Into<String>, message: impl Into<String>) -> anyhow::Error {
         ConfluenceError::ParsingError {
             filename: filename.into(),
             message: message.into(),
         }
+        .into()
     }
 }
 
-impl fmt::Display for ConfluenceError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ConfluenceError::GenericError(message) => write!(f, "{}", message.as_str()),
-            ConfluenceError::FailedRequest {
-                status,
-                body_content,
-            } => {
-                write!(f, "Failed request: {}: {}", status, body_content)
-            }
-            ConfluenceError::ParsingError { filename, message } => {
-                write!(f, "Failed to parse {}: {}", filename, message)
-            }
-            ConfluenceError::UnsupportedStorageFormat { message } => {
-                write!(f, "Unsupported storage format: {}", message)
-            }
-        }
-    }
-}
+// impl fmt::Display for ConfluenceError {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match self {
+//             ConfluenceError::GenericError(message) => write!(f, "{}", message.as_str()),
+//             ConfluenceError::FailedRequest {
+//                 status,
+//                 body_content,
+//             } => {
+//                 write!(f, "Failed request: {}: {}", status, body_content)
+//             }
+//             ConfluenceError::ParsingError { filename, message } => {
+//                 write!(f, "Failed to parse {}: {}", filename, message)
+//             }
+//             ConfluenceError::UnsupportedStorageFormat { message } => {
+//                 write!(f, "Unsupported storage format: {}", message)
+//             }
+//         }
+//     }
+// }
 
 impl From<reqwest::Error> for ConfluenceError {
     fn from(value: reqwest::Error) -> Self {
@@ -87,4 +88,4 @@ impl From<std::io::Error> for ConfluenceError {
     }
 }
 
-pub type Result<T> = std::result::Result<T, ConfluenceError>;
+pub type Result<T> = anyhow::Result<T>;
