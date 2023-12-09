@@ -842,7 +842,12 @@ impl<'o> ConfluenceFormatter<'o> {
             }
             NodeValue::Image(ref nl) => {
                 if entering {
-                    self.output.write_all(br#"<ac:image>"#)?;
+                    self.output.write_all(br#"<ac:image ac:align="center""#)?;
+                    if !nl.title.is_empty() {
+                        self.output
+                            .write_all(format!(" ac:title=\"{}\"", nl.title).as_bytes())?;
+                    }
+                    self.output.write_all(b">")?;
                     self.output.write_all(b"<ri:attachment ri:filename=\"")?;
 
                     let url = nl.url.as_bytes();

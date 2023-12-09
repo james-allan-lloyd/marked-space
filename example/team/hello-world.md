@@ -14,7 +14,7 @@ my life is the best
 
 Check out the home page here: [](index.md)
 
-![Alt text](image.png)
+![Alt text](image.png "A rusty crustation")
 
 ## A Table
 
