@@ -1,7 +1,7 @@
 use clap::builder::OsStr;
 use walkdir::WalkDir;
 
-use crate::error::{ConfluenceError, Result};
+use crate::error::{Result};
 use std::path::{Path, PathBuf};
 
 pub struct MarkdownSpace {
