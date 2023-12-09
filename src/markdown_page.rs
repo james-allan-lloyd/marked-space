@@ -39,8 +39,11 @@ impl<'a> MarkdownPage<'a> {
         arena: &'a Arena<AstNode<'a>>,
     ) -> Result<MarkdownPage<'a>> {
         let source = markdown_page.display().to_string();
+        let mut options = Options::default();
+        // options.extension.autolink = true;
+        options.extension.table = true;
 
-        let root: &AstNode<'_> = parse_document(arena, content.as_str(), &Options::default());
+        let root: &AstNode<'_> = parse_document(arena, content.as_str(), &options);
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
         where
@@ -98,10 +101,12 @@ impl<'a> MarkdownPage<'a> {
     }
 
     pub fn to_html_string(&self, link_generator: &LinkGenerator) -> Result<String> {
-        // let adapter = ConfluenceLinkAdapter;
-        let options = Options::default();
+        let mut options = Options::default();
+        // options.extension.autolink = true;
+        options.extension.table = true;
+        // options.extension.tasklist = true;
+        // options.extension.strikethrough = true;
         let plugins = Plugins::default();
-        // plugins.render.heading_adapter = Some(&adapter);
 
         let mut html = vec![];
         format_document_with_plugins(self.root, &options, &mut html, &plugins, link_generator)

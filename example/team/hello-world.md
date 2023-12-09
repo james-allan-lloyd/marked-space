@@ -15,3 +15,9 @@ my life is the best
 Check out the home page here: [](index.md)
 
 ![Alt text](image.png)
+
+## A Table
+
+| Column A | Column B |
+| -------- | -------- |
+| Cell A   | Cell B   |
