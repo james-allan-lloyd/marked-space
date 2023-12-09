@@ -13,3 +13,5 @@ some other text.
 my life is the best
 
 Check out the home page here: [](index.md)
+
+![Rustacean Image from https://rustacean.net/](image.png)
