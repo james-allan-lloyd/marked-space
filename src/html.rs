@@ -456,7 +456,7 @@ impl LinkGenerator {
         if let Some(_confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
             confluence_formatter
                 .output
-                .write_all(b"]]/></ac:plain-text-link-body></ac:link>")?;
+                .write_all(b"]]></ac:plain-text-link-body></ac:link>")?;
         }
 
         Ok(())

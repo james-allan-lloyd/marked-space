@@ -1,7 +1,7 @@
 use clap::builder::OsStr;
 use walkdir::WalkDir;
 
-use crate::error::{Result};
+use crate::error::Result;
 use std::path::{Path, PathBuf};
 
 pub struct MarkdownSpace {
@@ -9,12 +9,6 @@ pub struct MarkdownSpace {
     pub markdown_pages: Vec<PathBuf>,
     pub dir: PathBuf,
 }
-
-// impl From<walkdir::Error> for ConfluenceError {
-//     fn from(value: walkdir::Error) -> Self {
-//         ConfluenceError::generic_error(format!("Failed to iterate space files: {}", value))
-//     }
-// }
 
 impl MarkdownSpace {
     pub fn from_directory(dir: &Path) -> Result<MarkdownSpace> {
