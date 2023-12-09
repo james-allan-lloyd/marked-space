@@ -213,7 +213,7 @@ pub fn sync_space(
         )
     });
 
-    println!("Synchronizing space...");
+    println!("Synchronizing space {}...", space_key);
     let space = get_space(&confluence_client, space_key.as_str())?;
     for markdown_page in markdown_pages.iter() {
         let page = render_page(&space_key, markdown_page, &link_generator)?;
