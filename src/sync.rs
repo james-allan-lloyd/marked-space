@@ -1,14 +1,19 @@
 use std::{
+    collections::HashMap,
+    default,
     fs::{create_dir_all, File},
-    io::Write,
+    io::{BufReader, Read, Write},
     path::{Component, PathBuf},
 };
 
-use anyhow::Context;
+use data_encoding::HEXUPPER;
+use ring::digest::{Context, Digest, SHA256};
+
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
 use regex::Regex;
 use reqwest::Response;
+use serde::de::IntoDeserializer;
 use serde_json::json;
 
 use crate::{
@@ -17,7 +22,7 @@ use crate::{
     html::LinkGenerator,
     markdown_page::MarkdownPage,
     markdown_space::MarkdownSpace,
-    responses::{self, PageSingle},
+    responses::{self, Attachment, MultiEntityResult, PageBulk, PageSingle},
     Result,
 };
 
@@ -86,14 +91,61 @@ struct ConfluencePage {
     version_number: i32,
 }
 
+fn sha256_digest<R: Read>(mut reader: R) -> Result<Digest> {
+    let mut context = Context::new(&SHA256);
+    let mut buffer = [0; 1024];
+
+    loop {
+        let count = reader.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        context.update(&buffer[..count]);
+    }
+
+    Ok(context.finish())
+}
+
 fn sync_page_attachments(
     confluence_client: &ConfluenceClient,
     page_id: String,
     attachments: &Vec<PathBuf>,
 ) -> Result<()> {
+    let existing_attachments: MultiEntityResult<Attachment> = confluence_client
+        .get_attachments(&page_id)?
+        .error_for_status()?
+        .json()?;
+
+    let mut hashes = HashMap::<String, String>::new();
+    for existing_attachment in existing_attachments.results.iter() {
+        if existing_attachment.comment.starts_with("hash:") {
+            hashes.insert(
+                existing_attachment.title.clone(),
+                existing_attachment
+                    .comment
+                    .strip_prefix("hash:")
+                    .unwrap()
+                    .into(),
+            );
+        }
+    }
+
     for attachment in attachments.iter() {
+        let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
+        let input = File::open(attachment)?;
+        let reader = BufReader::new(input);
+        let hash = sha256_digest(reader)?;
+        let hashstring = HEXUPPER.encode(hash.as_ref());
+        if hashes.contains_key(&filename) {
+            if hashstring == *hashes.get(&filename).unwrap() {
+                println!("Attachment {}: up to date", filename);
+                return Ok(());
+            }
+        }
+
+        println!("Updating attachment");
         let resp = confluence_client
-            .create_or_update_attachment(&page_id, attachment)?
+            .create_or_update_attachment(&page_id, attachment, &hashstring)?
             .error_for_status()?;
     }
 
@@ -146,7 +198,7 @@ fn sync_page_content(
             version_number: existing_page.version.number,
         }
     } else {
-        let existing_page: responses::MultiEntityResult = confluence_client
+        let existing_page: responses::MultiEntityResult<PageBulk> = confluence_client
             .get_page_by_title(&space.id, page.title.as_str())?
             .error_for_status()?
             .json()?;
@@ -188,7 +240,7 @@ fn sync_page_content(
     // File::create(format!("{}-existing.xhtml", id))?.write_all(existing_content.as_bytes())?;
     // File::create(format!("{}-new.xhtml", id))?.write_all(page.content.as_bytes())?;
     if existing_content == new_content {
-        println!("Already up to date");
+        println!("Page \"{}\": up to date", page.title);
         return Ok(id);
     }
     payload["id"] = id.clone().into();
@@ -262,9 +314,8 @@ pub fn sync_space(
             }
             println!("Writing to {}", output_path.display());
 
-            File::create(output_path)?
-                .write_all(page.content.as_bytes())
-                .context("writing confluence output")?;
+            File::create(output_path)?.write_all(page.content.as_bytes())?;
+            // .context("writing confluence output")?;
         }
         let page_id = sync_page_content(&confluence_client, &space, page)?;
         sync_page_attachments(&confluence_client, page_id, &markdown_page.attachments)?;

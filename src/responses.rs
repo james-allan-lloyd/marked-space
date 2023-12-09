@@ -52,8 +52,8 @@ pub struct PageSingle {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct MultiEntityResult {
-    pub results: Vec<PageBulk>,
+pub struct MultiEntityResult<T> {
+    pub results: Vec<T>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -63,4 +63,13 @@ pub struct Space {
     pub key: String,
     pub _name: String,
     pub homepage_id: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Attachment {
+    pub id: String,
+    pub title: String,
+    pub page_id: String,
+    pub comment: String,
 }

@@ -73,15 +73,19 @@ impl ConfluenceClient {
             .send()
     }
 
-    pub fn create_or_update_attachment(&self, content_id: &String, filename: &Path) -> Result {
+    pub fn create_or_update_attachment(
+        &self,
+        content_id: &String,
+        filename: &Path,
+        hash: &String,
+    ) -> Result {
         let url = format!(
             "https://{}/wiki/rest/api/content/{}/child/attachment",
             self.hostname, content_id
         );
-        println!("{}", filename.display());
         let form = Form::new()
             .text("minorEdit", "true")
-            .text("comment", "updated by markdown-confluence")
+            .text("comment", format!("hash:{}", hash))
             .file("file", filename)
             .unwrap();
 
@@ -91,6 +95,19 @@ impl ConfluenceClient {
             .header("Accept", "application/json")
             .header("X-Atlassian-Token", "nocheck")
             .multipart(form)
+            .send()
+    }
+
+    pub fn get_attachments(&self, page_id: &String) -> Result {
+        let url = format!(
+            "https://{}/wiki/api/v2/pages/{}/attachments",
+            self.hostname, page_id
+        );
+
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
             .send()
     }
 }

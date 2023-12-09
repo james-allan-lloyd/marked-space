@@ -61,7 +61,6 @@ impl<'a> MarkdownPage<'a> {
                 }
             }
             NodeValue::Image(image) => {
-                println!("{}", image.url);
                 if !image.url.starts_with("http") {
                     let mut attachment_path = PathBuf::from(markdown_page.parent().unwrap());
                     attachment_path.push(image.url.clone());
@@ -230,6 +229,8 @@ mod tests {
 
         Ok(())
     }
+
+    fn _it_raises_an_error_when_image_file_does_not_exist() {}
 
     #[test]
     fn it_renders_url_as_external_image() {
