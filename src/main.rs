@@ -1,5 +1,6 @@
 use std::env;
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use clap::Parser;
 
@@ -20,17 +21,11 @@ use crate::sync::sync_space;
 
 fn check_environment_vars() -> Result<()> {
     match (env::var("API_USER"), env::var("API_TOKEN")) {
-        (Err(_), Err(_)) => {
-            Err(ConfluenceError::generic_error(
-                "Missing API_USER and API_TOKEN",
-            ))
-        }
-        (Err(_), Ok(_)) => {
-            Err(ConfluenceError::generic_error("Missing API_USER"))
-        }
-        (Ok(_), Err(_)) => {
-            Err(ConfluenceError::generic_error("Missing API_TOKEN"))
-        }
+        (Err(_), Err(_)) => Err(ConfluenceError::generic_error(
+            "Missing API_USER and API_TOKEN",
+        )),
+        (Err(_), Ok(_)) => Err(ConfluenceError::generic_error("Missing API_USER")),
+        (Ok(_), Err(_)) => Err(ConfluenceError::generic_error("Missing API_TOKEN")),
         (Ok(_), Ok(_)) => Ok(()),
     }
 }
@@ -43,7 +38,7 @@ struct Args {
     space: String,
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<ExitCode> {
     dotenv().expect(".env file not found");
 
     let args = Args::parse();
@@ -54,14 +49,18 @@ fn main() -> Result<()> {
     let markdown_space = MarkdownSpace::from_directory(&dir)?;
 
     println!(
-        "Syncing {} from space {}",
+        "Syncing {} pages from space {}",
         markdown_space.markdown_pages.len(),
         args.space
     );
 
     let confluence_client = ConfluenceClient::new("jimjim256.atlassian.net");
 
-    sync_space(confluence_client, &markdown_space)?;
-
-    Ok(())
+    match sync_space(confluence_client, &markdown_space) {
+        Ok(_) => Ok(ExitCode::SUCCESS),
+        Err(err) => {
+            println!("Error: {}", err);
+            Ok(ExitCode::FAILURE)
+        }
+    }
 }

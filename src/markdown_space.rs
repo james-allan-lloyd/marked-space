@@ -12,16 +12,12 @@ pub struct MarkdownSpace {
 
 impl From<walkdir::Error> for ConfluenceError {
     fn from(value: walkdir::Error) -> Self {
-        ConfluenceError::generic_error(format!(
-            "Failed to iterate space files: {}",
-            value
-        ))
+        ConfluenceError::generic_error(format!("Failed to iterate space files: {}", value))
     }
 }
 
 impl MarkdownSpace {
     pub fn from_directory(dir: &Path) -> Result<MarkdownSpace> {
-        println!("space dir {}", dir.display());
         let mut markdown_pages = Vec::<PathBuf>::default();
         for entry in WalkDir::new(dir) {
             let entry = entry?;
@@ -59,12 +55,6 @@ mod tests {
     use super::MarkdownSpace;
 
     type Result = std::result::Result<(), ConfluenceError>;
-
-    impl From<std::io::Error> for ConfluenceError {
-        fn from(value: std::io::Error) -> Self {
-            ConfluenceError::generic_error(value.to_string())
-        }
-    }
 
     #[test]
     fn it_fails_if_space_directory_doesnt_exist() {

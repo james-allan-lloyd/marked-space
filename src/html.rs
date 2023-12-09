@@ -425,8 +425,6 @@ impl LinkGenerator {
         nl: &NodeLink,
         confluence_formatter: &mut ConfluenceFormatter,
     ) -> io::Result<()> {
-        println!("{:#?}", nl);
-
         if let Some(confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
             confluence_formatter
                 .output

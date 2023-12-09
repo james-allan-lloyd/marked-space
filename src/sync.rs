@@ -1,7 +1,12 @@
-use std::path::{Component, PathBuf};
+use std::{
+    fs::File,
+    io::Write,
+    path::{Component, PathBuf},
+};
 
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
+use regex::Regex;
 use serde_json::json;
 
 use crate::{
@@ -79,7 +84,6 @@ fn sync_page(
     space: &responses::Space,
     page: Page,
 ) -> Result<()> {
-    println!("{}", page.content);
     let mut payload = json!({
         "spaceId": space.id,
         "status": "current",
@@ -94,73 +98,49 @@ fn sync_page(
     let existing_page = if page.destination == space.key {
         payload["parentId"] = serde_json::Value::Null;
 
-        let existing_page = match confluence_client.get_page_by_id(&space.homepage_id) {
-            Ok(resp) => resp,
-            Err(_) => todo!(),
-        };
+        let existing_page: responses::PageSingle = confluence_client
+            .get_page_by_id(&space.homepage_id)?
+            .error_for_status()?
+            .json()?;
 
-        if !existing_page.status().is_success() {
-            return Err(ConfluenceError::failed_request(existing_page));
-        }
-
-        println!("{:#?}", existing_page);
-        let content = existing_page.text().unwrap_or_default();
-        let json: responses::PageSingle = match serde_json::from_str(content.as_str()) {
-            Ok(j) => j,
-            Err(err) => {
-                println!("{:#?}", content);
-                return Err(ConfluenceError::generic_error(err.to_string()));
-            }
-        };
-
-        let existing_content = match &json.body {
+        let existing_content = match &existing_page.body {
             responses::BodySingle::Storage(body) => body.value.clone(),
-            responses::BodySingle::AtlasDocFormat(_) => todo!(),
-            responses::BodySingle::View(_) => todo!(),
+            responses::BodySingle::AtlasDocFormat(_) => {
+                return Err(ConfluenceError::UnsupportedStorageFormat {
+                    message: "atlas doc format".into(),
+                })
+            }
+            responses::BodySingle::View(_) => {
+                return Err(ConfluenceError::UnsupportedStorageFormat {
+                    message: "view format".into(),
+                })
+            }
         };
         ConfluencePage {
-            id: json.id,
+            id: existing_page.id,
             content: existing_content,
-            version_number: json.version.number,
+            version_number: existing_page.version.number,
         }
     } else {
-        let existing_page =
-            match confluence_client.get_page_by_title(&space.id, page.title.as_str()) {
-                Ok(resp) => resp,
-                Err(_) => todo!(),
-            };
+        let existing_page: responses::MultiEntityResult = confluence_client
+            .get_page_by_title(&space.id, page.title.as_str())?
+            .error_for_status()?
+            .json()?;
 
-        let json: responses::MultiEntityResult =
-            match serde_json::from_str(existing_page.text().unwrap_or_default().as_str()) {
-                Ok(j) => j,
-                Err(_) => todo!(),
-            };
-
-        if json.results.is_empty() {
+        if existing_page.results.is_empty() {
             println!("Page doesn't exist, creating");
-            let resp = match confluence_client.create_page(payload) {
-                Ok(r) => r,
-                Err(_) => {
-                    return Err(ConfluenceError::generic_error("Failed to create page"))
-                }
-            };
-
-            let status = resp.status();
-            let content = resp.text().unwrap_or_default();
-            if !status.is_success() {
-                return Err(ConfluenceError::generic_error(format!(
-                    "Failed to create page: {}",
-                    content
-                )));
-            } else {
-                return Ok(()); // FIXME: return early
-            }
+            confluence_client.create_page(payload)?.error_for_status()?;
+            return Ok(()); // FIXME: return early
         }
 
-        let bulk_page = &json.results[0];
+        let bulk_page = &existing_page.results[0];
         let existing_content = match &bulk_page.body {
             responses::BodyBulk::Storage(body) => body.value.clone(),
-            responses::BodyBulk::AtlasDocFormat(_) => todo!(),
+            responses::BodyBulk::AtlasDocFormat(_) => {
+                return Err(ConfluenceError::UnsupportedStorageFormat {
+                    message: "atlas doc format".into(),
+                })
+            }
         };
         ConfluencePage {
             id: bulk_page.id.clone(),
@@ -172,9 +152,12 @@ fn sync_page(
     let id = existing_page.id.clone();
     println!("Updating \"{}\" ({}) from {}", page.title, id, page.source);
 
-    // println!("body {:#?}", json.results[0].body);
-
-    if existing_page.content == page.content {
+    let re = Regex::new(r#"\s*ri:version-at-save="\d+"\s*"#).unwrap();
+    let existing_content = re.replace_all(existing_page.content.as_str(), "");
+    let new_content = String::from(page.content.replace("<![CDATA[]]>", "").trim());
+    // File::create(format!("{}-existing.xhtml", id))?.write_all(existing_content.as_bytes())?;
+    // File::create(format!("{}-new.xhtml", id))?.write_all(page.content.as_bytes())?;
+    if existing_content == new_content {
         println!("Already up to date");
         return Ok(());
     }
@@ -184,19 +167,10 @@ fn sync_page(
         "number": existing_page.version_number + 1
     });
 
-    let resp = match confluence_client.update_page(id, payload) {
-        Ok(r) => r,
-        Err(_) => return Err(ConfluenceError::generic_error("Failed to update page")),
-    };
+    confluence_client
+        .update_page(id, payload)?
+        .error_for_status()?;
 
-    if !resp.status().is_success() {
-        return Err(ConfluenceError::generic_error(format!(
-            "Failed to update page: {:?}",
-            resp.text()
-        )));
-    }
-
-    println!("Page synced");
     Ok(())
 }
 
@@ -270,8 +244,7 @@ mod tests {
     #[test]
     fn it_parses_page() -> TestResult {
         let temp = assert_fs::TempDir::new().unwrap();
-        temp
-            .child("test/markdown1.md")
+        temp.child("test/markdown1.md")
             .write_str("# Page Title")
             .unwrap();
 
@@ -293,8 +266,7 @@ mod tests {
     #[test]
     fn it_uses_index_md_as_homepage() -> TestResult {
         let temp = assert_fs::TempDir::new().unwrap();
-        temp
-            .child("test/index.md")
+        temp.child("test/index.md")
             .write_str("# Page Title")
             .unwrap();
 
@@ -308,8 +280,7 @@ mod tests {
     #[test]
     fn it_errors_when_not_able_to_parse_a_file() -> TestResult {
         let temp = assert_fs::TempDir::new().unwrap();
-        temp
-            .child("test/index.md")
+        temp.child("test/index.md")
             .write_str("Missing title should cause error")
             .unwrap();
 

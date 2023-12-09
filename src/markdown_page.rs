@@ -69,10 +69,7 @@ impl<'a> MarkdownPage<'a> {
         let mut title = String::default();
         for c in heading_node.children() {
             iter_nodes(c, &mut |child| match &mut child.data.borrow_mut().value {
-                NodeValue::Text(text) => {
-                    println!("heading text {}", text);
-                    title += text
-                }
+                NodeValue::Text(text) => title += text,
                 _ => (),
             });
         }
@@ -189,8 +186,6 @@ mod tests {
         link_generator.add_file_title(&link_filename, &link_file_title);
 
         let content = page.to_html_string(&link_generator)?;
-
-        println!("{}", content);
 
         assert!(content.contains(format!("ri:content-title=\"{}\"", link_file_title).as_str()));
         assert!(content.contains(format!("<![CDATA[{}]]>", link_text).as_str()));

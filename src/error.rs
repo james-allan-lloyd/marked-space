@@ -14,6 +14,9 @@ pub enum ConfluenceError {
         filename: String,
         message: String,
     },
+    UnsupportedStorageFormat {
+        message: String,
+    },
 }
 
 impl ConfluenceError {
@@ -27,7 +30,13 @@ impl ConfluenceError {
             StatusCode::UNAUTHORIZED => {
                 String::from("Unauthorized. Check your API_USER/API_TOKEN and try again.")
             }
-            _ => response.text().unwrap_or("No content".into()),
+            _ => {
+                let json: serde_json::Value = match response.json() {
+                    Ok(j) => j,
+                    Err(_) => todo!(),
+                };
+                json["errors"][0]["title"].to_string()
+            }
         };
         ConfluenceError::FailedRequest {
             status,
@@ -46,15 +55,6 @@ impl ConfluenceError {
     }
 }
 
-impl std::error::Error for ConfluenceError {}
-
-impl Termination for ConfluenceError {
-    fn report(self) -> std::process::ExitCode {
-        println!("** Error: {}", self);
-        ExitCode::FAILURE
-    }
-}
-
 impl fmt::Display for ConfluenceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -68,13 +68,22 @@ impl fmt::Display for ConfluenceError {
             ConfluenceError::ParsingError { filename, message } => {
                 write!(f, "Failed to parse {}: {}", filename, message)
             }
+            ConfluenceError::UnsupportedStorageFormat { message } => {
+                write!(f, "Unsupported storage format: {}", message)
+            }
         }
     }
 }
 
 impl From<reqwest::Error> for ConfluenceError {
     fn from(value: reqwest::Error) -> Self {
-        ConfluenceError::GenericError(format!("reqwest error: {:#?}", value))
+        ConfluenceError::GenericError(format!("reqwest error: {}", value.to_string()))
+    }
+}
+
+impl From<std::io::Error> for ConfluenceError {
+    fn from(value: std::io::Error) -> Self {
+        ConfluenceError::GenericError(format!("io error: {}", value.to_string()))
     }
 }
 
