@@ -1,5 +1,5 @@
 use std::fmt;
-use std::process::{ExitCode, Termination};
+
 
 use reqwest::{blocking::Response, StatusCode};
 
@@ -77,13 +77,13 @@ impl fmt::Display for ConfluenceError {
 
 impl From<reqwest::Error> for ConfluenceError {
     fn from(value: reqwest::Error) -> Self {
-        ConfluenceError::GenericError(format!("reqwest error: {}", value.to_string()))
+        ConfluenceError::GenericError(format!("reqwest error: {}", value))
     }
 }
 
 impl From<std::io::Error> for ConfluenceError {
     fn from(value: std::io::Error) -> Self {
-        ConfluenceError::GenericError(format!("io error: {}", value.to_string()))
+        ConfluenceError::GenericError(format!("io error: {}", value))
     }
 }
 
