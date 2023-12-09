@@ -1,5 +1,10 @@
-use std::path::{Component, PathBuf};
+use std::{
+    fs::{create_dir_all, File},
+    io::Write,
+    path::{Component, PathBuf},
+};
 
+use anyhow::Context;
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
 use regex::Regex;
@@ -176,6 +181,7 @@ fn sync_page(
 pub fn sync_space(
     confluence_client: ConfluenceClient,
     markdown_space: &MarkdownSpace,
+    output_dir: Option<String>,
 ) -> Result<()> {
     let space_key = markdown_space.key.clone();
     println!("Parsing space {}...", space_key);
@@ -216,6 +222,22 @@ pub fn sync_space(
     let space = get_space(&confluence_client, space_key.as_str())?;
     for markdown_page in markdown_pages.iter() {
         let page = render_page(&space_key, markdown_page, &link_generator)?;
+        if let Some(ref d) = output_dir {
+            let mut output_path = PathBuf::from(d);
+            output_path.push(
+                markdown_space.relative_page_path(
+                    &PathBuf::from(page.source.clone()).with_extension("xhtml"),
+                ),
+            );
+            if let Some(p) = output_path.parent() {
+                create_dir_all(p)?;
+            }
+            println!("Writing to {}", output_path.display());
+
+            File::create(output_path)?
+                .write_all(page.content.as_bytes())
+                .context("writing confluence output")?;
+        }
         sync_page(&confluence_client, &space, page)?;
     }
 
@@ -285,7 +307,7 @@ mod tests {
 
         let confluence_client = ConfluenceClient::new("host.example.com");
         let space = MarkdownSpace::from_directory(temp.child("test").path())?;
-        let sync_result = sync_space(confluence_client, &space);
+        let sync_result = sync_space(confluence_client, &space, None);
 
         assert!(sync_result.is_err());
 

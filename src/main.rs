@@ -36,6 +36,10 @@ struct Args {
     /// Path to the space to update
     #[arg(short, long)]
     space: String,
+
+    /// Write intermediate output to this directory
+    #[arg(short, long)]
+    output: Option<String>,
 }
 
 fn main() -> Result<ExitCode> {
@@ -56,7 +60,7 @@ fn main() -> Result<ExitCode> {
 
     let confluence_client = ConfluenceClient::new("jimjim256.atlassian.net");
 
-    match sync_space(confluence_client, &markdown_space) {
+    match sync_space(confluence_client, &markdown_space, args.output) {
         Ok(_) => Ok(ExitCode::SUCCESS),
         Err(err) => {
             println!("Error: {}", err);
