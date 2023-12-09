@@ -56,36 +56,4 @@ impl ConfluenceError {
     }
 }
 
-// impl fmt::Display for ConfluenceError {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         match self {
-//             ConfluenceError::GenericError(message) => write!(f, "{}", message.as_str()),
-//             ConfluenceError::FailedRequest {
-//                 status,
-//                 body_content,
-//             } => {
-//                 write!(f, "Failed request: {}: {}", status, body_content)
-//             }
-//             ConfluenceError::ParsingError { filename, message } => {
-//                 write!(f, "Failed to parse {}: {}", filename, message)
-//             }
-//             ConfluenceError::UnsupportedStorageFormat { message } => {
-//                 write!(f, "Unsupported storage format: {}", message)
-//             }
-//         }
-//     }
-// }
-
-impl From<reqwest::Error> for ConfluenceError {
-    fn from(value: reqwest::Error) -> Self {
-        ConfluenceError::GenericError(format!("reqwest error: {}", value))
-    }
-}
-
-impl From<std::io::Error> for ConfluenceError {
-    fn from(value: std::io::Error) -> Self {
-        ConfluenceError::GenericError(format!("io error: {}", value))
-    }
-}
-
 pub type Result<T> = anyhow::Result<T>;
