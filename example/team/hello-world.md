@@ -14,4 +14,4 @@ my life is the best
 
 Check out the home page here: [](index.md)
 
-![Rustacean Image from https://rustacean.net/](image.png)
+![Alt text](image.png)

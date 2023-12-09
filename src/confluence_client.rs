@@ -1,5 +1,6 @@
+use reqwest::blocking::multipart::{self, Form};
 use serde_json::Value;
-use std::env;
+use std::{env, fs::File, path::Path};
 
 pub struct ConfluenceClient {
     client: reqwest::blocking::Client,
@@ -62,13 +63,34 @@ impl ConfluenceClient {
             .send()
     }
 
-    pub fn update_page(&self, page_id: String, payload: Value) -> Result {
+    pub fn update_page(&self, page_id: &String, payload: Value) -> Result {
         let url = format!("https://{}/wiki/api/v2/pages/{}", self.hostname, page_id);
         self.client
             .put(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
             .header("Accept", "application/json")
             .json(&payload)
+            .send()
+    }
+
+    pub fn create_or_update_attachment(&self, content_id: &String, filename: &Path) -> Result {
+        let url = format!(
+            "https://{}/wiki/rest/api/content/{}/child/attachment",
+            self.hostname, content_id
+        );
+        println!("{}", filename.display());
+        let form = Form::new()
+            .text("minorEdit", "true")
+            .text("comment", "updated by markdown-confluence")
+            .file("file", filename)
+            .unwrap();
+
+        self.client
+            .put(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "nocheck")
+            .multipart(form)
             .send()
     }
 }

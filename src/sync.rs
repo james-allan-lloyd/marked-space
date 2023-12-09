@@ -8,11 +8,17 @@ use anyhow::Context;
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
 use regex::Regex;
+use reqwest::Response;
 use serde_json::json;
 
 use crate::{
-    confluence_client::ConfluenceClient, error::ConfluenceError, html::LinkGenerator,
-    markdown_page::MarkdownPage, markdown_space::MarkdownSpace, responses, Result,
+    confluence_client::ConfluenceClient,
+    error::ConfluenceError,
+    html::LinkGenerator,
+    markdown_page::MarkdownPage,
+    markdown_space::MarkdownSpace,
+    responses::{self, PageSingle},
+    Result,
 };
 
 fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<responses::Space> {
@@ -80,11 +86,26 @@ struct ConfluencePage {
     version_number: i32,
 }
 
-fn sync_page(
+fn sync_page_attachments(
+    confluence_client: &ConfluenceClient,
+    page_id: String,
+    attachments: &Vec<PathBuf>,
+) -> Result<()> {
+    for attachment in attachments.iter() {
+        let resp = confluence_client
+            .create_or_update_attachment(&page_id, attachment)?
+            .error_for_status()?;
+    }
+
+    Ok(())
+}
+
+// Returns the ID of the page that the content was synced to.
+fn sync_page_content(
     confluence_client: &ConfluenceClient,
     space: &responses::Space,
     page: Page,
-) -> Result<()> {
+) -> Result<String> {
     let mut payload = json!({
         "spaceId": space.id,
         "status": "current",
@@ -132,8 +153,13 @@ fn sync_page(
 
         if existing_page.results.is_empty() {
             println!("Page doesn't exist, creating");
-            confluence_client.create_page(payload)?.error_for_status()?;
-            return Ok(()); // FIXME: return early
+            let resp = confluence_client.create_page(payload)?;
+            if !resp.status().is_success() {
+                return Err(ConfluenceError::failed_request(resp));
+            } else {
+                let page: PageSingle = resp.json()?;
+                return Ok(page.id);
+            }
         }
 
         let bulk_page = &existing_page.results[0];
@@ -163,7 +189,7 @@ fn sync_page(
     // File::create(format!("{}-new.xhtml", id))?.write_all(page.content.as_bytes())?;
     if existing_content == new_content {
         println!("Already up to date");
-        return Ok(());
+        return Ok(id);
     }
     payload["id"] = id.clone().into();
     payload["version"] = json!({
@@ -171,11 +197,13 @@ fn sync_page(
         "number": existing_page.version_number + 1
     });
 
-    confluence_client
-        .update_page(id, payload)?
-        .error_for_status()?;
-
-    Ok(())
+    let resp = confluence_client.update_page(&id, payload)?;
+    // .error_for_status()?;
+    if !resp.status().is_success() {
+        Err(ConfluenceError::failed_request(resp))
+    } else {
+        Ok(id)
+    }
 }
 
 pub fn sync_space(
@@ -238,7 +266,8 @@ pub fn sync_space(
                 .write_all(page.content.as_bytes())
                 .context("writing confluence output")?;
         }
-        sync_page(&confluence_client, &space, page)?;
+        let page_id = sync_page_content(&confluence_client, &space, page)?;
+        sync_page_attachments(&confluence_client, page_id, &markdown_page.attachments)?;
     }
 
     Ok(())

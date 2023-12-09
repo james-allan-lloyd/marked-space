@@ -1,5 +1,3 @@
-
-
 use reqwest::{blocking::Response, StatusCode};
 use thiserror::Error;
 
@@ -8,7 +6,7 @@ pub enum ConfluenceError {
     #[error("{0}")]
     GenericError(String),
 
-    #[error("Failed request {status:?}: {body_content:?}")]
+    #[error("Failed request {status}: {body_content}")]
     FailedRequest {
         status: StatusCode,
         body_content: String,

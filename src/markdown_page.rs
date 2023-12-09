@@ -1,4 +1,7 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use crate::html::{format_document_with_plugins, LinkGenerator};
 use comrak::{
@@ -12,6 +15,7 @@ pub struct MarkdownPage<'a> {
     pub title: String,
     pub source: String,
     root: &'a AstNode<'a>,
+    pub attachments: Vec<PathBuf>,
 }
 
 impl<'a> MarkdownPage<'a> {
@@ -48,11 +52,20 @@ impl<'a> MarkdownPage<'a> {
             }
         }
 
+        let mut attachments = Vec::<PathBuf>::default();
         let mut first_heading: Option<&AstNode> = None;
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
             NodeValue::Heading(_heading) => {
                 if first_heading.is_none() {
                     first_heading = Some(node);
+                }
+            }
+            NodeValue::Image(image) => {
+                println!("{}", image.url);
+                if !image.url.starts_with("http") {
+                    let mut attachment_path = PathBuf::from(markdown_page.parent().unwrap());
+                    attachment_path.push(image.url.clone());
+                    attachments.push(attachment_path);
                 }
             }
             _ => (),
@@ -81,6 +94,7 @@ impl<'a> MarkdownPage<'a> {
             title,
             source,
             root,
+            attachments,
         })
     }
 
@@ -195,4 +209,32 @@ mod tests {
 
     #[test]
     fn it_skips_unknown_local_links() {}
+
+    #[test]
+    fn it_renders_local_file_as_attached_image() -> TestResult {
+        // <ac:image>
+        //     <ri:attachment ri:filename="atlassian_logo.gif" />
+        // </ac:image>
+        let arena = Arena::<AstNode>::new();
+        let page = MarkdownPage::parse_content(
+            PathBuf::from("page.md").as_path(),
+            &format!("# My Page Title\n\nMy page content: ![myimage](myimage.png)",),
+            &arena,
+        )?;
+
+        assert_eq!(page.attachments.len(), 1);
+
+        let content = page.to_html_string(&LinkGenerator::new())?;
+
+        assert!(content.contains(r#"<ri:attachment ri:filename="myimage.png"/>"#));
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_renders_url_as_external_image() {
+        // <ac:image>
+        //     <ri:url ri:value="http://confluence.atlassian.com/images/logo/confluence_48_trans.png" />
+        // </ac:image>
+    }
 }

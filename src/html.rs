@@ -915,21 +915,15 @@ impl<'o> ConfluenceFormatter<'o> {
             }
             NodeValue::Image(ref nl) => {
                 if entering {
-                    self.output.write_all(b"<img")?;
-                    self.render_sourcepos(node)?;
-                    self.output.write_all(b" src=\"")?;
+                    self.output.write_all(br#"<ac:image>"#)?;
+                    self.output.write_all(b"<ri:attachment ri:filename=\"")?;
+
                     let url = nl.url.as_bytes();
-                    if self.options.render.unsafe_ {
-                        self.escape_href(url)?;
-                    }
-                    self.output.write_all(b"\" alt=\"")?;
+                    self.escape_href(url)?;
+                    self.output.write_all(b"\"/>")?;
                     return Ok(true);
                 } else {
-                    if !nl.title.is_empty() {
-                        self.output.write_all(b"\" title=\"")?;
-                        self.escape(nl.title.as_bytes())?;
-                    }
-                    self.output.write_all(b"\" />")?;
+                    self.output.write_all(b"</ac:image>")?;
                 }
             }
             #[cfg(feature = "shortcodes")]
