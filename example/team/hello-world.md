@@ -21,3 +21,16 @@ Check out the home page here: [](index.md)
 | Column A | Column B |
 | -------- | -------- |
 | Cell A   | Cell B   |
+
+## Some Code
+
+```python
+print("Hello world!")
+```
+
+```yaml
+test: value
+some-map:
+    foo: bar
+    baz: 0
+```

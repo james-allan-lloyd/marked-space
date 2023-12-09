@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    default,
     fs::{create_dir_all, File},
     io::{BufReader, Read, Write},
     path::{Component, PathBuf},
@@ -12,8 +11,6 @@ use ring::digest::{Context, Digest, SHA256};
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
 use regex::Regex;
-use reqwest::Response;
-use serde::de::IntoDeserializer;
 use serde_json::json;
 
 use crate::{
@@ -144,7 +141,7 @@ fn sync_page_attachments(
         }
 
         println!("Updating attachment");
-        let resp = confluence_client
+        let _resp = confluence_client
             .create_or_update_attachment(&page_id, attachment, &hashstring)?
             .error_for_status()?;
     }

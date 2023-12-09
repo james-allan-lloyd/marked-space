@@ -1,6 +1,6 @@
-use reqwest::blocking::multipart::{self, Form};
+use reqwest::blocking::multipart::Form;
 use serde_json::Value;
-use std::{env, fs::File, path::Path};
+use std::{env, path::Path};
 
 pub struct ConfluenceClient {
     client: reqwest::blocking::Client,

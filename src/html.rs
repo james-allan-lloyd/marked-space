@@ -384,26 +384,6 @@ pub fn escape_href(output: &mut dyn Write, buffer: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-/// Writes an opening HTML tag, using an iterator to enumerate the attributes.
-/// Note that attribute values are automatically escaped.
-pub fn write_opening_tag<Str>(
-    output: &mut dyn Write,
-    tag: &str,
-    attributes: impl IntoIterator<Item = (Str, Str)>,
-) -> io::Result<()>
-where
-    Str: AsRef<str>,
-{
-    write!(output, "<{}", tag)?;
-    for (attr, val) in attributes {
-        write!(output, " {}=\"", attr.as_ref())?;
-        escape(output, val.as_ref().as_bytes())?;
-        output.write_all(b"\"")?;
-    }
-    output.write_all(b">")?;
-    Ok(())
-}
-
 pub struct LinkGenerator {
     filename_to_title: HashMap<String, String>,
 }
@@ -689,71 +669,18 @@ impl<'o> ConfluenceFormatter<'o> {
                 if entering {
                     self.cr()?;
 
-                    let mut first_tag = 0;
-                    let mut pre_attributes: HashMap<String, String> = HashMap::new();
-                    let mut code_attributes: HashMap<String, String> = HashMap::new();
-                    let code_attr: String;
+                    self.output.write_all(br#"<ac:structured-macro ac:name="code" ac:schema-version="1" ac:macro-id="d248891e-ba87-4ba9-becf-edfb21175463">"#)?;
 
-                    let literal = &ncb.literal.as_bytes();
-                    let info = &ncb.info.as_bytes();
+                    self.output
+                        .write_all(br#"<ac:parameter ac:name="language">"#)?;
+                    self.output.write_all(&ncb.info.as_bytes())?;
+                    self.output.write_all(b"</ac:parameter>")?;
+                    self.output.write_all(b"<ac:plain-text-body><![CDATA[")?;
 
-                    if !info.is_empty() {
-                        while first_tag < info.len() && !isspace(info[first_tag]) {
-                            first_tag += 1;
-                        }
-
-                        let lang_str = str::from_utf8(&info[..first_tag]).unwrap();
-                        let info_str = str::from_utf8(&info[first_tag..]).unwrap().trim();
-
-                        if self.options.render.github_pre_lang {
-                            pre_attributes.insert(String::from("lang"), lang_str.to_string());
-
-                            if self.options.render.full_info_string && !info_str.is_empty() {
-                                pre_attributes
-                                    .insert(String::from("data-meta"), info_str.trim().to_string());
-                            }
-                        } else {
-                            code_attr = format!("language-{}", lang_str);
-                            code_attributes.insert(String::from("class"), code_attr);
-
-                            if self.options.render.full_info_string && !info_str.is_empty() {
-                                code_attributes
-                                    .insert(String::from("data-meta"), info_str.to_string());
-                            }
-                        }
-                    }
-
-                    if self.options.render.sourcepos {
-                        let ast = node.data.borrow();
-                        pre_attributes
-                            .insert("data-sourcepos".to_string(), ast.sourcepos.to_string());
-                    }
-
-                    match self.plugins.render.codefence_syntax_highlighter {
-                        None => {
-                            write_opening_tag(self.output, "pre", pre_attributes)?;
-                            write_opening_tag(self.output, "code", code_attributes)?;
-
-                            self.escape(literal)?;
-
-                            self.output.write_all(b"</code></pre>\n")?
-                        }
-                        Some(highlighter) => {
-                            highlighter.write_pre_tag(self.output, pre_attributes)?;
-                            highlighter.write_code_tag(self.output, code_attributes)?;
-
-                            highlighter.write_highlighted(
-                                self.output,
-                                match str::from_utf8(&info[..first_tag]) {
-                                    Ok(lang) => Some(lang),
-                                    Err(_) => None,
-                                },
-                                &ncb.literal,
-                            )?;
-
-                            self.output.write_all(b"</code></pre>\n")?
-                        }
-                    }
+                    let literal = &ncb.literal.trim_end().as_bytes();
+                    self.output.write_all(literal)?;
+                    self.output
+                        .write_all(b"]]></ac:plain-text-body></ac:structured-macro>")?;
                 }
             }
             NodeValue::HtmlBlock(ref nhb) => {
