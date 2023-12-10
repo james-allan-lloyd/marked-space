@@ -2,14 +2,34 @@
 
 Hello, **世界**!
 
-## Heading 2
+> Quote sections
+> this is a quotation
+>
+> wonder what this will do
 
-Some subsection.
+This is _italic_. And this is `preformatted fixed width` text.
+
+## Lists
+
+Unordered lists:
+
+- Item 1
+- Item 2
+
+Ordered Lists:
+
+1. Item 1
+1. Item 2
+1. Item 3
+1. Item 4
+1. Item 5
 
 ### Heading 3
 
 Some other text,
 with a soft break
+
+---
 
 Check out the home page here: [](index.md)
 
