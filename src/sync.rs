@@ -206,12 +206,19 @@ pub fn sync_space<'a>(
     output_dir: Option<String>,
 ) -> Result<()> {
     let space_key = markdown_space.key.clone();
-    println!("Parsing space {}...", space_key);
+    println!(
+        "Parsing space {} from {} ...",
+        space_key,
+        markdown_space.dir.display()
+    );
     let mut link_generator = LinkGenerator::new();
 
     let markdown_pages = markdown_space.parse(&mut link_generator)?;
 
-    println!("Synchronizing space {}...", space_key);
+    println!(
+        "Synchronizing space {} on {}...",
+        space_key, confluence_client.hostname
+    );
     let space = get_space(&confluence_client, space_key.as_str())?;
     for markdown_page in markdown_pages.iter() {
         let page = markdown_page.render(&link_generator)?;

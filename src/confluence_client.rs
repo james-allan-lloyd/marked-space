@@ -6,7 +6,7 @@ pub struct ConfluenceClient {
     client: reqwest::blocking::Client,
     api_user: String,
     api_token: String,
-    hostname: String,
+    pub hostname: String,
 }
 
 type Result = std::result::Result<reqwest::blocking::Response, reqwest::Error>;

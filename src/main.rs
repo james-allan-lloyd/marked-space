@@ -44,6 +44,9 @@ struct Args {
     /// Write intermediate output to this directory
     #[arg(short, long)]
     output: Option<String>,
+
+    #[arg(long)]
+    host: Option<String>,
 }
 
 fn main() -> Result<ExitCode> {
@@ -56,18 +59,20 @@ fn main() -> Result<ExitCode> {
     let dir = PathBuf::from(args.space.clone());
     let markdown_space = MarkdownSpace::from_directory(&dir)?;
 
-    println!(
-        "Syncing {} pages from space {}",
-        markdown_space.markdown_pages.len(),
-        args.space
-    );
-
-    let confluence_client = ConfluenceClient::new("jimjim256.atlassian.net");
+    let host = match (args.host, env::var("CONFLUENCE_HOST").ok()) {
+        (Some(host), _) => host,
+        (_, Some(envvar)) => envvar,
+        _ => {
+            eprintln!("Couldn't determine host from either --host or $CONFLUENCE_HOST");
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+    let confluence_client = ConfluenceClient::new(host.as_str());
 
     match sync_space(confluence_client, &markdown_space, args.output) {
         Ok(_) => Ok(ExitCode::SUCCESS),
         Err(err) => {
-            println!("Error: {:#}", err);
+            eprintln!("Error: {:#}", err);
             Ok(ExitCode::FAILURE)
         }
     }
