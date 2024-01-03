@@ -97,9 +97,9 @@ impl<'a> MarkdownSpace<'a> {
 mod tests {
     use std::path::Path;
 
-    use assert_fs::fixture::{FileTouch, FileWriteFile, FileWriteStr as _, PathChild};
+    use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
-    use crate::{error::ConfluenceError, html::LinkGenerator};
+    use crate::html::LinkGenerator;
 
     use super::MarkdownSpace;
 

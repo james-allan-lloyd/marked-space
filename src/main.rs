@@ -67,7 +67,7 @@ fn main() -> Result<ExitCode> {
     match sync_space(confluence_client, &markdown_space, args.output) {
         Ok(_) => Ok(ExitCode::SUCCESS),
         Err(err) => {
-            println!("Error: {}", err);
+            println!("Error: {:#}", err);
             Ok(ExitCode::FAILURE)
         }
     }

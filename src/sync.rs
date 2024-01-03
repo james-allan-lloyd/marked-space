@@ -1,10 +1,12 @@
 use std::{
     collections::HashMap,
+    fmt::format,
     fs::{create_dir_all, File},
     io::{BufReader, Write},
     path::PathBuf,
 };
 
+use anyhow::Context;
 use regex::Regex;
 use serde_json::json;
 
@@ -73,7 +75,8 @@ fn sync_page_attachments(
 
     for attachment in attachments.iter() {
         let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
-        let input = File::open(attachment)?;
+        let input = File::open(attachment)
+            .with_context(|| format!("Opening attachment for {}", filename))?;
         let reader = BufReader::new(input);
         let hashstring = sha256_digest(reader)?;
         if hashes.contains_key(&filename) && hashstring == *hashes.get(&filename).unwrap() {
@@ -259,7 +262,7 @@ mod tests {
         link_generator.add_file_title(
             &PathBuf::from(markdown_page.source.clone()),
             &markdown_page.title,
-        );
+        )?;
         markdown_page.render(link_generator)
     }
 

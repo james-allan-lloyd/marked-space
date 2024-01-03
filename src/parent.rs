@@ -62,7 +62,7 @@ mod tests {
         link_generator.add_file_title(
             &PathBuf::from("subpages").join("index.md"),
             &String::from("Page with Sub Pages"),
-        );
+        )?;
         let parent_title =
             get_parent_title(PathBuf::from("subpages/markdown1.md"), &link_generator)?;
         assert!(parent_title.is_some());

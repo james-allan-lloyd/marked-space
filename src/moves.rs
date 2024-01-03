@@ -18,4 +18,6 @@ mod test {
     // change title and move
     // rename file
     // warn about files that are orphaned
+
+    // links are checked
 }

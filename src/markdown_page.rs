@@ -248,7 +248,7 @@ mod tests {
 
         let mut link_generator = LinkGenerator::new();
 
-        link_generator.add_file_title(&link_filename, &link_file_title);
+        link_generator.add_file_title(&link_filename, &link_file_title)?;
 
         let content = page.to_html_string(&link_generator)?;
 
@@ -291,4 +291,8 @@ mod tests {
         //     <ri:url ri:value="http://confluence.atlassian.com/images/logo/confluence_48_trans.png" />
         // </ac:image>
     }
+
+    fn _it_checks_page_links() {}
+
+    fn _it_checks_attachment_links() {}
 }
