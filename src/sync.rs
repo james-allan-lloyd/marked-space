@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    fmt::format,
     fs::{create_dir_all, File},
     io::{BufReader, Write},
     path::PathBuf,

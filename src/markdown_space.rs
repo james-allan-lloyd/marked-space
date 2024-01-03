@@ -5,7 +5,7 @@ use walkdir::WalkDir;
 use crate::{
     error::{ConfluenceError, Result},
     html::LinkGenerator,
-    markdown_page::{self, MarkdownPage},
+    markdown_page::MarkdownPage,
 };
 use std::path::{Path, PathBuf};
 
@@ -79,7 +79,7 @@ impl<'a> MarkdownSpace<'a> {
 
         let missing_files = markdown_pages
             .iter()
-            .map(|markdown_page| {
+            .flat_map(|markdown_page| {
                 markdown_page.local_links.iter().map(|local_link| {
                     if self.dir.join(local_link).exists() {
                         Ok(local_link)
@@ -92,11 +92,32 @@ impl<'a> MarkdownSpace<'a> {
                     }
                 })
             })
-            .flatten()
+            .filter_map(|r| r.err());
+
+        let missing_attachments = markdown_pages
+            .iter()
+            .flat_map(|markdown_page| {
+                markdown_page.attachments.iter().map(|attachment| {
+                    if attachment.exists() {
+                        Ok(attachment)
+                    } else {
+                        Err(ConfluenceError::MissingAttachmentLink {
+                            source_file: markdown_page.source.clone(),
+                            attachment_path: attachment
+                                .strip_prefix(self.dir.as_path())
+                                .unwrap()
+                                .display()
+                                .to_string(),
+                        }
+                        .into())
+                    }
+                })
+            })
             .filter_map(|r| r.err());
 
         parse_errors.extend(title_errors);
         parse_errors.extend(missing_files);
+        parse_errors.extend(missing_attachments);
 
         if !parse_errors.is_empty() {
             let error_string: String = parse_errors
@@ -213,6 +234,33 @@ mod tests {
         assert_eq!(
             format!("{:#}", result.err().unwrap()),
             "Error parsing space: Missing file for link in [subpage\\markdown2.md] to [subpage\\does_not_exist.md]"
+        )
+    }
+
+    #[test]
+    fn it_checks_attachments_exist() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.child("test/index.md")
+            .write_str("# Page 1\nLink to image: ![link](test-image.png)\n")
+            .unwrap();
+        temp.child("test/test-image.png") // doesn't actually check the content, of course.
+            .touch()
+            .unwrap();
+        temp.child("test/subpage/image.md")
+            .write_str("# Page 2\nLink to non-existing image: ![link](image_does_not_exist.png)")
+            .unwrap();
+
+        let result = MarkdownSpace::from_directory(temp.child("test").path());
+
+        assert!(result.is_ok());
+
+        let space = result.unwrap();
+
+        let result = space.parse(&mut LinkGenerator::new());
+        assert!(result.is_err());
+        assert_eq!(
+            format!("{:#}", result.err().unwrap()),
+            "Error parsing space: Missing file for attachment link in [subpage\\image.md] to [subpage\\image_does_not_exist.png]"
         )
     }
 }

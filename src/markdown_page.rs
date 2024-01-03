@@ -8,7 +8,6 @@ use crate::{
     markdown_space::MarkdownSpace,
     parent::get_parent_title,
 };
-use anyhow::Error;
 use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options, Plugins,
@@ -91,13 +90,12 @@ impl<'a> MarkdownPage<'a> {
                 }
             }
             NodeValue::Link(node_link) => {
-                println!("{:#?}", node_link);
                 if !(node_link.url.starts_with("http://") || node_link.url.starts_with("https://"))
                 {
                     let link_path = PathBuf::from(source.as_str())
                         .parent()
                         .unwrap()
-                        .join(node_link.url.to_owned());
+                        .join(&node_link.url);
                     local_links.push(link_path);
                 }
             }
@@ -106,10 +104,7 @@ impl<'a> MarkdownPage<'a> {
 
         let mut title = String::default();
 
-        if first_heading.is_none() {
-            errors.push(String::from("missing first heading for title"));
-        } else {
-            let heading_node = first_heading.unwrap();
+        if let Some(heading_node) = first_heading {
             for c in heading_node.children() {
                 iter_nodes(c, &mut |child| {
                     if let NodeValue::Text(text) = &mut child.data.borrow_mut().value {
@@ -119,6 +114,8 @@ impl<'a> MarkdownPage<'a> {
             }
             // TODO: it's still allocated tho...
             heading_node.detach();
+        } else {
+            errors.push(String::from("missing first heading for title"));
         }
 
         if errors.is_empty() {

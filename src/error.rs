@@ -1,5 +1,3 @@
-use std::path::Display;
-
 use reqwest::{blocking::Response, StatusCode};
 use thiserror::Error;
 
@@ -27,6 +25,12 @@ pub enum ConfluenceError {
     MissingFileLink {
         source_file: String,
         local_link: String,
+    },
+
+    #[error("Missing file for attachment link in [{source_file}] to [{attachment_path}]")]
+    MissingAttachmentLink {
+        source_file: String,
+        attachment_path: String,
     },
 }
 
