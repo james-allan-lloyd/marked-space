@@ -7,6 +7,7 @@ use crate::error::Result;
 
 pub struct ConfluencePage {
     pub id: String,
+    pub parent_id: Option<String>,
     pub content: String,
     pub version_number: i32,
 }
@@ -40,6 +41,7 @@ impl ConfluencePage {
             id: existing_page.id,
             content: existing_content,
             version_number: existing_page.version.number,
+            parent_id: None,
         })
     }
 
@@ -72,6 +74,7 @@ impl ConfluencePage {
             id: bulk_page.id.clone(),
             content: existing_content,
             version_number: bulk_page.version.number,
+            parent_id: Some(bulk_page.parent_id.clone()),
         }))
     }
 }

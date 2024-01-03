@@ -37,6 +37,7 @@ pub struct PageBulkWithoutBody {
 #[serde(rename_all = "camelCase")]
 pub struct PageBulk {
     pub id: String,
+    pub parent_id: String,
     pub title: String,
     pub version: Version,
     pub body: BodyBulk,

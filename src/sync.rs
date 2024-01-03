@@ -129,42 +129,57 @@ fn sync_page_content(
     page: RenderedPage,
 ) -> Result<String> {
     start_operation(format!("[{}] \"{}\"", page.source, page.title).as_str());
+
+    let existing_page = if page.is_home_page() {
+        Some(ConfluencePage::get_homepage(
+            confluence_client,
+            &space.homepage_id,
+        )?)
+    } else {
+        ConfluencePage::get_page(confluence_client, space, &page)?
+    };
+
+    let parent_id = if page.is_home_page() {
+        None
+    } else if let Some(parent) = page.parent.as_ref() {
+        get_page_id_by_title(confluence_client, &space.id, parent)?
+    } else {
+        Some(space.homepage_id.clone())
+    };
+
     let mut payload = json!({
         "spaceId": space.id,
         "status": "current",
         "title": page.title,
-        // "parentId": space.homepage_id,
+        "parentId": parent_id,
         "body": {
             "representation": "storage",
             "value": page.content
         }
     });
 
-    let existing_page = if page.is_home_page() {
-        payload["parentId"] = serde_json::Value::Null;
-        Some(ConfluencePage::get_homepage(
-            confluence_client,
-            &space.homepage_id,
-        )?)
-    } else {
-        if let Some(parent) = page.parent.as_ref() {
-            payload["parentId"] =
-                get_page_id_by_title(confluence_client, &space.id, parent)?.into();
-        } else {
-            payload["parentId"] = space.homepage_id.clone().into();
+    if let Some(existing_page) = existing_page {
+        let id = existing_page.id.clone();
+        if parent_id == existing_page.parent_id && page_up_to_date(&existing_page, &page) {
+            end_operation("OK");
+            return Ok(id);
         }
-        ConfluencePage::get_page(confluence_client, space, &page)?
-    };
 
-    payload["parentId"] = if page.is_home_page() {
-        serde_json::Value::Null
-    } else if let Some(parent) = page.parent.as_ref() {
-        get_page_id_by_title(confluence_client, &space.id, parent)?.into()
+        payload["id"] = id.clone().into();
+        payload["version"] = json!({
+            "message": "updated automatically",
+            "number": existing_page.version_number + 1
+        });
+
+        let resp = confluence_client.update_page(&id, payload)?;
+        if !resp.status().is_success() {
+            end_operation("ERROR");
+            Err(ConfluenceError::failed_request(resp))
+        } else {
+            end_operation("UPDATED");
+            Ok(id)
+        }
     } else {
-        space.homepage_id.clone().into()
-    };
-
-    if existing_page.is_none() {
         let resp = confluence_client.create_page(payload)?;
         if !resp.status().is_success() {
             end_operation("ERROR");
@@ -174,29 +189,6 @@ fn sync_page_content(
             end_operation("CREATED");
             return Ok(page.id);
         }
-    }
-
-    let existing_page = existing_page.unwrap();
-
-    let id = existing_page.id.clone();
-    if page_up_to_date(&existing_page, &page) {
-        end_operation("OK");
-        return Ok(id);
-    }
-
-    payload["id"] = id.clone().into();
-    payload["version"] = json!({
-        "message": "updated automatically",
-        "number": existing_page.version_number + 1
-    });
-
-    let resp = confluence_client.update_page(&id, payload)?;
-    if !resp.status().is_success() {
-        end_operation("ERROR");
-        Err(ConfluenceError::failed_request(resp))
-    } else {
-        end_operation("UPDATED");
-        Ok(id)
     }
 }
 
