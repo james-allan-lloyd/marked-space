@@ -192,10 +192,13 @@ mod tests {
     #[test]
     fn it_checks_page_links_exist() {
         let temp = assert_fs::TempDir::new().unwrap();
-        temp.child("test/markdown1.md")
-            .write_str("# Page 1\nLink to page 2: [link](markdown2.md)\n")
+        temp.child("test/index.md")
+            .write_str("# Page 1\nLink to page 2: [link](subpage/markdown2.md)\n")
             .unwrap();
-        temp.child("test/markdown2.md")
+        temp.child("test/subpage/index.md")
+            .write_str("# Subpage\n")
+            .unwrap();
+        temp.child("test/subpage/markdown2.md")
             .write_str("# Page 2\nLink to non-existing page: [link](does_not_exist.md)")
             .unwrap();
 
@@ -209,7 +212,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             format!("{:#}", result.err().unwrap()),
-            "Error parsing space: Missing file for link in [markdown2.md] to [does_not_exist.md]"
+            "Error parsing space: Missing file for link in [subpage\\markdown2.md] to [subpage\\does_not_exist.md]"
         )
     }
 }
