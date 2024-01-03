@@ -396,11 +396,13 @@ impl LinkGenerator {
     }
 
     pub fn add_file_title(&mut self, filename: &Path, title: &String) {
+        println!("Adding title for {:#?}: {}", filename.display(), title);
         self.filename_to_title
             .insert(filename.display().to_string(), title.clone());
     }
 
     pub fn get_file_title(&self, filename: &Path) -> Option<&String> {
+        println!("Getting title for {:#?}", filename.display());
         self.filename_to_title.get(&filename.display().to_string())
     }
 

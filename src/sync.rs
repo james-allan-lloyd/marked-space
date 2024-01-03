@@ -49,12 +49,18 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
     }
 }
 
+#[derive(Debug)]
 struct Page {
     title: String,
     content: String,
     source: String,
-    destination: String,
     parent: Option<String>,
+}
+
+impl Page {
+    fn is_home_page(&self) -> bool {
+        self.source == "index.md"
+    }
 }
 
 fn render_page(
@@ -78,7 +84,6 @@ fn render_page(
         title,
         content,
         source: markdown_page.source.clone(),
-        destination,
         parent,
     })
 }
@@ -172,7 +177,7 @@ fn sync_page_content(
         }
     });
 
-    let existing_page = if page.source == "index.md" {
+    let existing_page = if page.is_home_page() {
         payload["parentId"] = serde_json::Value::Null;
 
         let existing_page: responses::PageSingle = confluence_client
@@ -301,7 +306,6 @@ pub fn sync_space(
     }
 
     let mut link_generator = LinkGenerator::new();
-
     markdown_pages.iter().for_each(|markdown_page| {
         link_generator.add_file_title(
             &PathBuf::from(markdown_page.source.clone()),
@@ -348,11 +352,20 @@ mod tests {
     type TestResult = std::result::Result<(), anyhow::Error>;
 
     // TODO: we're really only testing the destination pathing here...
-    fn parse_page(markdown_space: &MarkdownSpace, markdown_page_path: &Path) -> Result<Page> {
+    fn parse_page(
+        markdown_space: &MarkdownSpace,
+        markdown_page_path: &Path,
+        link_generator: &mut LinkGenerator,
+    ) -> Result<Page> {
         // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
         let arena = Arena::<AstNode>::new();
         let markdown_page = MarkdownPage::parse(markdown_space, markdown_page_path, &arena)?;
-        render_page(&markdown_space.key, &markdown_page, &LinkGenerator::new())
+        let page = render_page(&markdown_space.key, &markdown_page, link_generator);
+        link_generator.add_file_title(
+            &PathBuf::from(markdown_page.source.clone()),
+            &markdown_page.title,
+        );
+        page
     }
 
     #[test]
@@ -365,9 +378,10 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/markdown1.md").path(),
-        )?;
+            &mut LinkGenerator::new(),
+        );
 
-        assert_eq!(parsed_page.destination, "TEST/Page Title");
+        assert!(parsed_page.is_ok());
 
         Ok(())
     }
@@ -386,9 +400,48 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/index.md").path(),
+            &mut LinkGenerator::new(),
         )?;
 
-        assert_eq!(parsed_page.destination, "TEST");
+        assert!(parsed_page.parent.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_uses_index_as_parent_for_subpages() -> TestResult {
+        // Space
+        // +-- Subpages Parent
+        //     +-- Subpage Child
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.child("test/index.md")
+            .write_str("# Homepage\nhomepage content")?;
+        temp.child("test/subpages/index.md")
+            .write_str("# Subpages Parent\nparent content")?;
+        temp.child("test/subpages/child.md")
+            .write_str("# Subpage Child\nchild content")?;
+        let space = MarkdownSpace::from_directory(temp.child("test").path())?;
+        let mut link_generator = LinkGenerator::new();
+        let _home_page = parse_page(
+            &space,
+            temp.child("test/index.md").path(),
+            &mut link_generator,
+        )?;
+        let _parent_page = parse_page(
+            &space,
+            temp.child("test\\subpages\\index.md").path(),
+            &mut link_generator,
+        )?;
+        let child_page = parse_page(
+            &space,
+            temp.child("test/subpages/child.md").path(),
+            &mut link_generator,
+        )?;
+
+        println!("child {:#?}", child_page);
+
+        assert!(child_page.parent.is_some());
+        assert_eq!(child_page.parent.unwrap(), "Subpages Parent");
 
         Ok(())
     }
