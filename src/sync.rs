@@ -74,12 +74,13 @@ fn sync_page_attachments(
 
     for attachment in attachments.iter() {
         let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
+        start_operation(format!("[{}] attachment", filename).as_str());
         let input = File::open(attachment)
             .with_context(|| format!("Opening attachment for {}", filename))?;
         let reader = BufReader::new(input);
         let hashstring = sha256_digest(reader)?;
         if hashes.contains_key(&filename) && hashstring == *hashes.get(&filename).unwrap() {
-            println!("Attachment {}: up to date", filename);
+            end_operation("OK");
             return Ok(());
         }
 
@@ -87,6 +88,7 @@ fn sync_page_attachments(
         let _resp = confluence_client
             .create_or_update_attachment(&page_id, attachment, &hashstring)?
             .error_for_status()?;
+        end_operation("UPDATED");
     }
 
     Ok(())
@@ -102,7 +104,6 @@ fn get_page_id_by_title(
         .error_for_status()?;
 
     let content = resp.text()?;
-    println!("Content: {}", content);
     let existing_page: responses::MultiEntityResult<PageBulkWithoutBody> =
         serde_json::from_str(content.as_str())?;
 
@@ -113,12 +114,21 @@ fn get_page_id_by_title(
     }
 }
 
+fn start_operation(desc: &str) {
+    print!("  {}", desc);
+}
+
+fn end_operation(result: &str) {
+    println!(":  {}", result);
+}
+
 // Returns the ID of the page that the content was synced to.
 fn sync_page_content(
     confluence_client: &ConfluenceClient,
     space: &responses::Space,
     page: RenderedPage,
 ) -> Result<String> {
+    start_operation(format!("[{}] \"{}\"", page.source, page.title).as_str());
     let mut payload = json!({
         "spaceId": space.id,
         "status": "current",
@@ -155,12 +165,13 @@ fn sync_page_content(
     };
 
     if existing_page.is_none() {
-        println!("Page doesn't exist, creating");
         let resp = confluence_client.create_page(payload)?;
         if !resp.status().is_success() {
+            end_operation("ERROR");
             return Err(ConfluenceError::failed_request(resp));
         } else {
             let page: PageSingle = resp.json()?;
+            end_operation("CREATED");
             return Ok(page.id);
         }
     }
@@ -168,10 +179,8 @@ fn sync_page_content(
     let existing_page = existing_page.unwrap();
 
     let id = existing_page.id.clone();
-    println!("Updating \"{}\" ({}) from {}", page.title, id, page.source);
-
     if page_up_to_date(&existing_page, &page) {
-        println!("Page \"{}\": up to date", page.title);
+        end_operation("OK");
         return Ok(id);
     }
 
@@ -183,8 +192,10 @@ fn sync_page_content(
 
     let resp = confluence_client.update_page(&id, payload)?;
     if !resp.status().is_success() {
+        end_operation("ERROR");
         Err(ConfluenceError::failed_request(resp))
     } else {
+        end_operation("UPDATED");
         Ok(id)
     }
 }

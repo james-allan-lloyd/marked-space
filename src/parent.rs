@@ -20,7 +20,6 @@ pub fn get_parent_title(
                 return Ok(None);
             }
             let parent_path_page = parent_path.join("index.md");
-            println!("parent: {:#?}", parent_path_page.as_path().display());
             if let Some(parent_title) = link_generator.get_file_title(&parent_path_page).cloned() {
                 Ok(Some(parent_title))
             } else {
