@@ -1,7 +1,12 @@
 use clap::builder::OsStr;
+use comrak::{nodes::AstNode, Arena};
 use walkdir::WalkDir;
 
-use crate::error::{ConfluenceError, Result};
+use crate::{
+    error::{ConfluenceError, Result},
+    html::LinkGenerator,
+    markdown_page::MarkdownPage,
+};
 use std::path::{Path, PathBuf};
 
 pub struct MarkdownSpace {
@@ -49,6 +54,37 @@ impl MarkdownSpace {
                 page_path.display()
             ))),
         }
+    }
+
+    pub(crate) fn parse<'a>(
+        &self,
+        arena: &'a Arena<AstNode<'a>>,
+        link_generator: &mut LinkGenerator,
+    ) -> Result<Vec<MarkdownPage<'a>>> {
+        let mut parse_errors = Vec::<anyhow::Error>::default();
+        let markdown_pages: Vec<MarkdownPage> = self
+            .markdown_pages
+            .iter()
+            .map(|markdown_page_path| MarkdownPage::parse(self, markdown_page_path, arena))
+            .filter_map(|r| r.map_err(|e| parse_errors.push(e)).ok())
+            .collect();
+        if !parse_errors.is_empty() {
+            let error_string: String = parse_errors
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<String>>()
+                .join(", ");
+            return Err(ConfluenceError::generic_error(
+                String::from("Error parsing space: ") + &error_string,
+            ));
+        }
+        markdown_pages.iter().for_each(|markdown_page| {
+            link_generator.add_file_title(
+                &PathBuf::from(markdown_page.source.clone()),
+                &markdown_page.title,
+            )
+        });
+        Ok(markdown_pages)
     }
 }
 
