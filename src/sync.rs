@@ -2,23 +2,21 @@ use std::{
     collections::HashMap,
     fs::{create_dir_all, File},
     io::{BufReader, Write},
-    path::{Component, PathBuf},
+    path::PathBuf,
 };
 
-use clap::builder::OsStr;
-use comrak::{nodes::AstNode, Arena};
 use regex::Regex;
 use serde_json::json;
 
 use crate::{
     checksum::sha256_digest,
     confluence_client::ConfluenceClient,
+    confluence_page::ConfluencePage,
     error::ConfluenceError,
     html::LinkGenerator,
-    markdown_page::MarkdownPage,
+    markdown_page::RenderedPage,
     markdown_space::MarkdownSpace,
-    parent::get_parent_title,
-    responses::{self, Attachment, MultiEntityResult, PageBulk, PageBulkWithoutBody, PageSingle},
+    responses::{self, Attachment, MultiEntityResult, PageBulkWithoutBody, PageSingle},
     Result,
 };
 
@@ -47,51 +45,6 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
         Ok(parsed_space) => Ok(parsed_space),
         Err(_) => Err(ConfluenceError::generic_error("Failed to parse response.")),
     }
-}
-
-#[derive(Debug)]
-struct Page {
-    title: String,
-    content: String,
-    source: String,
-    parent: Option<String>,
-}
-
-impl Page {
-    fn is_home_page(&self) -> bool {
-        self.source == "index.md"
-    }
-}
-
-fn render_page(
-    space_key: &String,
-    markdown_page: &MarkdownPage,
-    link_generator: &LinkGenerator,
-) -> Result<Page> {
-    let content = markdown_page.to_html_string(link_generator)?.clone();
-    let title = markdown_page.title.clone();
-    let page_path = PathBuf::from(markdown_page.source.clone());
-    let destination =
-        if page_path.components().last() == Some(Component::Normal(&OsStr::from("index.md"))) {
-            space_key.clone().to_uppercase()
-        } else {
-            format!("{}/{}", space_key.clone().to_uppercase(), title)
-        };
-
-    let parent = get_parent_title(page_path, link_generator)?;
-
-    Ok(Page {
-        title,
-        content,
-        source: markdown_page.source.clone(),
-        parent,
-    })
-}
-
-struct ConfluencePage {
-    id: String,
-    content: String,
-    version_number: i32,
 }
 
 fn sync_page_attachments(
@@ -164,7 +117,7 @@ fn get_page_id_by_title(
 fn sync_page_content(
     confluence_client: &ConfluenceClient,
     space: &responses::Space,
-    page: Page,
+    page: RenderedPage,
 ) -> Result<String> {
     let mut payload = json!({
         "spaceId": space.id,
@@ -179,32 +132,10 @@ fn sync_page_content(
 
     let existing_page = if page.is_home_page() {
         payload["parentId"] = serde_json::Value::Null;
-
-        let existing_page: responses::PageSingle = confluence_client
-            .get_page_by_id(&space.homepage_id)?
-            .error_for_status()?
-            .json()?;
-
-        let existing_content = match &existing_page.body {
-            responses::BodySingle::Storage(body) => body.value.clone(),
-            responses::BodySingle::AtlasDocFormat(_) => {
-                return Err(ConfluenceError::UnsupportedStorageFormat {
-                    message: "atlas doc format".into(),
-                }
-                .into())
-            }
-            responses::BodySingle::View(_) => {
-                return Err(ConfluenceError::UnsupportedStorageFormat {
-                    message: "view format".into(),
-                }
-                .into())
-            }
-        };
-        ConfluencePage {
-            id: existing_page.id,
-            content: existing_content,
-            version_number: existing_page.version.number,
-        }
+        Some(ConfluencePage::get_homepage(
+            confluence_client,
+            &space.homepage_id,
+        )?)
     } else {
         if let Some(parent) = page.parent.as_ref() {
             payload["parentId"] =
@@ -212,39 +143,29 @@ fn sync_page_content(
         } else {
             payload["parentId"] = space.homepage_id.clone().into();
         }
-        let existing_page: responses::MultiEntityResult<PageBulk> = confluence_client
-            .get_page_by_title(&space.id, page.title.as_str(), true)?
-            .error_for_status()?
-            .json()?;
-
-        if existing_page.results.is_empty() {
-            println!("Page doesn't exist, creating");
-            let resp = confluence_client.create_page(payload)?;
-            if !resp.status().is_success() {
-                return Err(ConfluenceError::failed_request(resp));
-            } else {
-                let page: PageSingle = resp.json()?;
-                return Ok(page.id);
-            }
-        }
-
-        let bulk_page = &existing_page.results[0];
-        let existing_content = match &bulk_page.body {
-            responses::BodyBulk::Storage(body) => body.value.clone(),
-            responses::BodyBulk::AtlasDocFormat(_) => {
-                return Err(ConfluenceError::UnsupportedStorageFormat {
-                    message: "atlas doc format".into(),
-                }
-                .into())
-            }
-            &responses::BodyBulk::Empty => todo!(),
-        };
-        ConfluencePage {
-            id: bulk_page.id.clone(),
-            content: existing_content,
-            version_number: bulk_page.version.number,
-        }
+        ConfluencePage::get_page(confluence_client, space, &page)?
     };
+
+    payload["parentId"] = if page.is_home_page() {
+        serde_json::Value::Null
+    } else if let Some(parent) = page.parent.as_ref() {
+        get_page_id_by_title(confluence_client, &space.id, parent)?.into()
+    } else {
+        space.homepage_id.clone().into()
+    };
+
+    if existing_page.is_none() {
+        println!("Page doesn't exist, creating");
+        let resp = confluence_client.create_page(payload)?;
+        if !resp.status().is_success() {
+            return Err(ConfluenceError::failed_request(resp));
+        } else {
+            let page: PageSingle = resp.json()?;
+            return Ok(page.id);
+        }
+    }
+
+    let existing_page = existing_page.unwrap();
 
     let id = existing_page.id.clone();
     println!("Updating \"{}\" ({}) from {}", page.title, id, page.source);
@@ -268,7 +189,7 @@ fn sync_page_content(
     }
 }
 
-fn page_up_to_date(existing_page: &ConfluencePage, page: &Page) -> bool {
+fn page_up_to_date(existing_page: &ConfluencePage, page: &RenderedPage) -> bool {
     // TODO: avoid using the regex and other "cleanups" -> just has the content when you put it and compare the hashes of the next put
     let re = Regex::new(r#"\s*ri:version-at-save="\d+"\s*"#).unwrap();
     let existing_content = re.replace_all(existing_page.content.as_str(), "");
@@ -290,7 +211,7 @@ pub fn sync_space<'a>(
     println!("Synchronizing space {}...", space_key);
     let space = get_space(&confluence_client, space_key.as_str())?;
     for markdown_page in markdown_pages.iter() {
-        let page = render_page(&space_key, markdown_page, &link_generator)?;
+        let page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {
             output_content(d, markdown_space, &page)?;
         }
@@ -301,7 +222,7 @@ pub fn sync_space<'a>(
     Ok(())
 }
 
-fn output_content(d: &String, markdown_space: &MarkdownSpace, page: &Page) -> Result<()> {
+fn output_content(d: &String, markdown_space: &MarkdownSpace, page: &RenderedPage) -> Result<()> {
     let mut output_path = PathBuf::from(d);
     output_path.push(
         markdown_space
@@ -319,9 +240,12 @@ fn output_content(d: &String, markdown_space: &MarkdownSpace, page: &Page) -> Re
 mod tests {
     use std::path::Path;
 
+    use crate::markdown_page::MarkdownPage;
+
     use super::*;
 
     use assert_fs::fixture::{FileWriteStr, PathChild};
+    use comrak::{nodes::AstNode, Arena};
 
     type TestResult = std::result::Result<(), anyhow::Error>;
 
@@ -330,16 +254,15 @@ mod tests {
         markdown_space: &MarkdownSpace,
         markdown_page_path: &Path,
         link_generator: &mut LinkGenerator,
-    ) -> Result<Page> {
+    ) -> Result<RenderedPage> {
         // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
         let arena = Arena::<AstNode>::new();
         let markdown_page = MarkdownPage::parse(markdown_space, markdown_page_path, &arena)?;
-        let page = render_page(&markdown_space.key, &markdown_page, link_generator);
         link_generator.add_file_title(
             &PathBuf::from(markdown_page.source.clone()),
             &markdown_page.title,
         );
-        page
+        markdown_page.render(link_generator)
     }
 
     #[test]

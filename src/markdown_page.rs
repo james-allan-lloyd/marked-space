@@ -6,6 +6,7 @@ use std::{
 use crate::{
     html::{format_document_with_plugins, LinkGenerator},
     markdown_space::MarkdownSpace,
+    parent::get_parent_title,
 };
 use comrak::{
     nodes::{AstNode, NodeValue},
@@ -115,7 +116,7 @@ impl<'a> MarkdownPage<'a> {
         })
     }
 
-    pub fn to_html_string(&self, link_generator: &LinkGenerator) -> Result<String> {
+    fn to_html_string(&self, link_generator: &LinkGenerator) -> Result<String> {
         let mut options = Options::default();
         // options.extension.autolink = true;
         options.extension.table = true;
@@ -131,6 +132,34 @@ impl<'a> MarkdownPage<'a> {
             Ok(content) => Ok(content),
             Err(_err) => Err(ConfluenceError::generic_error("Failed to convert to utf8")),
         }
+    }
+
+    pub fn render(&self, link_generator: &LinkGenerator) -> Result<RenderedPage> {
+        let content = self.to_html_string(link_generator)?.clone();
+        let title = self.title.clone();
+        let page_path = PathBuf::from(self.source.clone());
+        let parent = get_parent_title(page_path, link_generator)?;
+
+        Ok(RenderedPage {
+            title,
+            content,
+            source: self.source.clone(),
+            parent,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct RenderedPage {
+    pub title: String,
+    pub content: String,
+    pub source: String,
+    pub parent: Option<String>,
+}
+
+impl RenderedPage {
+    pub fn is_home_page(&self) -> bool {
+        self.source == "index.md"
     }
 }
 
