@@ -3,7 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::html::{format_document_with_plugins, LinkGenerator};
+use crate::{
+    html::{format_document_with_plugins, LinkGenerator},
+    markdown_space::MarkdownSpace,
+};
 use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options, Plugins,
@@ -19,7 +22,11 @@ pub struct MarkdownPage<'a> {
 }
 
 impl<'a> MarkdownPage<'a> {
-    pub fn parse(markdown_page: &Path, arena: &'a Arena<AstNode<'a>>) -> Result<MarkdownPage<'a>> {
+    pub fn parse(
+        markdown_space: &MarkdownSpace,
+        markdown_page: &Path,
+        arena: &'a Arena<AstNode<'a>>,
+    ) -> Result<MarkdownPage<'a>> {
         let content = match fs::read_to_string(markdown_page) {
             Ok(c) => c,
             Err(err) => {
@@ -30,15 +37,23 @@ impl<'a> MarkdownPage<'a> {
                 )))
             }
         };
-        Self::parse_content(markdown_page, &content, arena)
+        Self::parse_content(
+            markdown_page,
+            &content,
+            arena,
+            markdown_space
+                .relative_page_path(markdown_page)?
+                .display()
+                .to_string(),
+        )
     }
 
     fn parse_content(
         markdown_page: &Path,
         content: &String,
         arena: &'a Arena<AstNode<'a>>,
+        source: String,
     ) -> Result<MarkdownPage<'a>> {
-        let source = markdown_page.display().to_string();
         let mut options = Options::default();
         // options.extension.autolink = true;
         options.extension.table = true;
@@ -138,6 +153,7 @@ mod tests {
             PathBuf::from("page.md").as_path(),
             &String::from("# My Page Title\n\nMy page content"),
             &arena,
+            "page.md".into(),
         )?;
 
         assert_eq!(page.title, "My Page Title");
@@ -152,6 +168,7 @@ mod tests {
             PathBuf::from("page.md").as_path(),
             &String::from("# My Page Title\n\nMy page content"),
             &arena,
+            "page.md".into(),
         )?;
 
         let content = page.to_html_string(&LinkGenerator::new())?;
@@ -169,6 +186,7 @@ mod tests {
             PathBuf::from("page.md").as_path(),
             &String::from("My page content"),
             &arena,
+            "page.md".into(),
         );
 
         assert!(page.is_err());
@@ -197,6 +215,7 @@ mod tests {
                 link_filename.display()
             ),
             &arena,
+            "page.md".into(),
         )?;
 
         let mut link_generator = LinkGenerator::new();
@@ -224,6 +243,7 @@ mod tests {
             PathBuf::from("page.md").as_path(),
             &format!("# My Page Title\n\nMy page content: ![myimage](myimage.png)",),
             &arena,
+            "page.md".into(),
         )?;
 
         assert_eq!(page.attachments.len(), 1);

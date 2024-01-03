@@ -1,12 +1,9 @@
 use std::{
     collections::HashMap,
     fs::{create_dir_all, File},
-    io::{BufReader, Read, Write},
+    io::{BufReader, Write},
     path::{Component, PathBuf},
 };
-
-use data_encoding::HEXUPPER;
-use ring::digest::{Context, Digest, SHA256};
 
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
@@ -14,12 +11,14 @@ use regex::Regex;
 use serde_json::json;
 
 use crate::{
+    checksum::sha256_digest,
     confluence_client::ConfluenceClient,
     error::ConfluenceError,
     html::LinkGenerator,
     markdown_page::MarkdownPage,
     markdown_space::MarkdownSpace,
-    responses::{self, Attachment, MultiEntityResult, PageBulk, PageSingle},
+    parent::get_parent_title,
+    responses::{self, Attachment, MultiEntityResult, PageBulk, PageBulkWithoutBody, PageSingle},
     Result,
 };
 
@@ -55,6 +54,7 @@ struct Page {
     content: String,
     source: String,
     destination: String,
+    parent: Option<String>,
 }
 
 fn render_page(
@@ -64,21 +64,22 @@ fn render_page(
 ) -> Result<Page> {
     let content = markdown_page.to_html_string(link_generator)?.clone();
     let title = markdown_page.title.clone();
-    let destination = if PathBuf::from(markdown_page.source.clone())
-        .components()
-        .last()
-        == Some(Component::Normal(&OsStr::from("index.md")))
-    {
-        space_key.clone().to_uppercase()
-    } else {
-        format!("{}/{}", space_key.clone().to_uppercase(), title)
-    };
+    let page_path = PathBuf::from(markdown_page.source.clone());
+    let destination =
+        if page_path.components().last() == Some(Component::Normal(&OsStr::from("index.md"))) {
+            space_key.clone().to_uppercase()
+        } else {
+            format!("{}/{}", space_key.clone().to_uppercase(), title)
+        };
+
+    let parent = get_parent_title(page_path, link_generator)?;
 
     Ok(Page {
         title,
         content,
         source: markdown_page.source.clone(),
         destination,
+        parent,
     })
 }
 
@@ -86,21 +87,6 @@ struct ConfluencePage {
     id: String,
     content: String,
     version_number: i32,
-}
-
-fn sha256_digest<R: Read>(mut reader: R) -> Result<Digest> {
-    let mut context = Context::new(&SHA256);
-    let mut buffer = [0; 1024];
-
-    loop {
-        let count = reader.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        context.update(&buffer[..count]);
-    }
-
-    Ok(context.finish())
 }
 
 fn sync_page_attachments(
@@ -131,8 +117,7 @@ fn sync_page_attachments(
         let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
         let input = File::open(attachment)?;
         let reader = BufReader::new(input);
-        let hash = sha256_digest(reader)?;
-        let hashstring = HEXUPPER.encode(hash.as_ref());
+        let hashstring = sha256_digest(reader)?;
         if hashes.contains_key(&filename) {
             if hashstring == *hashes.get(&filename).unwrap() {
                 println!("Attachment {}: up to date", filename);
@@ -149,6 +134,27 @@ fn sync_page_attachments(
     Ok(())
 }
 
+fn get_page_id_by_title(
+    confluence_client: &ConfluenceClient,
+    space_id: &str,
+    title: &String,
+) -> Result<Option<String>> {
+    let resp = confluence_client
+        .get_page_by_title(space_id, title, false)?
+        .error_for_status()?;
+
+    let content = resp.text()?;
+    println!("Content: {}", content);
+    let existing_page: responses::MultiEntityResult<PageBulkWithoutBody> =
+        serde_json::from_str(content.as_str())?;
+
+    if existing_page.results.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(existing_page.results[0].id.clone()))
+    }
+}
+
 // Returns the ID of the page that the content was synced to.
 fn sync_page_content(
     confluence_client: &ConfluenceClient,
@@ -159,14 +165,14 @@ fn sync_page_content(
         "spaceId": space.id,
         "status": "current",
         "title": page.title,
-        "parentId": space.homepage_id,
+        // "parentId": space.homepage_id,
         "body": {
             "representation": "storage",
             "value": page.content
         }
     });
 
-    let existing_page = if page.destination == space.key {
+    let existing_page = if page.source == "index.md" {
         payload["parentId"] = serde_json::Value::Null;
 
         let existing_page: responses::PageSingle = confluence_client
@@ -195,8 +201,14 @@ fn sync_page_content(
             version_number: existing_page.version.number,
         }
     } else {
+        if let Some(parent) = page.parent.as_ref() {
+            payload["parentId"] =
+                get_page_id_by_title(confluence_client, &space.id, parent)?.into();
+        } else {
+            payload["parentId"] = space.homepage_id.clone().into();
+        }
         let existing_page: responses::MultiEntityResult<PageBulk> = confluence_client
-            .get_page_by_title(&space.id, page.title.as_str())?
+            .get_page_by_title(&space.id, page.title.as_str(), true)?
             .error_for_status()?
             .json()?;
 
@@ -220,6 +232,7 @@ fn sync_page_content(
                 }
                 .into())
             }
+            &responses::BodyBulk::Empty => todo!(),
         };
         ConfluencePage {
             id: bulk_page.id.clone(),
@@ -231,15 +244,11 @@ fn sync_page_content(
     let id = existing_page.id.clone();
     println!("Updating \"{}\" ({}) from {}", page.title, id, page.source);
 
-    let re = Regex::new(r#"\s*ri:version-at-save="\d+"\s*"#).unwrap();
-    let existing_content = re.replace_all(existing_page.content.as_str(), "");
-    let new_content = String::from(page.content.replace("<![CDATA[]]>", "").trim());
-    // File::create(format!("{}-existing.xhtml", id))?.write_all(existing_content.as_bytes())?;
-    // File::create(format!("{}-new.xhtml", id))?.write_all(page.content.as_bytes())?;
-    if existing_content == new_content {
+    if page_up_to_date(&existing_page, &page) {
         println!("Page \"{}\": up to date", page.title);
         return Ok(id);
     }
+
     payload["id"] = id.clone().into();
     payload["version"] = json!({
         "message": "updated automatically",
@@ -247,12 +256,19 @@ fn sync_page_content(
     });
 
     let resp = confluence_client.update_page(&id, payload)?;
-    // .error_for_status()?;
     if !resp.status().is_success() {
         Err(ConfluenceError::failed_request(resp))
     } else {
         Ok(id)
     }
+}
+
+fn page_up_to_date(existing_page: &ConfluencePage, page: &Page) -> bool {
+    // TODO: avoid using the regex and other "cleanups" -> just has the content when you put it and compare the hashes of the next put
+    let re = Regex::new(r#"\s*ri:version-at-save="\d+"\s*"#).unwrap();
+    let existing_content = re.replace_all(existing_page.content.as_str(), "");
+    let new_content = String::from(page.content.replace("<![CDATA[]]>", "").trim());
+    existing_content == new_content
 }
 
 pub fn sync_space(
@@ -269,7 +285,7 @@ pub fn sync_space(
     let markdown_pages: Vec<MarkdownPage> = markdown_space
         .markdown_pages
         .iter()
-        .map(|markdown_page_path| MarkdownPage::parse(markdown_page_path, &arena))
+        .map(|markdown_page_path| MarkdownPage::parse(markdown_space, markdown_page_path, &arena))
         .filter_map(|r| r.map_err(|e| parse_errors.push(e)).ok())
         .collect();
 
@@ -288,9 +304,7 @@ pub fn sync_space(
 
     markdown_pages.iter().for_each(|markdown_page| {
         link_generator.add_file_title(
-            markdown_space
-                .relative_page_path(&PathBuf::from(markdown_page.source.clone()))
-                .as_path(),
+            &PathBuf::from(markdown_page.source.clone()),
             &markdown_page.title,
         )
     });
@@ -300,24 +314,26 @@ pub fn sync_space(
     for markdown_page in markdown_pages.iter() {
         let page = render_page(&space_key, markdown_page, &link_generator)?;
         if let Some(ref d) = output_dir {
-            let mut output_path = PathBuf::from(d);
-            output_path.push(
-                markdown_space.relative_page_path(
-                    &PathBuf::from(page.source.clone()).with_extension("xhtml"),
-                ),
-            );
-            if let Some(p) = output_path.parent() {
-                create_dir_all(p)?;
-            }
-            println!("Writing to {}", output_path.display());
-
-            File::create(output_path)?.write_all(page.content.as_bytes())?;
-            // .context("writing confluence output")?;
+            output_content(d, markdown_space, &page)?;
         }
         let page_id = sync_page_content(&confluence_client, &space, page)?;
         sync_page_attachments(&confluence_client, page_id, &markdown_page.attachments)?;
     }
 
+    Ok(())
+}
+
+fn output_content(d: &String, markdown_space: &MarkdownSpace, page: &Page) -> Result<()> {
+    let mut output_path = PathBuf::from(d);
+    output_path.push(
+        markdown_space
+            .relative_page_path(&PathBuf::from(page.source.clone()).with_extension("xhtml"))?,
+    );
+    if let Some(p) = output_path.parent() {
+        create_dir_all(p)?;
+    }
+    println!("Writing to {}", output_path.display());
+    File::create(output_path)?.write_all(page.content.as_bytes())?;
     Ok(())
 }
 
@@ -332,11 +348,11 @@ mod tests {
     type TestResult = std::result::Result<(), anyhow::Error>;
 
     // TODO: we're really only testing the destination pathing here...
-    fn parse_page(space_key: &String, markdown_page_path: &Path) -> Result<Page> {
+    fn parse_page(markdown_space: &MarkdownSpace, markdown_page_path: &Path) -> Result<Page> {
         // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
         let arena = Arena::<AstNode>::new();
-        let markdown_page = MarkdownPage::parse(markdown_page_path, &arena)?;
-        render_page(space_key, &markdown_page, &LinkGenerator::new())
+        let markdown_page = MarkdownPage::parse(markdown_space, markdown_page_path, &arena)?;
+        render_page(&markdown_space.key, &markdown_page, &LinkGenerator::new())
     }
 
     #[test]
@@ -347,7 +363,7 @@ mod tests {
             .unwrap();
 
         let parsed_page = parse_page(
-            &String::from("test"),
+            &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/markdown1.md").path(),
         )?;
 
@@ -356,9 +372,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn it_escapes_page_titles_with_forward_slash() -> TestResult {
-        Ok(())
+    fn _it_escapes_page_titles_with_forward_slash() -> TestResult {
+        todo!()
     }
 
     #[test]
@@ -368,7 +383,10 @@ mod tests {
             .write_str("# Page Title")
             .unwrap();
 
-        let parsed_page = parse_page(&String::from("test"), temp.child("test/index.md").path())?;
+        let parsed_page = parse_page(
+            &MarkdownSpace::from_directory(temp.child("test").path())?,
+            temp.child("test/index.md").path(),
+        )?;
 
         assert_eq!(parsed_page.destination, "TEST");
 
@@ -399,5 +417,9 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    fn _it_renames_default_parent_page_when_index_md_is_added() -> TestResult {
+        todo!()
     }
 }

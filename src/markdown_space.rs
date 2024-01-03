@@ -1,7 +1,7 @@
 use clap::builder::OsStr;
 use walkdir::WalkDir;
 
-use crate::error::Result;
+use crate::error::{ConfluenceError, Result};
 use std::path::{Path, PathBuf};
 
 pub struct MarkdownSpace {
@@ -15,7 +15,14 @@ impl MarkdownSpace {
         let mut markdown_pages = Vec::<PathBuf>::default();
         for entry in WalkDir::new(dir) {
             let entry = entry?;
-            if entry.path().extension() == Some(&OsStr::from("md")) {
+            if entry.path().is_dir() {
+                if !entry.path().join("index.md").exists() {
+                    println!(
+                        "Warning: directory {} is missing index.md",
+                        entry.path().display()
+                    )
+                }
+            } else if entry.path().extension() == Some(&OsStr::from("md")) {
                 markdown_pages.push(entry.into_path());
             }
         }
@@ -33,8 +40,15 @@ impl MarkdownSpace {
         }
     }
 
-    pub fn relative_page_path(&self, page_path: &Path) -> PathBuf {
-        page_path.strip_prefix(&self.dir).unwrap().into()
+    pub fn relative_page_path(&self, page_path: &Path) -> Result<PathBuf> {
+        match page_path.strip_prefix(&self.dir) {
+            Ok(p) => Ok(PathBuf::from(p)),
+            Err(_) => Err(ConfluenceError::generic_error(format!(
+                "Page is not in space directory {}: {}",
+                self.dir.display(),
+                page_path.display()
+            ))),
+        }
     }
 }
 
@@ -86,5 +100,6 @@ mod tests {
         Ok(())
     }
 
-    fn _it_fails_if_space_directory_is_invalid_spacek_key() {}
+    fn _it_fails_if_space_directory_is_invalid_space_key() {}
+    fn _it_skips_subpages_if_directory_contains_no_markdown_files() {}
 }

@@ -8,11 +8,13 @@ use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
 use markdown_space::MarkdownSpace;
 
+mod checksum;
 mod confluence_client;
 mod error;
 mod html;
 mod markdown_page;
 mod markdown_space;
+mod parent;
 mod responses;
 mod sync;
 

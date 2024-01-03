@@ -400,6 +400,10 @@ impl LinkGenerator {
             .insert(filename.display().to_string(), title.clone());
     }
 
+    pub fn get_file_title(&self, filename: &Path) -> Option<&String> {
+        self.filename_to_title.get(&filename.display().to_string())
+    }
+
     fn enter(
         &self,
         nl: &NodeLink,
