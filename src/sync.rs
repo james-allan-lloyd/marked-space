@@ -50,7 +50,7 @@ fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<res
 fn sync_page_attachments(
     confluence_client: &ConfluenceClient,
     page_id: String,
-    attachments: &Vec<PathBuf>,
+    attachments: &[PathBuf],
 ) -> Result<()> {
     let existing_attachments: MultiEntityResult<Attachment> = confluence_client
         .get_attachments(&page_id)?
@@ -93,7 +93,7 @@ fn sync_page_attachments(
 fn get_page_id_by_title(
     confluence_client: &ConfluenceClient,
     space_id: &str,
-    title: &String,
+    title: &str,
 ) -> Result<Option<String>> {
     let resp = confluence_client
         .get_page_by_title(space_id, title, false)?

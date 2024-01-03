@@ -14,7 +14,7 @@ pub struct ConfluencePage {
 impl ConfluencePage {
     pub fn get_homepage(
         confluence_client: &ConfluenceClient,
-        homepage_id: &String,
+        homepage_id: &str,
     ) -> Result<ConfluencePage> {
         let existing_page: responses::PageSingle = confluence_client
             .get_page_by_id(homepage_id)?

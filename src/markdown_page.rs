@@ -51,7 +51,7 @@ impl<'a> MarkdownPage<'a> {
 
     fn parse_content(
         markdown_page: &Path,
-        content: &String,
+        content: &str,
         arena: &'a Arena<AstNode<'a>>,
         source: String,
     ) -> Result<MarkdownPage<'a>> {
@@ -59,7 +59,7 @@ impl<'a> MarkdownPage<'a> {
         // options.extension.autolink = true;
         options.extension.table = true;
 
-        let root: &AstNode<'_> = parse_document(arena, content.as_str(), &options);
+        let root: &AstNode<'_> = parse_document(arena, content, &options);
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
         where
@@ -99,9 +99,10 @@ impl<'a> MarkdownPage<'a> {
         let heading_node = first_heading.unwrap();
         let mut title = String::default();
         for c in heading_node.children() {
-            iter_nodes(c, &mut |child| match &mut child.data.borrow_mut().value {
-                NodeValue::Text(text) => title += text,
-                _ => (),
+            iter_nodes(c, &mut |child| {
+                if let NodeValue::Text(text) = &mut child.data.borrow_mut().value {
+                    title += text
+                }
             });
         }
 
@@ -270,7 +271,7 @@ mod tests {
         let arena = Arena::<AstNode>::new();
         let page = MarkdownPage::parse_content(
             PathBuf::from("page.md").as_path(),
-            &"# My Page Title\n\nMy page content: ![myimage](myimage.png)".to_string(),
+            "# My Page Title\n\nMy page content: ![myimage](myimage.png)",
             &arena,
             "page.md".into(),
         )?;

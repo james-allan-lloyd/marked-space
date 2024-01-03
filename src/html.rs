@@ -395,9 +395,9 @@ impl LinkGenerator {
         }
     }
 
-    pub fn add_file_title(&mut self, filename: &Path, title: &String) {
+    pub fn add_file_title(&mut self, filename: &Path, title: &str) {
         self.filename_to_title
-            .insert(filename.display().to_string(), title.clone());
+            .insert(filename.display().to_string(), title.to_owned());
     }
 
     pub fn get_file_title(&self, filename: &Path) -> Option<&String> {
