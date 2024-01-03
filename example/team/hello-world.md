@@ -31,7 +31,7 @@ with a soft break
 
 ---
 
-Check out the home page here: [](../index.md)
+Check out the home page here: [](index.md)
 
 ![Alt text](image.png "A rusty crustation")
 
