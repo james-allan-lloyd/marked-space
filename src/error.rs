@@ -1,3 +1,5 @@
+use std::path::Display;
+
 use reqwest::{blocking::Response, StatusCode};
 use thiserror::Error;
 
@@ -12,14 +14,20 @@ pub enum ConfluenceError {
         body_content: String,
     },
 
-    #[error("Failed to parse {filename}: {message}")]
-    ParsingError { filename: String, message: String },
+    #[error("Failed to parse {filename}: {errors}")]
+    ParsingError { filename: String, errors: String },
 
     #[error("Unsupported format: {message:?}")]
     UnsupportedStorageFormat { message: String },
 
     #[error("Duplicate title '{title}' in [{file}]")]
     DuplicateTitle { title: String, file: String },
+
+    #[error("Missing file for link in [{source_file}] to [{local_link}]")]
+    MissingFileLink {
+        source_file: String,
+        local_link: String,
+    },
 }
 
 impl ConfluenceError {
@@ -48,10 +56,11 @@ impl ConfluenceError {
         .into()
     }
 
-    pub fn parsing_error(filename: impl Into<String>, message: impl Into<String>) -> anyhow::Error {
+    pub fn parsing_errors(filename: impl Into<String>, errors: Vec<String>) -> anyhow::Error {
+        let errors = errors.join(", ");
         ConfluenceError::ParsingError {
             filename: filename.into(),
-            message: message.into(),
+            errors,
         }
         .into()
     }

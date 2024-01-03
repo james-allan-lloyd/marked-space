@@ -5,7 +5,7 @@ use walkdir::WalkDir;
 use crate::{
     error::{ConfluenceError, Result},
     html::LinkGenerator,
-    markdown_page::MarkdownPage,
+    markdown_page::{self, MarkdownPage},
 };
 use std::path::{Path, PathBuf};
 
@@ -77,7 +77,26 @@ impl<'a> MarkdownSpace<'a> {
             })
             .filter_map(|r| r.err());
 
+        let missing_files = markdown_pages
+            .iter()
+            .map(|markdown_page| {
+                markdown_page.local_links.iter().map(|local_link| {
+                    if self.dir.join(local_link).exists() {
+                        Ok(local_link)
+                    } else {
+                        Err(ConfluenceError::MissingFileLink {
+                            source_file: markdown_page.source.clone(),
+                            local_link: local_link.display().to_string(),
+                        }
+                        .into())
+                    }
+                })
+            })
+            .flatten()
+            .filter_map(|r| r.err());
+
         parse_errors.extend(title_errors);
+        parse_errors.extend(missing_files);
 
         if !parse_errors.is_empty() {
             let error_string: String = parse_errors
@@ -167,6 +186,30 @@ mod tests {
         assert_eq!(
             format!("{}", result.err().unwrap()),
             "Error parsing space: Duplicate title 'The Same Heading' in [markdown2.md]"
+        )
+    }
+
+    #[test]
+    fn it_checks_page_links_exist() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.child("test/markdown1.md")
+            .write_str("# Page 1\nLink to page 2: [link](markdown2.md)\n")
+            .unwrap();
+        temp.child("test/markdown2.md")
+            .write_str("# Page 2\nLink to non-existing page: [link](does_not_exist.md)")
+            .unwrap();
+
+        let result = MarkdownSpace::from_directory(temp.child("test").path());
+
+        assert!(result.is_ok());
+
+        let space = result.unwrap();
+
+        let result = space.parse(&mut LinkGenerator::new());
+        assert!(result.is_err());
+        assert_eq!(
+            format!("{:#}", result.err().unwrap()),
+            "Error parsing space: Missing file for link in [markdown2.md] to [does_not_exist.md]"
         )
     }
 }

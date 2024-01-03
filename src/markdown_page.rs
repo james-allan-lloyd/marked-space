@@ -8,6 +8,7 @@ use crate::{
     markdown_space::MarkdownSpace,
     parent::get_parent_title,
 };
+use anyhow::Error;
 use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options, Plugins,
@@ -20,6 +21,7 @@ pub struct MarkdownPage<'a> {
     pub source: String,
     root: &'a AstNode<'a>,
     pub attachments: Vec<PathBuf>,
+    pub local_links: Vec<PathBuf>,
 }
 
 impl<'a> MarkdownPage<'a> {
@@ -71,7 +73,9 @@ impl<'a> MarkdownPage<'a> {
             }
         }
 
+        let mut errors = Vec::<String>::default();
         let mut attachments = Vec::<PathBuf>::default();
+        let mut local_links = Vec::<PathBuf>::default();
         let mut first_heading: Option<&AstNode> = None;
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
             NodeValue::Heading(_heading) => {
@@ -86,35 +90,48 @@ impl<'a> MarkdownPage<'a> {
                     attachments.push(attachment_path);
                 }
             }
+            NodeValue::Link(node_link) => {
+                println!("{:#?}", node_link);
+                if !(node_link.url.starts_with("http://") || node_link.url.starts_with("https://"))
+                {
+                    let link_path = PathBuf::from(source.as_str())
+                        .parent()
+                        .unwrap()
+                        .join(node_link.url.to_owned());
+                    local_links.push(link_path);
+                }
+            }
             _ => (),
         });
 
-        if first_heading.is_none() {
-            return Err(ConfluenceError::parsing_error(
-                source,
-                "missing first heading for title",
-            ));
-        }
-
-        let heading_node = first_heading.unwrap();
         let mut title = String::default();
-        for c in heading_node.children() {
-            iter_nodes(c, &mut |child| {
-                if let NodeValue::Text(text) = &mut child.data.borrow_mut().value {
-                    title += text
-                }
-            });
+
+        if first_heading.is_none() {
+            errors.push(String::from("missing first heading for title"));
+        } else {
+            let heading_node = first_heading.unwrap();
+            for c in heading_node.children() {
+                iter_nodes(c, &mut |child| {
+                    if let NodeValue::Text(text) = &mut child.data.borrow_mut().value {
+                        title += text
+                    }
+                });
+            }
+            // TODO: it's still allocated tho...
+            heading_node.detach();
         }
 
-        // TODO: it's still allocated tho...
-        heading_node.detach();
-
-        Ok(MarkdownPage {
-            title,
-            source,
-            root,
-            attachments,
-        })
+        if errors.is_empty() {
+            Ok(MarkdownPage {
+                title,
+                source,
+                root,
+                attachments,
+                local_links,
+            })
+        } else {
+            Err(ConfluenceError::parsing_errors(source, errors))
+        }
     }
 
     fn to_html_string(&self, link_generator: &LinkGenerator) -> Result<String> {
@@ -291,8 +308,6 @@ mod tests {
         //     <ri:url ri:value="http://confluence.atlassian.com/images/logo/confluence_48_trans.png" />
         // </ac:image>
     }
-
-    fn _it_checks_page_links() {}
 
     fn _it_checks_attachment_links() {}
 }
