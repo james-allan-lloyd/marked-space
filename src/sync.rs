@@ -276,17 +276,16 @@ fn page_up_to_date(existing_page: &ConfluencePage, page: &Page) -> bool {
     existing_content == new_content
 }
 
-pub fn sync_space(
+pub fn sync_space<'a>(
     confluence_client: ConfluenceClient,
-    markdown_space: &MarkdownSpace,
+    markdown_space: &'a MarkdownSpace<'a>,
     output_dir: Option<String>,
 ) -> Result<()> {
     let space_key = markdown_space.key.clone();
     println!("Parsing space {}...", space_key);
-    let arena = Arena::<AstNode>::new();
     let mut link_generator = LinkGenerator::new();
 
-    let markdown_pages = markdown_space.parse(&arena, &mut link_generator)?;
+    let markdown_pages = markdown_space.parse(&mut link_generator)?;
 
     println!("Synchronizing space {}...", space_key);
     let space = get_space(&confluence_client, space_key.as_str())?;

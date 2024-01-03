@@ -52,7 +52,7 @@ fn main() -> Result<ExitCode> {
     check_environment_vars()?;
 
     let dir = PathBuf::from(args.space.clone());
-    let markdown_space = MarkdownSpace::from_directory(&dir)?;
+    let mut markdown_space = MarkdownSpace::from_directory(&dir)?;
 
     println!(
         "Syncing {} pages from space {}",
@@ -62,7 +62,7 @@ fn main() -> Result<ExitCode> {
 
     let confluence_client = ConfluenceClient::new("jimjim256.atlassian.net");
 
-    match sync_space(confluence_client, &markdown_space, args.output) {
+    match sync_space(confluence_client, &mut markdown_space, args.output) {
         Ok(_) => Ok(ExitCode::SUCCESS),
         Err(err) => {
             println!("Error: {}", err);

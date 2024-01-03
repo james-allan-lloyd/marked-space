@@ -9,14 +9,15 @@ use crate::{
 };
 use std::path::{Path, PathBuf};
 
-pub struct MarkdownSpace {
+pub struct MarkdownSpace<'a> {
     pub key: String,
+    pub arena: Arena<AstNode<'a>>,
     pub markdown_pages: Vec<PathBuf>,
     pub dir: PathBuf,
 }
 
-impl MarkdownSpace {
-    pub fn from_directory(dir: &Path) -> Result<MarkdownSpace> {
+impl<'a> MarkdownSpace<'a> {
+    pub fn from_directory(dir: &Path) -> Result<Self> {
         let mut markdown_pages = Vec::<PathBuf>::default();
         for entry in WalkDir::new(dir) {
             let entry = entry?;
@@ -37,6 +38,7 @@ impl MarkdownSpace {
                 markdown_pages,
                 key,
                 dir: PathBuf::from(dir),
+                arena: Arena::new(),
             })
         } else {
             Err(crate::error::ConfluenceError::generic_error(
@@ -56,16 +58,12 @@ impl MarkdownSpace {
         }
     }
 
-    pub(crate) fn parse<'a>(
-        &self,
-        arena: &'a Arena<AstNode<'a>>,
-        link_generator: &mut LinkGenerator,
-    ) -> Result<Vec<MarkdownPage<'a>>> {
+    pub(crate) fn parse(&'a self, link_generator: &mut LinkGenerator) -> Result<Vec<MarkdownPage>> {
         let mut parse_errors = Vec::<anyhow::Error>::default();
         let markdown_pages: Vec<MarkdownPage> = self
             .markdown_pages
             .iter()
-            .map(|markdown_page_path| MarkdownPage::parse(self, markdown_page_path, arena))
+            .map(|markdown_page_path| MarkdownPage::parse(self, markdown_page_path, &self.arena))
             .filter_map(|r| r.map_err(|e| parse_errors.push(e)).ok())
             .collect();
         if !parse_errors.is_empty() {
