@@ -677,7 +677,7 @@ impl<'o> ConfluenceFormatter<'o> {
 
                     self.output
                         .write_all(br#"<ac:parameter ac:name="language">"#)?;
-                    self.output.write_all(&ncb.info.as_bytes())?;
+                    self.output.write_all(ncb.info.as_bytes())?;
                     self.output.write_all(b"</ac:parameter>")?;
                     self.output.write_all(b"<ac:plain-text-body><![CDATA[")?;
 

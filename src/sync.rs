@@ -76,11 +76,9 @@ fn sync_page_attachments(
         let input = File::open(attachment)?;
         let reader = BufReader::new(input);
         let hashstring = sha256_digest(reader)?;
-        if hashes.contains_key(&filename) {
-            if hashstring == *hashes.get(&filename).unwrap() {
-                println!("Attachment {}: up to date", filename);
-                return Ok(());
-            }
+        if hashes.contains_key(&filename) && hashstring == *hashes.get(&filename).unwrap() {
+            println!("Attachment {}: up to date", filename);
+            return Ok(());
         }
 
         println!("Updating attachment");

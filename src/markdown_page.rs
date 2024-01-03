@@ -270,7 +270,7 @@ mod tests {
         let arena = Arena::<AstNode>::new();
         let page = MarkdownPage::parse_content(
             PathBuf::from("page.md").as_path(),
-            &format!("# My Page Title\n\nMy page content: ![myimage](myimage.png)",),
+            &"# My Page Title\n\nMy page content: ![myimage](myimage.png)".to_string(),
             &arena,
             "page.md".into(),
         )?;

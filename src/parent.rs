@@ -24,10 +24,10 @@ pub fn get_parent_title(
             if let Some(parent_title) = link_generator.get_file_title(&parent_path_page).cloned() {
                 Ok(Some(parent_title))
             } else {
-                return Err(ConfluenceError::generic_error(format!(
+                Err(ConfluenceError::generic_error(format!(
                     "Missing parent: {}",
                     parent_path_page.display()
-                )));
+                )))
             }
         }
     } else {
