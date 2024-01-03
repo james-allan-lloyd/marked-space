@@ -284,34 +284,9 @@ pub fn sync_space(
     let space_key = markdown_space.key.clone();
     println!("Parsing space {}...", space_key);
     let arena = Arena::<AstNode>::new();
-
-    let mut parse_errors = Vec::<anyhow::Error>::default();
-
-    let markdown_pages: Vec<MarkdownPage> = markdown_space
-        .markdown_pages
-        .iter()
-        .map(|markdown_page_path| MarkdownPage::parse(markdown_space, markdown_page_path, &arena))
-        .filter_map(|r| r.map_err(|e| parse_errors.push(e)).ok())
-        .collect();
-
-    if !parse_errors.is_empty() {
-        let error_string: String = parse_errors
-            .iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<String>>()
-            .join(", ");
-        return Err(ConfluenceError::generic_error(
-            String::from("Error parsing space: ") + &error_string,
-        ));
-    }
-
     let mut link_generator = LinkGenerator::new();
-    markdown_pages.iter().for_each(|markdown_page| {
-        link_generator.add_file_title(
-            &PathBuf::from(markdown_page.source.clone()),
-            &markdown_page.title,
-        )
-    });
+
+    let markdown_pages = parse_space(markdown_space, &arena, &mut link_generator)?;
 
     println!("Synchronizing space {}...", space_key);
     let space = get_space(&confluence_client, space_key.as_str())?;
@@ -325,6 +300,37 @@ pub fn sync_space(
     }
 
     Ok(())
+}
+
+fn parse_space<'a>(
+    markdown_space: &MarkdownSpace,
+    arena: &'a Arena<AstNode<'a>>,
+    link_generator: &mut LinkGenerator,
+) -> Result<Vec<MarkdownPage<'a>>> {
+    let mut parse_errors = Vec::<anyhow::Error>::default();
+    let markdown_pages: Vec<MarkdownPage> = markdown_space
+        .markdown_pages
+        .iter()
+        .map(|markdown_page_path| MarkdownPage::parse(markdown_space, markdown_page_path, arena))
+        .filter_map(|r| r.map_err(|e| parse_errors.push(e)).ok())
+        .collect();
+    if !parse_errors.is_empty() {
+        let error_string: String = parse_errors
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+        return Err(ConfluenceError::generic_error(
+            String::from("Error parsing space: ") + &error_string,
+        ));
+    }
+    markdown_pages.iter().for_each(|markdown_page| {
+        link_generator.add_file_title(
+            &PathBuf::from(markdown_page.source.clone()),
+            &markdown_page.title,
+        )
+    });
+    Ok(markdown_pages)
 }
 
 fn output_content(d: &String, markdown_space: &MarkdownSpace, page: &Page) -> Result<()> {
@@ -420,8 +426,8 @@ mod tests {
             .write_str("# Subpages Parent\nparent content")?;
         temp.child("test/subpages/child.md")
             .write_str("# Subpage Child\nchild content")?;
-        let space = MarkdownSpace::from_directory(temp.child("test").path())?;
         let mut link_generator = LinkGenerator::new();
+        let space = MarkdownSpace::from_directory(temp.child("test").path())?;
         let _home_page = parse_page(
             &space,
             temp.child("test/index.md").path(),
