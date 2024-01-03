@@ -15,6 +15,7 @@ mod error;
 mod html;
 mod markdown_page;
 mod markdown_space;
+mod moves;
 mod parent;
 mod responses;
 mod sync;

@@ -66,6 +66,19 @@ impl<'a> MarkdownSpace<'a> {
             .map(|markdown_page_path| MarkdownPage::parse(self, markdown_page_path, &self.arena))
             .filter_map(|r| r.map_err(|e| parse_errors.push(e)).ok())
             .collect();
+
+        let title_errors = markdown_pages
+            .iter()
+            .map(|markdown_page| {
+                link_generator.add_file_title(
+                    &PathBuf::from(markdown_page.source.clone()),
+                    &markdown_page.title,
+                )
+            })
+            .filter_map(|r| r.err());
+
+        parse_errors.extend(title_errors);
+
         if !parse_errors.is_empty() {
             let error_string: String = parse_errors
                 .iter()
@@ -76,12 +89,6 @@ impl<'a> MarkdownSpace<'a> {
                 String::from("Error parsing space: ") + &error_string,
             ));
         }
-        markdown_pages.iter().for_each(|markdown_page| {
-            link_generator.add_file_title(
-                &PathBuf::from(markdown_page.source.clone()),
-                &markdown_page.title,
-            )
-        });
         Ok(markdown_pages)
     }
 }
@@ -90,7 +97,9 @@ impl<'a> MarkdownSpace<'a> {
 mod tests {
     use std::path::Path;
 
-    use assert_fs::fixture::{FileTouch, PathChild};
+    use assert_fs::fixture::{FileTouch, FileWriteFile, FileWriteStr as _, PathChild};
+
+    use crate::{error::ConfluenceError, html::LinkGenerator};
 
     use super::MarkdownSpace;
 
@@ -136,4 +145,28 @@ mod tests {
 
     fn _it_fails_if_space_directory_is_invalid_space_key() {}
     fn _it_skips_subpages_if_directory_contains_no_markdown_files() {}
+
+    #[test]
+    fn it_fails_when_headings_are_duplicated() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.child("test/markdown1.md")
+            .write_str("# The Same Heading")
+            .unwrap();
+        temp.child("test/markdown2.md")
+            .write_str("# The Same Heading")
+            .unwrap();
+
+        let result = MarkdownSpace::from_directory(temp.child("test").path());
+
+        assert!(result.is_ok());
+
+        let space = result.unwrap();
+        let result = space.parse(&mut LinkGenerator::new());
+
+        assert!(result.is_err());
+        assert_eq!(
+            format!("{}", result.err().unwrap()),
+            "Error parsing space: Duplicate title 'The Same Heading' in [markdown2.md]"
+        )
+    }
 }

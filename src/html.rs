@@ -14,7 +14,10 @@ use std::str;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::error::Result;
 use comrak::adapters::HeadingMeta;
+
+use crate::error::ConfluenceError;
 
 #[rustfmt::skip]
 const CMARK_CTYPE_CLASS: [u8; 256] = [
@@ -384,20 +387,30 @@ pub fn escape_href(output: &mut dyn Write, buffer: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
+#[derive(Default)]
 pub struct LinkGenerator {
     filename_to_title: HashMap<String, String>,
+    titles: HashSet<String>,
 }
 
 impl LinkGenerator {
     pub fn new() -> Self {
-        LinkGenerator {
-            filename_to_title: HashMap::default(),
-        }
+        LinkGenerator::default()
     }
 
-    pub fn add_file_title(&mut self, filename: &Path, title: &str) {
+    pub fn add_file_title(&mut self, filename: &Path, title: &str) -> Result<()> {
+        let title = title.to_owned();
+        if self.titles.contains(&title) {
+            return Err(ConfluenceError::DuplicateTitle {
+                file: filename.display().to_string(),
+                title,
+            }
+            .into());
+        }
+        self.titles.insert(title.clone());
         self.filename_to_title
             .insert(filename.display().to_string(), title.to_owned());
+        Ok(())
     }
 
     pub fn get_file_title(&self, filename: &Path) -> Option<&String> {

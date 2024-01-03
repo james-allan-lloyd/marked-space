@@ -170,11 +170,9 @@ mod tests {
 
     use comrak::{nodes::AstNode, Arena};
 
+    use crate::error::TestResult;
     use crate::html::LinkGenerator;
     use crate::markdown_page::MarkdownPage;
-    use crate::Result;
-
-    type TestResult = Result<()>;
 
     #[test]
     fn it_get_first_heading_as_title() -> TestResult {

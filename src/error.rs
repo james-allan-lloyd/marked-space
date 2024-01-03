@@ -17,6 +17,9 @@ pub enum ConfluenceError {
 
     #[error("Unsupported format: {message:?}")]
     UnsupportedStorageFormat { message: String },
+
+    #[error("Duplicate title '{title}' in [{file}]")]
+    DuplicateTitle { title: String, file: String },
 }
 
 impl ConfluenceError {
@@ -55,3 +58,6 @@ impl ConfluenceError {
 }
 
 pub type Result<T> = anyhow::Result<T>;
+
+#[cfg(test)]
+pub type TestResult = Result<()>;
