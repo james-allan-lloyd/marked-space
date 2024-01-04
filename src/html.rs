@@ -413,6 +413,10 @@ impl LinkGenerator {
         Ok(())
     }
 
+    pub fn has_title(&self, title: &str) -> bool {
+        self.titles.contains(&title.to_owned())
+    }
+
     pub fn get_file_title(&self, filename: &Path) -> Option<&String> {
         self.filename_to_title.get(&filename.display().to_string())
     }

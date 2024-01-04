@@ -20,6 +20,9 @@ mod test {
     // but... even if the content doesn't change, then it should be reparented
 
     // change title of file without moving
+    // - change the title
+    // - somehow look up the original title? or find pages that have been orphaned
+    // - check orphaned pages to see if they reference the original file
     // change title and move
     // warn about files that are orphaned
 

@@ -1,3 +1,6 @@
+use reqwest::Version;
+use serde_json::from_str;
+
 use crate::{
     confluence_client::ConfluenceClient, error::ConfluenceError, markdown_page::RenderedPage,
     responses,
@@ -5,14 +8,40 @@ use crate::{
 
 use crate::error::Result;
 
+#[derive(Debug)]
 pub struct ConfluencePage {
     pub id: String,
+    pub title: String,
     pub parent_id: Option<String>,
     pub content: String,
-    pub version_number: i32,
+    pub version: responses::Version,
 }
 
 impl ConfluencePage {
+    pub fn get_all(confluence_client: &ConfluenceClient, space_id: &str) -> Result<Vec<Self>> {
+        let response = confluence_client
+            .get_all_pages_in_space(space_id)?
+            .error_for_status()?;
+
+        let content = response.text()?;
+        let existing_page: responses::MultiEntityResult<responses::PageBulkWithoutBody> =
+            from_str(content.as_str())?;
+
+        let results = existing_page
+            .results
+            .iter()
+            .map(|bulk_page| ConfluencePage {
+                id: bulk_page.id.clone(),
+                content: String::default(),
+                version: bulk_page.version.clone(),
+                parent_id: bulk_page.parent_id.clone(),
+                title: bulk_page.title.clone(),
+            })
+            .collect();
+
+        Ok(results)
+    }
+
     pub fn get_homepage(
         confluence_client: &ConfluenceClient,
         homepage_id: &str,
@@ -40,8 +69,9 @@ impl ConfluencePage {
         Ok(ConfluencePage {
             id: existing_page.id,
             content: existing_content,
-            version_number: existing_page.version.number,
+            version: existing_page.version,
             parent_id: None,
+            title: existing_page.title,
         })
     }
 
@@ -73,8 +103,9 @@ impl ConfluencePage {
         Ok(Some(ConfluencePage {
             id: bulk_page.id.clone(),
             content: existing_content,
-            version_number: bulk_page.version.number,
+            version: bulk_page.version.clone(),
             parent_id: Some(bulk_page.parent_id.clone()),
+            title: bulk_page.title.clone(),
         }))
     }
 }

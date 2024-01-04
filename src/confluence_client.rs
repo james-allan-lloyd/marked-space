@@ -69,6 +69,19 @@ impl ConfluenceClient {
             .send()
     }
 
+    pub fn get_all_pages_in_space(&self, space_id: &str) -> Result {
+        let url = format!(
+            "https://{}/wiki/api/v2/spaces/{}/pages",
+            self.hostname, space_id
+        );
+
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .send()
+    }
+
     pub fn update_page(&self, page_id: &String, payload: Value) -> Result {
         let url = format!("https://{}/wiki/api/v2/pages/{}", self.hostname, page_id);
         self.client

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Version {
     pub message: String,
@@ -29,6 +29,7 @@ pub enum BodyBulk {
 #[serde(rename_all = "camelCase")]
 pub struct PageBulkWithoutBody {
     pub id: String,
+    pub parent_id: Option<String>,
     pub title: String,
     pub version: Version,
 }

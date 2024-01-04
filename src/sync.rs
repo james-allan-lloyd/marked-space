@@ -74,21 +74,20 @@ fn sync_page_attachments(
 
     for attachment in attachments.iter() {
         let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
-        start_operation(format!("[{}] attachment", filename).as_str());
+        let op = SyncOperation::start(format!("[{}] attachment", filename), true);
         let input = File::open(attachment)
             .with_context(|| format!("Opening attachment for {}", filename))?;
         let reader = BufReader::new(input);
         let hashstring = sha256_digest(reader)?;
         if hashes.contains_key(&filename) && hashstring == *hashes.get(&filename).unwrap() {
-            end_operation("OK");
+            op.end(SyncOperationResult::SKIPPED);
             return Ok(());
         }
 
-        println!("Updating attachment");
         let _resp = confluence_client
             .create_or_update_attachment(&page_id, attachment, &hashstring)?
             .error_for_status()?;
-        end_operation("UPDATED");
+        op.end(SyncOperationResult::UPDATED);
     }
 
     Ok(())
@@ -114,12 +113,35 @@ fn get_page_id_by_title(
     }
 }
 
-fn start_operation(desc: &str) {
-    print!("  {}", desc);
+struct SyncOperation {
+    desc: String,
+    verbose: bool,
 }
 
-fn end_operation(result: &str) {
-    println!(":  {}", result);
+enum SyncOperationResult {
+    UPDATED,
+    SKIPPED,
+    CREATED,
+    ERROR,
+}
+
+impl SyncOperation {
+    fn start(desc: String, verbose: bool) -> SyncOperation {
+        // print!("  {}", desc);
+        SyncOperation { desc, verbose }
+    }
+
+    fn end(&self, result: SyncOperationResult) {
+        let result_str = match result {
+            SyncOperationResult::UPDATED => "Updated",
+            SyncOperationResult::SKIPPED => "Skipped",
+            SyncOperationResult::CREATED => "Created",
+            SyncOperationResult::ERROR => "Error",
+        };
+        if self.verbose || matches!(result, SyncOperationResult::SKIPPED) == false {
+            println!("{}:  {}", self.desc, result_str);
+        }
+    }
 }
 
 // Returns the ID of the page that the content was synced to.
@@ -128,7 +150,7 @@ fn sync_page_content(
     space: &responses::Space,
     page: RenderedPage,
 ) -> Result<String> {
-    start_operation(format!("[{}] \"{}\"", page.source, page.title).as_str());
+    let op = SyncOperation::start(format!("[{}] \"{}\"", page.source, page.title), true);
 
     let existing_page = if page.is_home_page() {
         Some(ConfluencePage::get_homepage(
@@ -160,33 +182,37 @@ fn sync_page_content(
 
     if let Some(existing_page) = existing_page {
         let id = existing_page.id.clone();
-        if parent_id == existing_page.parent_id && page_up_to_date(&existing_page, &page) {
-            end_operation("OK");
+        let version_message = "updated by markedspace:";
+        if parent_id == existing_page.parent_id
+            && version_message == existing_page.version.message
+            && page_up_to_date(&existing_page, &page)
+        {
+            op.end(SyncOperationResult::SKIPPED);
             return Ok(id);
         }
 
         payload["id"] = id.clone().into();
         payload["version"] = json!({
-            "message": "updated automatically",
-            "number": existing_page.version_number + 1
+            "message": version_message,
+            "number": existing_page.version.number + 1
         });
 
         let resp = confluence_client.update_page(&id, payload)?;
         if !resp.status().is_success() {
-            end_operation("ERROR");
+            op.end(SyncOperationResult::ERROR);
             Err(ConfluenceError::failed_request(resp))
         } else {
-            end_operation("UPDATED");
+            op.end(SyncOperationResult::UPDATED);
             Ok(id)
         }
     } else {
         let resp = confluence_client.create_page(payload)?;
         if !resp.status().is_success() {
-            end_operation("ERROR");
+            op.end(SyncOperationResult::ERROR);
             return Err(ConfluenceError::failed_request(resp));
         } else {
             let page: PageSingle = resp.json()?;
-            end_operation("CREATED");
+            op.end(SyncOperationResult::CREATED);
             return Ok(page.id);
         }
     }
@@ -198,6 +224,24 @@ fn page_up_to_date(existing_page: &ConfluencePage, page: &RenderedPage) -> bool 
     let existing_content = re.replace_all(existing_page.content.as_str(), "");
     let new_content = String::from(page.content.replace("<![CDATA[]]>", "").trim());
     existing_content == new_content
+}
+
+fn get_orphaned_pages<'a>(
+    confluence_client: &ConfluenceClient,
+    link_generator: &LinkGenerator,
+    space_id: &str,
+) -> Result<Vec<ConfluencePage>> {
+    let pages = ConfluencePage::get_all(confluence_client, space_id)?;
+    Ok(pages
+        .into_iter()
+        .filter(|confluence_page| {
+            confluence_page
+                .version
+                .message
+                .starts_with("updated by markedspace:")
+                && !link_generator.has_title(confluence_page.title.as_str())
+        })
+        .collect())
 }
 
 pub fn sync_space<'a>(
@@ -219,7 +263,12 @@ pub fn sync_space<'a>(
         "Synchronizing space {} on {}...",
         space_key, confluence_client.hostname
     );
+
     let space = get_space(&confluence_client, space_key.as_str())?;
+    let orphaned_pages = get_orphaned_pages(&confluence_client, &link_generator, &space.id)?;
+    orphaned_pages.iter().for_each(|p| {
+        println!("Orphan {:#?}", p);
+    });
     for markdown_page in markdown_pages.iter() {
         let page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {
