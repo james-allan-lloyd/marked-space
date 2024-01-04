@@ -55,7 +55,7 @@ impl ConfluenceSpace {
         if result.is_some() {
             return Ok(result);
         }
-        let source_marker = format!("source={}", &page.source);
+        let source_marker = format!("source={}", &page.source.replace('\\', "/"));
         Ok(self
             .orphans
             .iter()

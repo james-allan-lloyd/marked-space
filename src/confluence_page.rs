@@ -1,4 +1,3 @@
-use reqwest::Version;
 use serde_json::from_str;
 
 use crate::{

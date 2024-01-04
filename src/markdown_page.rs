@@ -182,7 +182,7 @@ impl RenderedPage {
         format!(
             "{} source={}",
             ConfluencePage::version_message_prefix(),
-            self.source
+            self.source.replace('\\', "/") // needs to be platform independent
         )
     }
 }

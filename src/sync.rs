@@ -18,7 +18,7 @@ use crate::{
     html::LinkGenerator,
     markdown_page::RenderedPage,
     markdown_space::MarkdownSpace,
-    responses::{self, Attachment, MultiEntityResult, PageBulkWithoutBody, PageSingle},
+    responses::{self, Attachment, MultiEntityResult, PageBulkWithoutBody, PageSingle, Version},
     Result,
 };
 
@@ -126,7 +126,7 @@ fn sync_page_content(
 ) -> Result<String> {
     let op = SyncOperation::start(format!("[{}] \"{}\"", page.source, page.title), true);
 
-    let existing_page = if page.is_home_page() {
+    let mut existing_page = if page.is_home_page() {
         Some(ConfluencePage::get_homepage(
             confluence_client,
             &space.homepage_id,
@@ -143,7 +143,50 @@ fn sync_page_content(
         Some(space.homepage_id.clone())
     };
 
-    let mut payload = json!({
+    let mut op_result = SyncOperationResult::UPDATED;
+    if existing_page.is_none() {
+        // it's important that we have a version message to make move detection
+        // work, but you can't set the version string for a create call, so we
+        // create a page with empty content, then update it with the new stuff.
+        // Means we'll always have at least two versions.
+        op_result = SyncOperationResult::CREATED;
+        let resp = confluence_client.create_page(json!({
+            "spaceId": space.id,
+            "status": "current",
+            "title": page.title.clone(),
+            "parentId": parent_id,
+        }))?;
+        if !resp.status().is_success() {
+            op.end(SyncOperationResult::ERROR);
+            return Err(ConfluenceError::failed_request(resp));
+        }
+
+        let page: PageSingle = resp.json()?;
+        existing_page = Some(ConfluencePage {
+            id: page.id,
+            title: page.title.clone(),
+            parent_id: parent_id.clone(),
+            content: String::default(),
+            version: Version {
+                number: 1,
+                message: String::default(),
+            },
+        });
+    }
+
+    let existing_page = existing_page.unwrap();
+    let id = existing_page.id.clone();
+    let version_message = page.version_message();
+    if parent_id == existing_page.parent_id
+        && version_message == existing_page.version.message
+        && page_up_to_date(&existing_page, &page)
+    {
+        op.end(SyncOperationResult::SKIPPED);
+        return Ok(id);
+    }
+
+    let update_payload = json!({
+        "id": id.clone(),
         "spaceId": space.id,
         "status": "current",
         "title": page.title,
@@ -151,44 +194,20 @@ fn sync_page_content(
         "body": {
             "representation": "storage",
             "value": page.content
+        },
+        "version": {
+            "message": version_message,
+            "number": existing_page.version.number + 1
         }
     });
 
-    if let Some(existing_page) = existing_page {
-        let id = existing_page.id.clone();
-        let version_message = page.version_message();
-        if parent_id == existing_page.parent_id
-            && version_message == existing_page.version.message
-            && page_up_to_date(&existing_page, &page)
-        {
-            op.end(SyncOperationResult::SKIPPED);
-            return Ok(id);
-        }
-
-        payload["id"] = id.clone().into();
-        payload["version"] = json!({
-            "message": version_message,
-            "number": existing_page.version.number + 1
-        });
-
-        let resp = confluence_client.update_page(&id, payload)?;
-        if !resp.status().is_success() {
-            op.end(SyncOperationResult::ERROR);
-            Err(ConfluenceError::failed_request(resp))
-        } else {
-            op.end(SyncOperationResult::UPDATED);
-            Ok(id)
-        }
+    let resp = confluence_client.update_page(&id, update_payload)?;
+    if !resp.status().is_success() {
+        op.end(SyncOperationResult::ERROR);
+        Err(ConfluenceError::failed_request(resp))
     } else {
-        let resp = confluence_client.create_page(payload)?;
-        if !resp.status().is_success() {
-            op.end(SyncOperationResult::ERROR);
-            return Err(ConfluenceError::failed_request(resp));
-        } else {
-            let page: PageSingle = resp.json()?;
-            op.end(SyncOperationResult::CREATED);
-            return Ok(page.id);
-        }
+        op.end(op_result);
+        Ok(id)
     }
 }
 
@@ -242,6 +261,7 @@ pub fn sync_space<'a>(
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     let orphaned_pages = get_orphaned_pages(&confluence_client, &link_generator, &space.id)?;
     orphaned_pages.iter().for_each(|p| {
+        // todo: filter for orphans whose files still exist
         println!(
             "Orphaned page detected \"{}\", version comment: {}",
             p.title, p.version.message
