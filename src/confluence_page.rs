@@ -8,7 +8,7 @@ use crate::{
 
 use crate::error::Result;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConfluencePage {
     pub id: String,
     pub title: String,
@@ -18,6 +18,10 @@ pub struct ConfluencePage {
 }
 
 impl ConfluencePage {
+    pub fn version_message_prefix() -> &'static str {
+        "updated by markedspace:"
+    }
+
     pub fn get_all(confluence_client: &ConfluenceClient, space_id: &str) -> Result<Vec<Self>> {
         let response = confluence_client
             .get_all_pages_in_space(space_id)?
@@ -77,11 +81,11 @@ impl ConfluencePage {
 
     pub fn get_page(
         confluence_client: &ConfluenceClient,
-        space: &responses::Space,
+        space_id: &str,
         page: &RenderedPage,
     ) -> Result<Option<ConfluencePage>> {
         let existing_page: responses::MultiEntityResult<responses::PageBulk> = confluence_client
-            .get_page_by_title(&space.id, page.title.as_str(), true)?
+            .get_page_by_title(space_id, page.title.as_str(), true)?
             .error_for_status()?
             .json()?;
 

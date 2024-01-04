@@ -13,6 +13,7 @@ use crate::{
     checksum::sha256_digest,
     confluence_client::ConfluenceClient,
     confluence_page::ConfluencePage,
+    confluence_space::ConfluenceSpace,
     error::ConfluenceError,
     html::LinkGenerator,
     markdown_page::RenderedPage,
@@ -20,33 +21,6 @@ use crate::{
     responses::{self, Attachment, MultiEntityResult, PageBulkWithoutBody, PageSingle},
     Result,
 };
-
-fn get_space(confluence_client: &ConfluenceClient, space_id: &str) -> Result<responses::Space> {
-    let resp = match confluence_client.get_space_by_key(space_id) {
-        Ok(resp) => resp,
-        Err(_) => {
-            return Err(ConfluenceError::generic_error("Failed to get space id"));
-        }
-    };
-
-    if !resp.status().is_success() {
-        return Err(ConfluenceError::failed_request(resp));
-    }
-
-    let json = resp.json::<serde_json::Value>()?;
-
-    if json["results"].as_array().unwrap().is_empty() {
-        return Err(ConfluenceError::generic_error(format!(
-            "No such space: {}",
-            space_id
-        )));
-    }
-
-    match serde_json::from_value::<responses::Space>(json["results"][0].clone()) {
-        Ok(parsed_space) => Ok(parsed_space),
-        Err(_) => Err(ConfluenceError::generic_error("Failed to parse response.")),
-    }
-}
 
 fn sync_page_attachments(
     confluence_client: &ConfluenceClient,
@@ -147,7 +121,7 @@ impl SyncOperation {
 // Returns the ID of the page that the content was synced to.
 fn sync_page_content(
     confluence_client: &ConfluenceClient,
-    space: &responses::Space,
+    space: &ConfluenceSpace,
     page: RenderedPage,
 ) -> Result<String> {
     let op = SyncOperation::start(format!("[{}] \"{}\"", page.source, page.title), true);
@@ -158,7 +132,7 @@ fn sync_page_content(
             &space.homepage_id,
         )?)
     } else {
-        ConfluencePage::get_page(confluence_client, space, &page)?
+        space.get_existing_page(confluence_client, &page)?
     };
 
     let parent_id = if page.is_home_page() {
@@ -182,7 +156,7 @@ fn sync_page_content(
 
     if let Some(existing_page) = existing_page {
         let id = existing_page.id.clone();
-        let version_message = "updated by markedspace:";
+        let version_message = page.version_message();
         if parent_id == existing_page.parent_id
             && version_message == existing_page.version.message
             && page_up_to_date(&existing_page, &page)
@@ -238,7 +212,7 @@ fn get_orphaned_pages<'a>(
             confluence_page
                 .version
                 .message
-                .starts_with("updated by markedspace:")
+                .starts_with(ConfluencePage::version_message_prefix())
                 && !link_generator.has_title(confluence_page.title.as_str())
         })
         .collect())
@@ -264,11 +238,16 @@ pub fn sync_space<'a>(
         space_key, confluence_client.hostname
     );
 
-    let space = get_space(&confluence_client, space_key.as_str())?;
+    // let space = get_space(&confluence_client, space_key.as_str())?;
+    let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     let orphaned_pages = get_orphaned_pages(&confluence_client, &link_generator, &space.id)?;
     orphaned_pages.iter().for_each(|p| {
-        println!("Orphan {:#?}", p);
+        println!(
+            "Orphaned page detected \"{}\", version comment: {}",
+            p.title, p.version.message
+        );
     });
+    space.set_orphans(orphaned_pages);
     for markdown_page in markdown_pages.iter() {
         let page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {

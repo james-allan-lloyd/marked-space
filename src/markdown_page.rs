@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    confluence_page::ConfluencePage,
     html::{format_document_with_plugins, LinkGenerator},
     markdown_space::MarkdownSpace,
     parent::get_parent_title,
@@ -175,6 +176,14 @@ pub struct RenderedPage {
 impl RenderedPage {
     pub fn is_home_page(&self) -> bool {
         self.source == "index.md"
+    }
+
+    pub fn version_message(&self) -> String {
+        format!(
+            "{} source={}",
+            ConfluencePage::version_message_prefix(),
+            self.source
+        )
     }
 }
 
