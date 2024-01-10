@@ -55,30 +55,36 @@ impl ConfluencePage {
                 })
             }
 
-            fn get_next_page(&mut self) {
-                let response = self.client.get(self.next_url.clone().unwrap()).unwrap();
+            fn get_next_page(&mut self) -> Result<()> {
+                let response = self.client.get(self.next_url.clone().unwrap())?;
                 let current_url = response.url().clone();
-                let content = response.text().unwrap(); // FIXME:
+                let content = response.text()?;
 
                 let existing_page: responses::MultiEntityResult<responses::PageBulkWithoutBody> =
-                    from_str(content.as_str()).unwrap(); // FIXME: error
+                    from_str(content.as_str())?;
 
                 self.next_url = existing_page
                     .links
                     .next
                     .map(|l| current_url.join(l.as_str()).unwrap()); //FIXME: error
                 self.current_page = VecDeque::from_iter(existing_page.results.iter().cloned());
+                Ok(())
             }
         }
 
         impl<'a> Iterator for NextUrlIterator<'a> {
-            type Item = responses::PageBulkWithoutBody;
+            type Item = Result<responses::PageBulkWithoutBody>;
 
             fn next(&mut self) -> Option<Self::Item> {
                 if self.current_page.is_empty() && self.next_url.is_some() {
-                    self.get_next_page();
+                    if let Err(err) = self.get_next_page() {
+                        return Some(Err(err));
+                    }
                 }
-                self.current_page.pop_front()
+                match self.current_page.pop_front() {
+                    Some(i) => Some(Ok(i)),
+                    None => None,
+                }
             }
         }
 
@@ -87,6 +93,7 @@ impl ConfluencePage {
             .error_for_status()?;
 
         let results: Vec<ConfluencePage> = NextUrlIterator::new(response, confluence_client)?
+            .filter_map(|f| f.ok())
             .map(|bulk_page| ConfluencePage {
                 id: bulk_page.id.clone(),
                 content: String::default(),
