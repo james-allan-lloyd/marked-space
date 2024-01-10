@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{create_dir_all, File},
     io::{BufReader, Write},
     path::PathBuf,
@@ -33,6 +33,7 @@ fn sync_page_attachments(
         .json()?;
 
     let mut hashes = HashMap::<String, String>::new();
+    let mut remove_titles_to_id = HashMap::<String, String>::new();
     for existing_attachment in existing_attachments.results.iter() {
         if existing_attachment.comment.starts_with("hash:") {
             hashes.insert(
@@ -44,10 +45,17 @@ fn sync_page_attachments(
                     .into(),
             );
         }
+        remove_titles_to_id.insert(
+            existing_attachment.title.clone(),
+            existing_attachment.id.clone(),
+        );
     }
 
     for attachment in attachments.iter() {
         let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
+
+        remove_titles_to_id.remove(&filename);
+
         let op = SyncOperation::start(format!("[{}] attachment", filename), true);
         let input = File::open(attachment)
             .with_context(|| format!("Opening attachment for {}", filename))?;
@@ -63,6 +71,20 @@ fn sync_page_attachments(
             .error_for_status()?;
         op.end(SyncOperationResult::Updated);
     }
+
+    let _remove_results: Vec<crate::confluence_client::Result> = remove_titles_to_id
+        .iter()
+        .map(|(title, id)| {
+            let op = SyncOperation::start(format!("[{}] attachment", title), false);
+            let result = confluence_client.remove_attachment(id);
+            if result.is_ok() {
+                op.end(SyncOperationResult::Deleted);
+            } else {
+                op.end(SyncOperationResult::Error);
+            }
+            result
+        })
+        .collect();
 
     Ok(())
 }
@@ -97,6 +119,7 @@ enum SyncOperationResult {
     Skipped,
     Created,
     Error,
+    Deleted,
 }
 
 impl SyncOperation {
@@ -111,6 +134,7 @@ impl SyncOperation {
             SyncOperationResult::Skipped => "Skipped",
             SyncOperationResult::Created => "Created",
             SyncOperationResult::Error => "Error",
+            SyncOperationResult::Deleted => "Deleted",
         };
         if self.verbose || !matches!(result, SyncOperationResult::Skipped) {
             println!("{}:  {}", self.desc, result_str);

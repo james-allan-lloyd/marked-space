@@ -9,7 +9,7 @@ pub struct ConfluenceClient {
     pub hostname: String,
 }
 
-type Result = std::result::Result<reqwest::blocking::Response, reqwest::Error>;
+pub type Result = std::result::Result<reqwest::blocking::Response, reqwest::Error>;
 
 impl ConfluenceClient {
     pub fn new(hostname: &str) -> ConfluenceClient {
@@ -133,6 +133,16 @@ impl ConfluenceClient {
 
         self.client
             .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .send()
+    }
+
+    pub(crate) fn remove_attachment(&self, id: &str) -> Result {
+        let url = format!("https://{}/wiki/api/v2/attachments/{}", self.hostname, id);
+
+        self.client
+            .delete(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
             .header("Accept", "application/json")
             .send()
