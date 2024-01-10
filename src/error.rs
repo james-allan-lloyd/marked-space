@@ -15,9 +15,6 @@ pub enum ConfluenceError {
     #[error("Failed to parse {filename}: {errors}")]
     ParsingError { filename: String, errors: String },
 
-    #[error("Unsupported format: {message:?}")]
-    UnsupportedStorageFormat { message: String },
-
     #[error("Duplicate title '{title}' in [{file}]")]
     DuplicateTitle { title: String, file: String },
 

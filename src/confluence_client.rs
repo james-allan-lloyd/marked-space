@@ -46,7 +46,7 @@ impl ConfluenceClient {
             .get(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
             .header("Accept", "application/json")
-            .query(&[("body-format", "storage")])
+            // .query(&[("body-format", "storage")])
             .send()
     }
 

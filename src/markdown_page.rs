@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    checksum::sha256_digest,
     confluence_page::ConfluencePage,
     html::{format_document_with_plugins, LinkGenerator},
     markdown_space::MarkdownSpace,
@@ -155,12 +156,14 @@ impl<'a> MarkdownPage<'a> {
         let title = self.title.clone();
         let page_path = PathBuf::from(self.source.clone());
         let parent = get_parent_title(page_path, link_generator)?;
+        let checksum = sha256_digest(content.as_bytes())?;
 
         Ok(RenderedPage {
             title,
             content,
             source: self.source.clone(),
             parent,
+            checksum,
         })
     }
 }
@@ -171,6 +174,7 @@ pub struct RenderedPage {
     pub content: String,
     pub source: String,
     pub parent: Option<String>,
+    pub checksum: String,
 }
 
 impl RenderedPage {
@@ -180,9 +184,10 @@ impl RenderedPage {
 
     pub fn version_message(&self) -> String {
         format!(
-            "{} source={}",
+            "{} source={}; checksum={}",
             ConfluencePage::version_message_prefix(),
-            self.source.replace('\\', "/") // needs to be platform independent
+            self.source.replace('\\', "/"), // needs to be platform independent
+            self.checksum
         )
     }
 }

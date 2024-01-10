@@ -1,12 +1,11 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::{create_dir_all, File},
     io::{BufReader, Write},
     path::PathBuf,
 };
 
 use anyhow::Context;
-use regex::Regex;
 use serde_json::json;
 
 use crate::{
@@ -18,7 +17,9 @@ use crate::{
     html::LinkGenerator,
     markdown_page::RenderedPage,
     markdown_space::MarkdownSpace,
-    responses::{self, Attachment, MultiEntityResult, PageBulkWithoutBody, PageSingle, Version},
+    responses::{
+        self, Attachment, MultiEntityResult, PageBulkWithoutBody, PageSingleWithoutBody, Version,
+    },
     Result,
 };
 
@@ -185,12 +186,11 @@ fn sync_page_content(
             return Err(ConfluenceError::failed_request(resp));
         }
 
-        let page: PageSingle = resp.json()?;
+        let page: PageSingleWithoutBody = resp.json()?;
         existing_page = Some(ConfluencePage {
             id: page.id,
             title: page.title.clone(),
             parent_id: parent_id.clone(),
-            content: String::default(),
             version: Version {
                 number: 1,
                 message: String::default(),
@@ -201,9 +201,8 @@ fn sync_page_content(
     let existing_page = existing_page.unwrap();
     let id = existing_page.id.clone();
     let version_message = page.version_message();
-    if parent_id == existing_page.parent_id
-        && version_message == existing_page.version.message
-        && page_up_to_date(&existing_page, &page)
+    if parent_id == existing_page.parent_id && version_message == existing_page.version.message
+    // && page_up_to_date(&existing_page, &page)
     {
         op.end(SyncOperationResult::Skipped);
         return Ok(id);
@@ -233,14 +232,6 @@ fn sync_page_content(
         op.end(op_result);
         Ok(id)
     }
-}
-
-fn page_up_to_date(existing_page: &ConfluencePage, page: &RenderedPage) -> bool {
-    // TODO: avoid using the regex and other "cleanups" -> just has the content when you put it and compare the hashes of the next put
-    let re = Regex::new(r#"\s*ri:version-at-save="\d+"\s*"#).unwrap();
-    let existing_content = re.replace_all(existing_page.content.as_str(), "");
-    let new_content = String::from(page.content.replace("<![CDATA[]]>", "").trim());
-    existing_content == new_content
 }
 
 fn get_orphaned_pages(

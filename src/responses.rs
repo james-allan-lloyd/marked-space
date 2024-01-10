@@ -56,7 +56,15 @@ pub enum BodySingle {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct PageSingle {
+pub struct PageSingleWithoutBody {
+    pub id: String,
+    pub title: String,
+    pub version: Version,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PageSingleWithBody {
     pub id: String,
     pub title: String,
     pub version: Version,
