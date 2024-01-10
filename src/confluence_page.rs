@@ -26,13 +26,16 @@ impl ConfluencePage {
     }
 
     pub fn get_all(confluence_client: &ConfluenceClient, space_id: &str) -> Result<Vec<Self>> {
-        struct NextUrlIterator<'a> {
+        struct NextUrlIterator<'a, T> {
             client: &'a ConfluenceClient,
-            current_page: VecDeque<responses::PageBulkWithoutBody>,
+            current_page: VecDeque<T>,
             next_url: Option<reqwest::Url>,
         }
 
-        impl<'a> NextUrlIterator<'a> {
+        impl<'a, T> NextUrlIterator<'a, T>
+        where
+            T: serde::de::DeserializeOwned + Clone,
+        {
             fn new(
                 response: reqwest::blocking::Response,
                 client: &'a ConfluenceClient,
@@ -40,8 +43,7 @@ impl ConfluencePage {
                 let current_url = response.url().clone();
                 let content = response.text()?;
 
-                let existing_page: responses::MultiEntityResult<responses::PageBulkWithoutBody> =
-                    from_str(content.as_str())?;
+                let existing_page: responses::MultiEntityResult<T> = from_str(content.as_str())?;
 
                 let next_url: Option<reqwest::Url> = existing_page
                     .links
@@ -60,8 +62,7 @@ impl ConfluencePage {
                 let current_url = response.url().clone();
                 let content = response.text()?;
 
-                let existing_page: responses::MultiEntityResult<responses::PageBulkWithoutBody> =
-                    from_str(content.as_str())?;
+                let existing_page: responses::MultiEntityResult<T> = from_str(content.as_str())?;
 
                 self.next_url = existing_page
                     .links
@@ -72,8 +73,11 @@ impl ConfluencePage {
             }
         }
 
-        impl<'a> Iterator for NextUrlIterator<'a> {
-            type Item = Result<responses::PageBulkWithoutBody>;
+        impl<'a, T> Iterator for NextUrlIterator<'a, T>
+        where
+            T: serde::de::DeserializeOwned + Clone,
+        {
+            type Item = Result<T>;
 
             fn next(&mut self) -> Option<Self::Item> {
                 if self.current_page.is_empty() && self.next_url.is_some() {
@@ -92,16 +96,17 @@ impl ConfluencePage {
             .get_all_pages_in_space(space_id)?
             .error_for_status()?;
 
-        let results: Vec<ConfluencePage> = NextUrlIterator::new(response, confluence_client)?
-            .filter_map(|f| f.ok())
-            .map(|bulk_page| ConfluencePage {
-                id: bulk_page.id.clone(),
-                content: String::default(),
-                version: bulk_page.version.clone(),
-                parent_id: bulk_page.parent_id.clone(),
-                title: bulk_page.title.clone(),
-            })
-            .collect();
+        let results: Vec<ConfluencePage> =
+            NextUrlIterator::<responses::PageBulkWithoutBody>::new(response, confluence_client)?
+                .filter_map(|f| f.ok())
+                .map(|bulk_page| ConfluencePage {
+                    id: bulk_page.id.clone(),
+                    content: String::default(),
+                    version: bulk_page.version.clone(),
+                    parent_id: bulk_page.parent_id.clone(),
+                    title: bulk_page.title.clone(),
+                })
+                .collect();
 
         let page_titles: Vec<String> = results.iter().map(|p| p.title.clone()).collect();
 
