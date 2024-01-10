@@ -36,6 +36,7 @@ where
 
         self.next_url = existing_page
             .links
+            .unwrap()
             .next
             .map(|l| current_url.join(l.as_str()).unwrap()); //FIXME: error
         self.current_page = VecDeque::from_iter(existing_page.results.iter().cloned());

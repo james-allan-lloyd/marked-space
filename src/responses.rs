@@ -82,7 +82,7 @@ pub struct Links {
 pub struct MultiEntityResult<T> {
     pub results: Vec<T>,
     #[serde(rename = "_links")]
-    pub links: Links,
+    pub links: Option<Links>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -101,6 +101,15 @@ pub struct Attachment {
     pub title: String,
     pub page_id: String,
     pub comment: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Label {
+    pub prefix: String,
+    pub name: String,
+    pub id: String,
+    pub label: String,
 }
 
 #[cfg(test)]

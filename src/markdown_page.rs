@@ -14,8 +14,14 @@ use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options, Plugins,
 };
+use serde::Deserialize;
 
 use crate::{error::ConfluenceError, Result};
+
+#[derive(Deserialize, Debug)]
+pub struct FrontMatter {
+    pub labels: Vec<String>,
+}
 
 pub struct MarkdownPage<'a> {
     pub title: String,
@@ -23,6 +29,7 @@ pub struct MarkdownPage<'a> {
     root: &'a AstNode<'a>,
     pub attachments: Vec<PathBuf>,
     pub local_links: Vec<PathBuf>,
+    pub front_matter: Option<FrontMatter>,
 }
 
 impl<'a> MarkdownPage<'a> {
@@ -52,17 +59,24 @@ impl<'a> MarkdownPage<'a> {
         )
     }
 
+    fn options() -> Options {
+        let mut options = Options::default();
+        // options.extension.autolink = true;
+        options.extension.table = true;
+        // options.extension.tasklist = true;
+        // options.extension.strikethrough = true;
+        options.extension.front_matter_delimiter = Some("---".to_string());
+        // options.extension.shortcodes = true;
+        options
+    }
+
     fn parse_content(
         markdown_page: &Path,
         content: &str,
         arena: &'a Arena<AstNode<'a>>,
         source: String,
     ) -> Result<MarkdownPage<'a>> {
-        let mut options = Options::default();
-        // options.extension.autolink = true;
-        options.extension.table = true;
-
-        let root: &AstNode<'_> = parse_document(arena, content, &options);
+        let root: &AstNode<'_> = parse_document(arena, content, &Self::options());
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
         where
@@ -78,7 +92,23 @@ impl<'a> MarkdownPage<'a> {
         let mut attachments = Vec::<PathBuf>::default();
         let mut local_links = Vec::<PathBuf>::default();
         let mut first_heading: Option<&AstNode> = None;
+        let mut front_matter: Option<FrontMatter> = None;
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
+            NodeValue::FrontMatter(front_matter_str) => {
+                let front_matter_str = front_matter_str
+                    .strip_prefix("---")
+                    .unwrap()
+                    .strip_suffix("---\n")
+                    .unwrap();
+                match serde_yaml::from_str(&front_matter_str) {
+                    Ok(front_matter_yaml) => {
+                        front_matter = Some(front_matter_yaml);
+                    }
+                    Err(err) => {
+                        errors.push(format!("Couldn't parse front matter: {}", err));
+                    }
+                }
+            }
             NodeValue::Heading(_heading) => {
                 if first_heading.is_none() {
                     first_heading = Some(node);
@@ -127,6 +157,7 @@ impl<'a> MarkdownPage<'a> {
                 root,
                 attachments,
                 local_links,
+                front_matter,
             })
         } else {
             Err(ConfluenceError::parsing_errors(source, errors))
@@ -134,16 +165,17 @@ impl<'a> MarkdownPage<'a> {
     }
 
     fn to_html_string(&self, link_generator: &LinkGenerator) -> Result<String> {
-        let mut options = Options::default();
-        // options.extension.autolink = true;
-        options.extension.table = true;
-        // options.extension.tasklist = true;
-        // options.extension.strikethrough = true;
         let plugins = Plugins::default();
 
         let mut html = vec![];
-        format_document_with_plugins(self.root, &options, &mut html, &plugins, link_generator)
-            .unwrap();
+        format_document_with_plugins(
+            self.root,
+            &Self::options(),
+            &mut html,
+            &plugins,
+            link_generator,
+        )
+        .unwrap();
 
         match String::from_utf8(html) {
             Ok(content) => Ok(content),

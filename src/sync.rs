@@ -1,5 +1,6 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
+    env::join_paths,
     fs::{create_dir_all, File},
     io::{BufReader, Write},
     path::PathBuf,
@@ -25,11 +26,11 @@ use crate::{
 
 fn sync_page_attachments(
     confluence_client: &ConfluenceClient,
-    page_id: String,
+    page_id: &str,
     attachments: &[PathBuf],
 ) -> Result<()> {
     let existing_attachments: MultiEntityResult<Attachment> = confluence_client
-        .get_attachments(&page_id)?
+        .get_attachments(page_id)?
         .error_for_status()?
         .json()?;
 
@@ -68,7 +69,7 @@ fn sync_page_attachments(
         }
 
         let _resp = confluence_client
-            .create_or_update_attachment(&page_id, attachment, &hashstring)?
+            .create_or_update_attachment(page_id, attachment, &hashstring)?
             .error_for_status()?;
         op.end(SyncOperationResult::Updated);
     }
@@ -289,7 +290,58 @@ pub fn sync_space<'a>(
             output_content(d, markdown_space, &page)?;
         }
         let page_id = sync_page_content(&confluence_client, &space, page)?;
-        sync_page_attachments(&confluence_client, page_id, &markdown_page.attachments)?;
+        sync_page_attachments(
+            &confluence_client,
+            page_id.as_str(),
+            &markdown_page.attachments,
+        )?;
+        if let Some(front_matter) = &markdown_page.front_matter {
+            sync_page_labels(&confluence_client, page_id.as_str(), &front_matter.labels)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn sync_page_labels(
+    confluence_client: &ConfluenceClient,
+    page_id: &str,
+    labels: &[String],
+) -> Result<()> {
+    let mut label_set = HashSet::<String>::new();
+    let body = labels
+        .iter()
+        .map(|label| {
+            label_set.insert(label.clone());
+            json!({"prefix": "", "name": label})
+        })
+        .collect::<Vec<serde_json::Value>>();
+
+    let result = confluence_client
+        .set_page_labels(page_id, body)?
+        .error_for_status()?
+        .json::<MultiEntityResult<responses::Label>>()?;
+
+    let labels_removed = result
+        .results
+        .iter()
+        .filter(|label| !label_set.contains(&label.name))
+        .map(|label| {
+            confluence_client
+                .remove_label(page_id, label)?
+                .error_for_status()?;
+
+            Ok(label.name.clone())
+        })
+        .filter_map(|result| {
+            result
+                .map_err(|err: anyhow::Error| println!("{:#?}", err))
+                .ok()
+        })
+        .collect::<Vec<String>>();
+
+    if !labels_removed.is_empty() {
+        println!("Removed labels: {}", labels_removed.join(","));
     }
 
     Ok(())

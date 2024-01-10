@@ -102,7 +102,7 @@ impl ConfluenceClient {
 
     pub fn create_or_update_attachment(
         &self,
-        content_id: &String,
+        content_id: &str,
         filename: &Path,
         hash: &String,
     ) -> Result {
@@ -125,7 +125,7 @@ impl ConfluenceClient {
             .send()
     }
 
-    pub fn get_attachments(&self, page_id: &String) -> Result {
+    pub fn get_attachments(&self, page_id: &str) -> Result {
         let url = format!(
             "https://{}/wiki/api/v2/pages/{}/attachments",
             self.hostname, page_id
@@ -145,6 +145,36 @@ impl ConfluenceClient {
             .delete(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
             .header("Accept", "application/json")
+            .send()
+    }
+
+    pub(crate) fn set_page_labels(&self, page_id: &str, body: Vec<Value>) -> Result {
+        let url = format!(
+            "https://{}/wiki/rest/api/content/{}/label",
+            self.hostname, page_id
+        );
+
+        self.client
+            .post(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .json(&body)
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
+    pub(crate) fn remove_label(&self, page_id: &str, label: &crate::responses::Label) -> Result {
+        let url = format!(
+            "https://{}/wiki/rest/api/content/{}/label",
+            self.hostname, page_id
+        );
+
+        self.client
+            .delete(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .query(&[("name", label.name.clone())])
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
             .send()
     }
 }
