@@ -86,7 +86,6 @@ impl ConfluenceClient {
         self.client
             .get(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
-            .query(&HashMap::from([("limit", "1")]))
             .header("Accept", "application/json")
             .send()
     }
