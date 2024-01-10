@@ -54,14 +54,14 @@ fn sync_page_attachments(
         let reader = BufReader::new(input);
         let hashstring = sha256_digest(reader)?;
         if hashes.contains_key(&filename) && hashstring == *hashes.get(&filename).unwrap() {
-            op.end(SyncOperationResult::SKIPPED);
+            op.end(SyncOperationResult::Skipped);
             return Ok(());
         }
 
         let _resp = confluence_client
             .create_or_update_attachment(&page_id, attachment, &hashstring)?
             .error_for_status()?;
-        op.end(SyncOperationResult::UPDATED);
+        op.end(SyncOperationResult::Updated);
     }
 
     Ok(())
@@ -93,10 +93,10 @@ struct SyncOperation {
 }
 
 enum SyncOperationResult {
-    UPDATED,
-    SKIPPED,
-    CREATED,
-    ERROR,
+    Updated,
+    Skipped,
+    Created,
+    Error,
 }
 
 impl SyncOperation {
@@ -107,12 +107,12 @@ impl SyncOperation {
 
     fn end(&self, result: SyncOperationResult) {
         let result_str = match result {
-            SyncOperationResult::UPDATED => "Updated",
-            SyncOperationResult::SKIPPED => "Skipped",
-            SyncOperationResult::CREATED => "Created",
-            SyncOperationResult::ERROR => "Error",
+            SyncOperationResult::Updated => "Updated",
+            SyncOperationResult::Skipped => "Skipped",
+            SyncOperationResult::Created => "Created",
+            SyncOperationResult::Error => "Error",
         };
-        if self.verbose || !matches!(result, SyncOperationResult::SKIPPED) {
+        if self.verbose || !matches!(result, SyncOperationResult::Skipped) {
             println!("{}:  {}", self.desc, result_str);
         }
     }
@@ -143,13 +143,13 @@ fn sync_page_content(
         Some(space.homepage_id.clone())
     };
 
-    let mut op_result = SyncOperationResult::UPDATED;
+    let mut op_result = SyncOperationResult::Updated;
     if existing_page.is_none() {
         // it's important that we have a version message to make move detection
         // work, but you can't set the version string for a create call, so we
         // create a page with empty content, then update it with the new stuff.
         // Means we'll always have at least two versions.
-        op_result = SyncOperationResult::CREATED;
+        op_result = SyncOperationResult::Created;
         let resp = confluence_client.create_page(json!({
             "spaceId": space.id,
             "status": "current",
@@ -157,7 +157,7 @@ fn sync_page_content(
             "parentId": parent_id,
         }))?;
         if !resp.status().is_success() {
-            op.end(SyncOperationResult::ERROR);
+            op.end(SyncOperationResult::Error);
             return Err(ConfluenceError::failed_request(resp));
         }
 
@@ -181,7 +181,7 @@ fn sync_page_content(
         && version_message == existing_page.version.message
         && page_up_to_date(&existing_page, &page)
     {
-        op.end(SyncOperationResult::SKIPPED);
+        op.end(SyncOperationResult::Skipped);
         return Ok(id);
     }
 
@@ -203,7 +203,7 @@ fn sync_page_content(
 
     let resp = confluence_client.update_page(&id, update_payload)?;
     if !resp.status().is_success() {
-        op.end(SyncOperationResult::ERROR);
+        op.end(SyncOperationResult::Error);
         Err(ConfluenceError::failed_request(resp))
     } else {
         op.end(op_result);
@@ -219,7 +219,7 @@ fn page_up_to_date(existing_page: &ConfluencePage, page: &RenderedPage) -> bool 
     existing_content == new_content
 }
 
-fn get_orphaned_pages<'a>(
+fn get_orphaned_pages(
     confluence_client: &ConfluenceClient,
     link_generator: &LinkGenerator,
     space_id: &str,
