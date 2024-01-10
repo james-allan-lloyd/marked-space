@@ -63,9 +63,6 @@ where
                 return Some(Err(err));
             }
         }
-        match self.current_page.pop_front() {
-            Some(i) => Some(Ok(i)),
-            None => None,
-        }
+        self.current_page.pop_front().map(Ok)
     }
 }

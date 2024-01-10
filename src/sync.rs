@@ -112,7 +112,7 @@ impl SyncOperation {
             SyncOperationResult::CREATED => "Created",
             SyncOperationResult::ERROR => "Error",
         };
-        if self.verbose || matches!(result, SyncOperationResult::SKIPPED) == false {
+        if self.verbose || !matches!(result, SyncOperationResult::SKIPPED) {
             println!("{}:  {}", self.desc, result_str);
         }
     }
