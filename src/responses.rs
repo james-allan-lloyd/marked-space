@@ -25,7 +25,7 @@ pub enum BodyBulk {
 }
 
 // TODO: might be a better way to express this...
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PageBulkWithoutBody {
     pub id: String,
@@ -65,8 +65,16 @@ pub struct PageSingle {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct Links {
+    pub next: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct MultiEntityResult<T> {
     pub results: Vec<T>,
+    #[serde(rename = "_links")]
+    pub links: Links,
 }
 
 #[derive(Deserialize, Debug)]

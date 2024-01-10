@@ -1,3 +1,7 @@
+use std::collections::VecDeque;
+use std::str::FromStr;
+
+use reqwest::{Request, Response};
 use serde_json::from_str;
 
 use crate::{
@@ -22,17 +26,67 @@ impl ConfluencePage {
     }
 
     pub fn get_all(confluence_client: &ConfluenceClient, space_id: &str) -> Result<Vec<Self>> {
+        struct NextUrlIterator<'a> {
+            client: &'a ConfluenceClient,
+            current_page: VecDeque<responses::PageBulkWithoutBody>,
+            next_url: Option<reqwest::Url>,
+        }
+
+        impl<'a> NextUrlIterator<'a> {
+            fn new(
+                response: reqwest::blocking::Response,
+                client: &'a ConfluenceClient,
+            ) -> Result<Self> {
+                let current_url = response.url().clone();
+                let content = response.text()?;
+
+                let existing_page: responses::MultiEntityResult<responses::PageBulkWithoutBody> =
+                    from_str(content.as_str())?;
+
+                let next_url: Option<reqwest::Url> = existing_page
+                    .links
+                    .next
+                    .map(|l| current_url.join(l.as_str()).unwrap()); //FIXME:
+                let current_page = VecDeque::from_iter(existing_page.results.iter().cloned());
+                Ok(Self {
+                    current_page,
+                    next_url,
+                    client,
+                })
+            }
+
+            fn get_next_page(&mut self) {
+                let response = self.client.get(self.next_url.clone().unwrap()).unwrap();
+                let current_url = response.url().clone();
+                let content = response.text().unwrap(); // FIXME:
+
+                let existing_page: responses::MultiEntityResult<responses::PageBulkWithoutBody> =
+                    from_str(content.as_str()).unwrap(); // FIXME: error
+
+                self.next_url = existing_page
+                    .links
+                    .next
+                    .map(|l| current_url.join(l.as_str()).unwrap()); //FIXME: error
+                self.current_page = VecDeque::from_iter(existing_page.results.iter().cloned());
+            }
+        }
+
+        impl<'a> Iterator for NextUrlIterator<'a> {
+            type Item = responses::PageBulkWithoutBody;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.current_page.is_empty() && self.next_url.is_some() {
+                    self.get_next_page();
+                }
+                self.current_page.pop_front()
+            }
+        }
+
         let response = confluence_client
             .get_all_pages_in_space(space_id)?
             .error_for_status()?;
 
-        let content = response.text()?;
-        let existing_page: responses::MultiEntityResult<responses::PageBulkWithoutBody> =
-            from_str(content.as_str())?;
-
-        let results = existing_page
-            .results
-            .iter()
+        let results: Vec<ConfluencePage> = NextUrlIterator::new(response, confluence_client)?
             .map(|bulk_page| ConfluencePage {
                 id: bulk_page.id.clone(),
                 content: String::default(),
@@ -41,6 +95,14 @@ impl ConfluencePage {
                 title: bulk_page.title.clone(),
             })
             .collect();
+
+        let page_titles: Vec<String> = results.iter().map(|p| p.title.clone()).collect();
+
+        println!(
+            "Found {} pages already in space:\n{}",
+            results.len(),
+            page_titles.join("\n")
+        );
 
         Ok(results)
     }

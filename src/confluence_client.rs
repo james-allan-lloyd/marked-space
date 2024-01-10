@@ -69,6 +69,14 @@ impl ConfluenceClient {
             .send()
     }
 
+    pub fn get(&self, url: reqwest::Url) -> Result {
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .send()
+    }
+
     pub fn get_all_pages_in_space(&self, space_id: &str) -> Result {
         let url = format!(
             "https://{}/wiki/api/v2/spaces/{}/pages",
@@ -78,6 +86,7 @@ impl ConfluenceClient {
         self.client
             .get(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .query(&HashMap::from([("limit", "1")]))
             .header("Accept", "application/json")
             .send()
     }
