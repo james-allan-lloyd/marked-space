@@ -24,6 +24,13 @@ Ordered Lists:
 1. Item 4
 1. Item 5
 
+Task Lists:
+
+- [ ] task
+  - [x] sub task
+  - [ ] sub task
+- [x] task
+
 ### Heading 3
 
 Some other text,

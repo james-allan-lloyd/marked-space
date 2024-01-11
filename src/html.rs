@@ -183,6 +183,7 @@ struct ConfluenceFormatter<'o> {
     written_footnote_ix: u32,
     plugins: &'o Plugins<'o>,
     link_generator: &'o LinkGenerator,
+    next_task_id: u32,
 }
 
 #[rustfmt::skip]
@@ -479,6 +480,7 @@ impl<'o> ConfluenceFormatter<'o> {
             written_footnote_ix: 0,
             plugins,
             link_generator,
+            next_task_id: 1,
         }
     }
 
@@ -578,9 +580,13 @@ impl<'o> ConfluenceFormatter<'o> {
                 if entering {
                     self.cr()?;
                     if nl.list_type == ListType::Bullet {
-                        self.output.write_all(b"<ul")?;
-                        self.render_sourcepos(node)?;
-                        self.output.write_all(b">\n")?;
+                        if has_task_children(node) {
+                            self.output.write_all(b"<ac:task-list>")?;
+                        } else {
+                            self.output.write_all(b"<ul")?;
+                            self.render_sourcepos(node)?;
+                            self.output.write_all(b">\n")?;
+                        }
                     } else if nl.start == 1 {
                         self.output.write_all(b"<ol")?;
                         self.render_sourcepos(node)?;
@@ -591,7 +597,11 @@ impl<'o> ConfluenceFormatter<'o> {
                         writeln!(self.output, " start=\"{}\">", nl.start)?;
                     }
                 } else if nl.list_type == ListType::Bullet {
-                    self.output.write_all(b"</ul>\n")?;
+                    if has_task_children(node) {
+                        self.output.write_all(b"</ac:task-list>\n")?;
+                    } else {
+                        self.output.write_all(b"</ul>\n")?;
+                    }
                 } else {
                     self.output.write_all(b"</ol>\n")?;
                 }
@@ -1020,20 +1030,19 @@ impl<'o> ConfluenceFormatter<'o> {
             NodeValue::TaskItem(symbol) => {
                 if entering {
                     self.cr()?;
-                    self.output.write_all(b"<li")?;
-                    self.render_sourcepos(node)?;
-                    self.output.write_all(b">")?;
-                    write!(
-                        self.output,
-                        "<input type=\"checkbox\" {}disabled=\"\" /> ",
-                        if symbol.is_some() {
-                            "checked=\"\" "
-                        } else {
-                            ""
-                        }
-                    )?;
+                    self.output.write_all(b"<ac:task><ac:task-id>")?;
+                    self.output
+                        .write_all(self.next_task_id.to_string().as_bytes())?;
+                    self.next_task_id += 1;
+                    self.output.write_all(b"</ac:task-id><ac:task-status>")?;
+                    if symbol.is_some() {
+                        self.output.write_all(b"complete")?;
+                    } else {
+                        self.output.write_all(b"incomplete")?;
+                    }
+                    self.output.write_all(b"</ac:task-status><ac:task-body>")?;
                 } else {
-                    self.output.write_all(b"</li>\n")?;
+                    self.output.write_all(b"</ac:task-body></ac:task>\n")?;
                 }
             }
         }
@@ -1077,4 +1086,14 @@ impl<'o> ConfluenceFormatter<'o> {
         }
         Ok(true)
     }
+}
+
+fn has_task_children<'a>(
+    node: &'a comrak::arena_tree::Node<'a, std::cell::RefCell<comrak::nodes::Ast>>,
+) -> bool {
+    let result = node
+        .children()
+        .any(|child_node| matches!(child_node.data.borrow().value, NodeValue::TaskItem(_)));
+
+    result
 }

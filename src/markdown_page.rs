@@ -63,7 +63,7 @@ impl<'a> MarkdownPage<'a> {
         let mut options = Options::default();
         // options.extension.autolink = true;
         options.extension.table = true;
-        // options.extension.tasklist = true;
+        options.extension.tasklist = true;
         // options.extension.strikethrough = true;
         options.extension.front_matter_delimiter = Some("---".to_string());
         // options.extension.shortcodes = true;
@@ -131,6 +131,13 @@ impl<'a> MarkdownPage<'a> {
                     local_links.push(link_path);
                 }
             }
+            // NodeValue::TaskItem(_item) => match &node.parent().unwrap().data.borrow_mut().value {
+            //     NodeValue::List(mut list) => {
+            //         println!("Task list item is list");
+            //         list.bullet_char = b'x';
+            //     }
+            //     _ => println!("Task list item is NOT list"),
+            // },
             _ => (),
         });
 
