@@ -31,6 +31,14 @@ Task Lists:
   - [ ] sub task
 - [x] task
 
+Some things to note: task lists can be interacted with on confluence, but they will be overwritten when the markdown is synced again.
+
+## Shortcodes
+
+- `:joy:` :joy:
+- `:grin:` :grin:
+- `:heavy_check_mark:` :heavy_check_mark:
+
 ### Heading 3
 
 Some other text,

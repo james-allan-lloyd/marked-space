@@ -890,7 +890,6 @@ impl<'o> ConfluenceFormatter<'o> {
                     self.output.write_all(b"</ac:image>")?;
                 }
             }
-            #[cfg(feature = "shortcodes")]
             NodeValue::ShortCode(ref nsc) => {
                 if entering {
                     self.output.write_all(nsc.emoji().as_bytes())?;
