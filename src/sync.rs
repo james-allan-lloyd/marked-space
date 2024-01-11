@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    env::join_paths,
     fs::{create_dir_all, File},
     io::{BufReader, Write},
     path::PathBuf,
@@ -287,7 +286,7 @@ pub fn sync_space<'a>(
     for markdown_page in markdown_pages.iter() {
         let page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {
-            output_content(d, markdown_space, &page)?;
+            output_content(d, &page)?;
         }
         let page_id = sync_page_content(&confluence_client, &space, page)?;
         sync_page_attachments(
@@ -347,12 +346,9 @@ fn sync_page_labels(
     Ok(())
 }
 
-fn output_content(d: &String, markdown_space: &MarkdownSpace, page: &RenderedPage) -> Result<()> {
+fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
     let mut output_path = PathBuf::from(d);
-    output_path.push(
-        markdown_space
-            .relative_page_path(&PathBuf::from(page.source.clone()).with_extension("xhtml"))?,
-    );
+    output_path.push(&PathBuf::from(page.source.clone()).with_extension("xhtml"));
     if let Some(p) = output_path.parent() {
         create_dir_all(p)?;
     }
