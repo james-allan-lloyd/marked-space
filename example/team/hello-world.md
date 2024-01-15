@@ -1,5 +1,11 @@
 # Hello World 2
 
+## Table of Contents
+
+{{ macros::toc() }}
+
+## Basic Usage
+
 Hello, **世界**!
 
 > Quote sections
@@ -68,3 +74,7 @@ some-map:
     foo: bar
     baz: 0
 ```
+
+## Macros
+
+{{ filename }}

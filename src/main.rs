@@ -14,6 +14,7 @@ mod confluence_page;
 mod confluence_paginated;
 mod confluence_space;
 mod error;
+mod helpers;
 mod html;
 mod markdown_page;
 mod markdown_space;

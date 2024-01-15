@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -6,6 +7,7 @@ use std::{
 use crate::{
     checksum::sha256_digest,
     confluence_page::ConfluencePage,
+    helpers::collect_text,
     html::{format_document_with_plugins, LinkGenerator},
     markdown_space::MarkdownSpace,
     parent::get_parent_title,
@@ -15,6 +17,7 @@ use comrak::{
     parse_document, Arena, Options, Plugins,
 };
 use serde::Deserialize;
+use tera::{Context, Tera};
 
 use crate::{error::ConfluenceError, Result};
 
@@ -30,6 +33,13 @@ pub struct MarkdownPage<'a> {
     pub attachments: Vec<PathBuf>,
     pub local_links: Vec<PathBuf>,
     pub front_matter: Option<FrontMatter>,
+    pub headings: Vec<(u8, String)>,
+}
+
+fn hello_world(
+    _args: &HashMap<String, serde_json::Value>,
+) -> std::result::Result<serde_json::Value, tera::Error> {
+    Ok(serde_json::to_value("<em>hello world!</em>").unwrap())
 }
 
 impl<'a> MarkdownPage<'a> {
@@ -88,6 +98,8 @@ impl<'a> MarkdownPage<'a> {
             }
         }
 
+        let mut headings = Vec::<(u8, String)>::new();
+
         let mut errors = Vec::<String>::default();
         let mut attachments = Vec::<PathBuf>::default();
         let mut local_links = Vec::<PathBuf>::default();
@@ -109,9 +121,15 @@ impl<'a> MarkdownPage<'a> {
                     }
                 }
             }
-            NodeValue::Heading(_heading) => {
+            NodeValue::Heading(heading) => {
                 if first_heading.is_none() {
                     first_heading = Some(node);
+                } else {
+                    let mut text_content = Vec::new(); //with_capacity(20);
+                    for n in node.children() {
+                        collect_text(n, &mut text_content);
+                    }
+                    headings.push((heading.level, String::from_utf8(text_content).unwrap()));
                 }
             }
             NodeValue::Image(image) => {
@@ -131,13 +149,6 @@ impl<'a> MarkdownPage<'a> {
                     local_links.push(link_path);
                 }
             }
-            // NodeValue::TaskItem(_item) => match &node.parent().unwrap().data.borrow_mut().value {
-            //     NodeValue::List(mut list) => {
-            //         println!("Task list item is list");
-            //         list.bullet_char = b'x';
-            //     }
-            //     _ => println!("Task list item is NOT list"),
-            // },
             _ => (),
         });
 
@@ -165,6 +176,7 @@ impl<'a> MarkdownPage<'a> {
                 attachments,
                 local_links,
                 front_matter,
+                headings,
             })
         } else {
             Err(ConfluenceError::parsing_errors(source, errors))
@@ -190,8 +202,39 @@ impl<'a> MarkdownPage<'a> {
         }
     }
 
+    fn render_template(&self, source: &String, content: &str) -> Result<String> {
+        let mut tera = Tera::default();
+        tera.register_function("hello_world", hello_world);
+        tera.add_raw_template(
+            "macros.md",
+            r##"
+            {% macro hello(name) -%}<em>hello {{name}}</em>{%- endmacro hello %}
+
+            {% macro toc() -%}
+            <ac:structured-macro ac:name="toc" ac:schema-version="1" data-layout="default" ac:macro-id="334277ff-40b1-45ec-b5c7-ba6091fd0df3"><ac:parameter ac:name="minLevel">1</ac:parameter><ac:parameter ac:name="maxLevel">6</ac:parameter><ac:parameter ac:name="include" /><ac:parameter ac:name="outline">false</ac:parameter><ac:parameter ac:name="indent" /><ac:parameter ac:name="exclude" /><ac:parameter ac:name="type">list</ac:parameter><ac:parameter ac:name="class" /><ac:parameter ac:name="printable">false</ac:parameter></ac:structured-macro>
+            {%- endmacro toc %}
+
+            {% macro children() -%}
+            <ac:structured-macro ac:name="children" ac:schema-version="2" data-layout="default" ac:macro-id="4172775450124db364aa2f7e7faf4cb3" />
+            {%- endmacro chidlren %}
+                
+            "##,
+        )?;
+        let mut context = Context::new();
+        context.insert("filename", source);
+        context.insert("headings", &self.headings);
+        let path = PathBuf::from(source).with_extension(".html");
+
+        let template_name = path.to_str().unwrap();
+        let content = String::from("{% import \"macros.md\" as macros %}") + content;
+        tera.add_raw_template(template_name, content.as_str())?;
+        let content = tera.render(template_name, &context)?;
+        Ok(content)
+    }
+
     pub fn render(&self, link_generator: &LinkGenerator) -> Result<RenderedPage> {
-        let content = self.to_html_string(link_generator)?.clone();
+        let rendered_html = self.to_html_string(link_generator)?.clone();
+        let content = self.render_template(&self.source, rendered_html.as_str())?;
         let title = self.title.clone();
         let page_path = PathBuf::from(self.source.clone());
         let parent = get_parent_title(page_path, link_generator)?;
@@ -360,4 +403,75 @@ mod tests {
     }
 
     fn _it_checks_attachment_links() {}
+
+    #[test]
+    fn it_renders_templates() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let page = MarkdownPage::parse_content(
+            PathBuf::from("page.md").as_path(),
+            "# compulsory title\n{{filename}}",
+            &arena,
+            "page.md".into(),
+        )?;
+
+        let rendered_page = page.render(&LinkGenerator::new())?;
+
+        assert_eq!(rendered_page.content.trim(), "<p>page.md</p>");
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_renders_predefined_functions() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let page = MarkdownPage::parse_content(
+            PathBuf::from("page.md").as_path(),
+            "# compulsory title\n{{hello_world()|safe}}",
+            &arena,
+            "page.md".into(),
+        )?;
+
+        let rendered_page = page.render(&LinkGenerator::new())?;
+
+        assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_renders_macros() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let page = MarkdownPage::parse_content(
+            PathBuf::from("page.md").as_path(),
+            "# compulsory title\n{{macros::hello(name=\"world!\")}}",
+            &arena,
+            "page.md".into(),
+        )?;
+
+        let rendered_page = page.render(&LinkGenerator::new())?;
+
+        assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_renders_toc() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let page = MarkdownPage::parse_content(
+            PathBuf::from("page.md").as_path(),
+            "# compulsory title\n{{macros::toc()}}\n## First H2\n\n### First H3\n\n## Second H2\n",
+            &arena,
+            "page.md".into(),
+        )?;
+
+        let rendered_page = page.render(&LinkGenerator::new())?;
+
+        assert_eq!(
+            rendered_page.content.trim(),
+            r##"<p><ul><li>Heading 1<ul></li></ul></p>"##
+        );
+
+        Ok(())
+    }
 }

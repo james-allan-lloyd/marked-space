@@ -15,6 +15,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::error::Result;
+use crate::helpers::collect_text;
 use comrak::adapters::HeadingMeta;
 
 use crate::error::ConfluenceError;
@@ -547,20 +548,6 @@ impl<'o> ConfluenceFormatter<'o> {
         Ok(())
     }
 
-    fn collect_text<'a>(node: &'a AstNode<'a>, output: &mut Vec<u8>) {
-        match node.data.borrow().value {
-            NodeValue::Text(ref literal) | NodeValue::Code(NodeCode { ref literal, .. }) => {
-                output.extend_from_slice(literal.as_bytes())
-            }
-            NodeValue::LineBreak | NodeValue::SoftBreak => output.push(b' '),
-            _ => {
-                for n in node.children() {
-                    Self::collect_text(n, output);
-                }
-            }
-        }
-    }
-
     fn format_node<'a>(&mut self, node: &'a AstNode<'a>, entering: bool) -> io::Result<bool> {
         match node.data.borrow().value {
             NodeValue::Document => (),
@@ -655,7 +642,7 @@ impl<'o> ConfluenceFormatter<'o> {
 
                         if let Some(ref prefix) = self.options.extension.header_ids {
                             let mut text_content = Vec::with_capacity(20);
-                            Self::collect_text(node, &mut text_content);
+                            collect_text(node, &mut text_content);
 
                             let mut id = String::from_utf8(text_content).unwrap();
                             id = self.anchorizer.anchorize(id);
@@ -673,7 +660,7 @@ impl<'o> ConfluenceFormatter<'o> {
                 }
                 Some(adapter) => {
                     let mut text_content = Vec::with_capacity(20);
-                    Self::collect_text(node, &mut text_content);
+                    collect_text(node, &mut text_content);
                     let content = String::from_utf8(text_content).unwrap();
                     let heading = HeadingMeta {
                         level: nch.level,
@@ -776,7 +763,8 @@ impl<'o> ConfluenceFormatter<'o> {
             }
             NodeValue::Text(ref literal) => {
                 if entering {
-                    self.escape(literal.as_bytes())?;
+                    // self.escape(literal.as_bytes())?;
+                    self.output.write_all(literal.as_bytes())?; // need to avoid escaping template stuff :/
                 }
             }
             NodeValue::LineBreak => {
