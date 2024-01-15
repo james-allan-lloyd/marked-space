@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -11,13 +10,13 @@ use crate::{
     html::{format_document_with_plugins, LinkGenerator},
     markdown_space::MarkdownSpace,
     parent::get_parent_title,
+    template_renderer::TemplateRenderer,
 };
 use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options, Plugins,
 };
 use serde::Deserialize;
-use tera::{Context, Tera};
 
 use crate::{error::ConfluenceError, Result};
 
@@ -36,14 +35,8 @@ pub struct MarkdownPage<'a> {
     pub headings: Vec<(u8, String)>,
 }
 
-fn hello_world(
-    _args: &HashMap<String, serde_json::Value>,
-) -> std::result::Result<serde_json::Value, tera::Error> {
-    Ok(serde_json::to_value("<em>hello world!</em>").unwrap())
-}
-
 impl<'a> MarkdownPage<'a> {
-    pub fn parse(
+    pub fn from_file(
         markdown_space: &MarkdownSpace,
         markdown_page: &Path,
         arena: &'a Arena<AstNode<'a>>,
@@ -58,7 +51,7 @@ impl<'a> MarkdownPage<'a> {
                 )))
             }
         };
-        Self::parse_content(
+        Self::from_str(
             markdown_page,
             &content,
             arena,
@@ -80,7 +73,7 @@ impl<'a> MarkdownPage<'a> {
         options
     }
 
-    fn parse_content(
+    pub fn from_str(
         markdown_page: &Path,
         content: &str,
         arena: &'a Arena<AstNode<'a>>,
@@ -202,39 +195,13 @@ impl<'a> MarkdownPage<'a> {
         }
     }
 
-    fn render_template(&self, source: &String, content: &str) -> Result<String> {
-        let mut tera = Tera::default();
-        tera.register_function("hello_world", hello_world);
-        tera.add_raw_template(
-            "macros.md",
-            r##"
-            {% macro hello(name) -%}<em>hello {{name}}</em>{%- endmacro hello %}
-
-            {% macro toc() -%}
-            <ac:structured-macro ac:name="toc" ac:schema-version="1" data-layout="default" ac:macro-id="334277ff-40b1-45ec-b5c7-ba6091fd0df3"><ac:parameter ac:name="minLevel">1</ac:parameter><ac:parameter ac:name="maxLevel">6</ac:parameter><ac:parameter ac:name="include" /><ac:parameter ac:name="outline">false</ac:parameter><ac:parameter ac:name="indent" /><ac:parameter ac:name="exclude" /><ac:parameter ac:name="type">list</ac:parameter><ac:parameter ac:name="class" /><ac:parameter ac:name="printable">false</ac:parameter></ac:structured-macro>
-            {%- endmacro toc %}
-
-            {% macro children() -%}
-            <ac:structured-macro ac:name="children" ac:schema-version="2" data-layout="default" ac:macro-id="4172775450124db364aa2f7e7faf4cb3" />
-            {%- endmacro chidlren %}
-                
-            "##,
-        )?;
-        let mut context = Context::new();
-        context.insert("filename", source);
-        context.insert("headings", &self.headings);
-        let path = PathBuf::from(source).with_extension(".html");
-
-        let template_name = path.to_str().unwrap();
-        let content = String::from("{% import \"macros.md\" as macros %}") + content;
-        tera.add_raw_template(template_name, content.as_str())?;
-        let content = tera.render(template_name, &context)?;
-        Ok(content)
-    }
-
-    pub fn render(&self, link_generator: &LinkGenerator) -> Result<RenderedPage> {
+    pub fn render(
+        &self,
+        link_generator: &LinkGenerator,
+        template_renderer: &mut TemplateRenderer,
+    ) -> Result<RenderedPage> {
         let rendered_html = self.to_html_string(link_generator)?.clone();
-        let content = self.render_template(&self.source, rendered_html.as_str())?;
+        let content = template_renderer.expand_html(self, &rendered_html)?;
         let title = self.title.clone();
         let page_path = PathBuf::from(self.source.clone());
         let parent = get_parent_title(page_path, link_generator)?;
@@ -283,11 +250,12 @@ mod tests {
     use crate::error::TestResult;
     use crate::html::LinkGenerator;
     use crate::markdown_page::MarkdownPage;
+    use crate::template_renderer::TemplateRenderer;
 
     #[test]
     fn it_get_first_heading_as_title() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::parse_content(
+        let page = MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
             &String::from("# My Page Title\n\nMy page content"),
             &arena,
@@ -302,7 +270,7 @@ mod tests {
     #[test]
     fn it_removes_title_heading_and_renders_content() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::parse_content(
+        let page = MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
             &String::from("# My Page Title\n\nMy page content"),
             &arena,
@@ -320,7 +288,7 @@ mod tests {
     #[test]
     fn it_errors_if_no_heading() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::parse_content(
+        let page = MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
             &String::from("My page content"),
             &arena,
@@ -345,7 +313,7 @@ mod tests {
         let link_file_title = String::from("This is the title parsed from the linked file");
         let link_text = String::from("Link text");
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::parse_content(
+        let page = MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
             &format!(
                 "# My Page Title\n\nMy page content: [{}]({})",
@@ -377,7 +345,7 @@ mod tests {
         //     <ri:attachment ri:filename="atlassian_logo.gif" />
         // </ac:image>
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::parse_content(
+        let page = MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
             "# My Page Title\n\nMy page content: ![myimage](myimage.png)",
             &arena,
@@ -407,14 +375,15 @@ mod tests {
     #[test]
     fn it_renders_templates() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::parse_content(
+        let page = MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
             "# compulsory title\n{{filename}}",
             &arena,
             "page.md".into(),
         )?;
 
-        let rendered_page = page.render(&LinkGenerator::new())?;
+        let rendered_page =
+            page.render(&LinkGenerator::new(), &mut TemplateRenderer::default()?)?;
 
         assert_eq!(rendered_page.content.trim(), "<p>page.md</p>");
 
@@ -424,14 +393,15 @@ mod tests {
     #[test]
     fn it_renders_predefined_functions() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::parse_content(
+        let page = MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
             "# compulsory title\n{{hello_world()|safe}}",
             &arena,
             "page.md".into(),
         )?;
 
-        let rendered_page = page.render(&LinkGenerator::new())?;
+        let rendered_page =
+            page.render(&LinkGenerator::new(), &mut TemplateRenderer::default()?)?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
 
@@ -441,36 +411,17 @@ mod tests {
     #[test]
     fn it_renders_macros() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::parse_content(
+        let page = MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
             "# compulsory title\n{{macros::hello(name=\"world!\")}}",
             &arena,
             "page.md".into(),
         )?;
 
-        let rendered_page = page.render(&LinkGenerator::new())?;
+        let rendered_page =
+            page.render(&LinkGenerator::new(), &mut TemplateRenderer::default()?)?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
-
-        Ok(())
-    }
-
-    #[test]
-    fn it_renders_toc() -> TestResult {
-        let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::parse_content(
-            PathBuf::from("page.md").as_path(),
-            "# compulsory title\n{{macros::toc()}}\n## First H2\n\n### First H3\n\n## Second H2\n",
-            &arena,
-            "page.md".into(),
-        )?;
-
-        let rendered_page = page.render(&LinkGenerator::new())?;
-
-        assert_eq!(
-            rendered_page.content.trim(),
-            r##"<p><ul><li>Heading 1<ul></li></ul></p>"##
-        );
 
         Ok(())
     }

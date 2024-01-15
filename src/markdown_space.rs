@@ -63,7 +63,9 @@ impl<'a> MarkdownSpace<'a> {
         let markdown_pages: Vec<MarkdownPage> = self
             .markdown_pages
             .iter()
-            .map(|markdown_page_path| MarkdownPage::parse(self, markdown_page_path, &self.arena))
+            .map(|markdown_page_path| {
+                MarkdownPage::from_file(self, markdown_page_path, &self.arena)
+            })
             .filter_map(|r| r.map_err(|e| parse_errors.push(e)).ok())
             .collect();
 

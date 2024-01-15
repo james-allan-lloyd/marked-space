@@ -20,6 +20,7 @@ use crate::{
     responses::{
         self, Attachment, MultiEntityResult, PageBulkWithoutBody, PageSingleWithoutBody, Version,
     },
+    template_renderer::TemplateRenderer,
     Result,
 };
 
@@ -283,8 +284,9 @@ pub fn sync_space<'a>(
         );
     });
     space.set_orphans(orphaned_pages);
+    let mut template_renderer = TemplateRenderer::new(markdown_space)?;
     for markdown_page in markdown_pages.iter() {
-        let page = markdown_page.render(&link_generator)?;
+        let page = markdown_page.render(&link_generator, &mut template_renderer)?;
         if let Some(ref d) = output_dir {
             output_content(d, &page)?;
         }
@@ -378,12 +380,12 @@ mod tests {
     ) -> Result<RenderedPage> {
         // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
         let arena = Arena::<AstNode>::new();
-        let markdown_page = MarkdownPage::parse(markdown_space, markdown_page_path, &arena)?;
+        let markdown_page = MarkdownPage::from_file(markdown_space, markdown_page_path, &arena)?;
         link_generator.add_file_title(
             &PathBuf::from(markdown_page.source.clone()),
             &markdown_page.title,
         )?;
-        markdown_page.render(link_generator)
+        markdown_page.render(link_generator, &mut TemplateRenderer::default()?)
     }
 
     #[test]

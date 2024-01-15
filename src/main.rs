@@ -22,6 +22,7 @@ mod moves;
 mod parent;
 mod responses;
 mod sync;
+mod template_renderer;
 
 use crate::error::{ConfluenceError, Result};
 use crate::sync::sync_space;
