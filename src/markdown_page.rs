@@ -253,7 +253,7 @@ mod tests {
         MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
             content,
-            &arena,
+            arena,
             "page.md".into(),
             &mut TemplateRenderer::default()?,
         )

@@ -238,9 +238,9 @@ fn page_up_to_date(
     parent_id: &Option<String>,
     version_message: &String,
 ) -> bool {
-    return parent_id == &existing_page.parent_id
+    parent_id == &existing_page.parent_id
         && version_message == &existing_page.version.message
-        && existing_page.title == page.title;
+        && existing_page.title == page.title
 }
 
 fn get_orphaned_pages(
