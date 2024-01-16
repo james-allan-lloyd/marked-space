@@ -641,20 +641,20 @@ impl<'o> ConfluenceStorageRenderer<'o> {
                         self.render_sourcepos(node)?;
                         self.output.write_all(b">")?;
 
-                        if let Some(ref prefix) = self.options.extension.header_ids {
-                            let mut text_content = Vec::with_capacity(20);
-                            collect_text(node, &mut text_content);
+                        // if let Some(ref prefix) = self.options.extension.header_ids {
+                        //     let mut text_content = Vec::with_capacity(20);
+                        //     collect_text(node, &mut text_content);
 
-                            let mut id = String::from_utf8(text_content).unwrap();
-                            id = self.anchorizer.anchorize(id);
-                            write!(
-                                        self.output,
-                                        "<a href=\"#{}\" aria-hidden=\"true\" class=\"anchor\" id=\"{}{}\"></a>",
-                                        id,
-                                        prefix,
-                                        id
-                                    )?;
-                        }
+                        //     let mut id = String::from_utf8(text_content).unwrap();
+                        //     id = self.anchorizer.anchorize(id);
+                        //     write!(
+                        //                 self.output,
+                        //                 "<a href=\"#{}\" aria-hidden=\"true\" class=\"anchor\" id=\"{}{}\"></a>",
+                        //                 id,
+                        //                 prefix,
+                        //                 id
+                        //             )?;
+                        // }
                     } else {
                         writeln!(self.output, "</h{}>", nch.level)?;
                     }
@@ -869,7 +869,11 @@ impl<'o> ConfluenceStorageRenderer<'o> {
                             .write_all(format!(" ac:title=\"{}\"", nl.title).as_bytes())?;
                     }
                     self.output.write_all(b">")?;
-                    self.output.write_all(b"<ri:attachment ri:filename=\"")?;
+                    if nl.url.contains("://") {
+                        self.output.write_all(b"<ri:url ri:value=\"")?;
+                    } else {
+                        self.output.write_all(b"<ri:attachment ri:filename=\"")?;
+                    }
 
                     let url = nl.url.as_bytes();
                     self.escape_href(url)?;

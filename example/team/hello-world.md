@@ -73,6 +73,8 @@ Check out the home page here: [](index.md)
 
 ![Alt text](image.png "A rusty crustation")
 
+![External Image](http://confluence.atlassian.com/images/logo/confluence_48_trans.png "An external image")
+
 ## Tables
 
 | Column A | Column B |

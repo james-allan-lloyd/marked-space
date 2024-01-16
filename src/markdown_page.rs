@@ -255,6 +255,19 @@ mod tests {
     use crate::markdown_page::MarkdownPage;
     use crate::template_renderer::TemplateRenderer;
 
+    fn page_from_str<'a>(
+        content: &str,
+        arena: &'a Arena<AstNode<'a>>,
+    ) -> crate::error::Result<MarkdownPage<'a>> {
+        MarkdownPage::from_str(
+            PathBuf::from("page.md").as_path(),
+            content,
+            &arena,
+            "page.md".into(),
+            &mut TemplateRenderer::default()?,
+        )
+    }
+
     #[test]
     fn it_get_first_heading_as_title() -> TestResult {
         let arena = Arena::<AstNode>::new();
@@ -361,21 +374,10 @@ mod tests {
     }
 
     #[test]
-    fn it_skips_unknown_local_links() {}
-
-    #[test]
     fn it_renders_local_file_as_attached_image() -> TestResult {
-        // <ac:image>
-        //     <ri:attachment ri:filename="atlassian_logo.gif" />
-        // </ac:image>
+        let content = "# My Page Title\n\nMy page content: ![myimage](myimage.png)";
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
-            "# My Page Title\n\nMy page content: ![myimage](myimage.png)",
-            &arena,
-            "page.md".into(),
-            &mut TemplateRenderer::default()?,
-        )?;
+        let page = page_from_str(content, &arena)?;
 
         assert_eq!(page.attachments.len(), 1);
 
@@ -386,13 +388,33 @@ mod tests {
         Ok(())
     }
 
-    fn _it_raises_an_error_when_image_file_does_not_exist() {}
-
     #[test]
-    fn it_renders_url_as_external_image() {
+    fn it_renders_url_as_external_image() -> TestResult {
         // <ac:image>
         //     <ri:url ri:value="http://confluence.atlassian.com/images/logo/confluence_48_trans.png" />
         // </ac:image>
+        let image_url = "http://www.example.com/image.png";
+        let markdown_content = format!(
+            "# My Page Title\n\nMy page content: ![myimage]({})",
+            image_url
+        );
+        let arena = Arena::<AstNode>::new();
+        let page = page_from_str(markdown_content.as_str(), &arena)?;
+
+        assert_eq!(page.attachments.len(), 0); // should not view the external link as an attachment
+        let html_content = page.to_html_string(&LinkGenerator::new())?;
+
+        println!("Got content: {:#}", html_content);
+
+        assert!(html_content.contains(
+            format!(
+                r#"<ac:image ac:align="center"><ri:url ri:value="{}"/>myimage</ac:image>"#,
+                image_url
+            )
+            .as_str()
+        ));
+
+        Ok(())
     }
 
     fn _it_checks_attachment_links() {}
