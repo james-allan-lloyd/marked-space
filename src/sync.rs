@@ -201,9 +201,7 @@ fn sync_page_content(
     let existing_page = existing_page.unwrap();
     let id = existing_page.id.clone();
     let version_message = page.version_message();
-    if parent_id == existing_page.parent_id && version_message == existing_page.version.message
-    // && page_up_to_date(&existing_page, &page)
-    {
+    if page_up_to_date(&existing_page, &page, &parent_id, &version_message) {
         op.end(SyncOperationResult::Skipped);
         return Ok(id);
     }
@@ -232,6 +230,17 @@ fn sync_page_content(
         op.end(op_result);
         Ok(id)
     }
+}
+
+fn page_up_to_date(
+    existing_page: &ConfluencePage,
+    page: &RenderedPage,
+    parent_id: &Option<String>,
+    version_message: &String,
+) -> bool {
+    return parent_id == &existing_page.parent_id
+        && version_message == &existing_page.version.message
+        && existing_page.title == page.title;
 }
 
 fn get_orphaned_pages(
@@ -409,8 +418,24 @@ mod tests {
         Ok(())
     }
 
-    fn _it_escapes_page_titles_with_forward_slash() -> TestResult {
-        todo!()
+    #[test]
+    fn it_parses_page_titles_with_forward_slash() -> TestResult {
+        let temp = assert_fs::TempDir::new()?;
+        temp.child("test/markdown1.md")
+            .write_str("# A title with a / slash")?;
+
+        let parsed_page = parse_page(
+            &MarkdownSpace::from_directory(temp.child("test").path())?,
+            temp.child("test/markdown1.md").path(),
+            &mut LinkGenerator::new(),
+        );
+
+        assert!(parsed_page.is_ok());
+
+        let parsed_page = parsed_page.unwrap();
+
+        assert_eq!(parsed_page.title, "A title with a / slash");
+        Ok(())
     }
 
     #[test]
@@ -495,5 +520,34 @@ mod tests {
 
     fn _it_renames_default_parent_page_when_index_md_is_added() -> TestResult {
         todo!()
+    }
+
+    #[test]
+    fn it_updates_title() -> TestResult {
+        let confluence_page = ConfluencePage {
+            id: String::from("1"),
+            title: String::from("Old Title"),
+            parent_id: None,
+            version: Version {
+                message: String::default(),
+                number: 1,
+            },
+        };
+        let rendered_page = RenderedPage {
+            title: String::from("New title"),
+            content: String::default(),
+            source: String::default(),
+            parent: None,
+            checksum: String::default(),
+        };
+
+        assert!(!page_up_to_date(
+            &confluence_page,
+            &rendered_page,
+            &None,
+            &String::default()
+        ));
+
+        Ok(())
     }
 }
