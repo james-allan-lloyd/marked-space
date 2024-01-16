@@ -16,6 +16,21 @@ Hello, **世界**!
 
 This is _italic_. And this is `preformatted fixed width` text.
 
+This is ~strikethrough~.
+
+## Headings
+
+### Heading Level 3
+
+#### Heading Level 4
+
+## Soft Breaks
+
+By default, soft breaks are ignored; this means that paragraphs like the following will be combined to remove the line break:
+
+All of these words
+should appear on the same line.
+
 ## Lists
 
 Unordered lists:
@@ -46,24 +61,25 @@ Some things to note: task lists can be interacted with on confluence, but they w
 - `:grin:` :grin:
 - `:heavy_check_mark:` :heavy_check_mark:
 
-### Heading 3
+## Horizontal Rules
 
-Some other text,
-with a soft break
+Entering `---` should result in a horizontal rule in Confluence like this:
 
 ---
+
+## Links
 
 Check out the home page here: [](index.md)
 
 ![Alt text](image.png "A rusty crustation")
 
-## A Table
+## Tables
 
 | Column A | Column B |
 | -------- | -------- |
 | Cell A   | Cell B   |
 
-## Some Code
+## Code
 
 ```python
 print("Hello world!")

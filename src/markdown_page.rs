@@ -71,7 +71,7 @@ impl<'a> MarkdownPage<'a> {
         // options.extension.autolink = true;
         options.extension.table = true;
         options.extension.tasklist = true;
-        // options.extension.strikethrough = true;
+        options.extension.strikethrough = true;
         options.extension.front_matter_delimiter = Some("---".to_string());
         options.extension.shortcodes = true;
         options.extension.tagfilter = true;
