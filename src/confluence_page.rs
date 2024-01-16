@@ -1,4 +1,4 @@
-use crate::confluence_paginated::ConfluencePaginator;
+use crate::confluence_paginator::ConfluencePaginator;
 use crate::{confluence_client::ConfluenceClient, markdown_page::RenderedPage, responses};
 
 use crate::error::Result;
