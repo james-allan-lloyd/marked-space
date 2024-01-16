@@ -151,13 +151,18 @@ impl<'a> MarkdownPage<'a> {
         let mut title = String::default();
 
         if let Some(heading_node) = first_heading {
-            for c in heading_node.children() {
-                iter_nodes(c, &mut |child| {
-                    if let NodeValue::Text(text) = &mut child.data.borrow_mut().value {
-                        title += text
-                    }
-                });
+            if let NodeValue::Heading(heading) = heading_node.data.borrow().value {
+                if heading.level != 1 {
+                    errors.push(format!(
+                        "first heading in file should be level 1, instead was level {}",
+                        heading.level
+                    ));
+                }
             }
+            let mut output = Vec::default();
+            collect_text(heading_node, &mut output);
+            title = String::from_utf8(output)?;
+
             // TODO: it's still allocated tho...
             heading_node.detach();
         } else {
@@ -305,8 +310,25 @@ mod tests {
         Ok(())
     }
 
-    fn _it_warns_if_title_and_filename_dont_agree() {}
-    fn _it_fails_if_first_non_frontmatter_element_is_not_h1() {}
+    #[test]
+    fn it_fails_if_first_non_frontmatter_element_is_not_h1() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let page = MarkdownPage::from_str(
+            PathBuf::from("page.md").as_path(),
+            &String::from("## First Heading Needs to be H1"),
+            &arena,
+            "page.md".into(),
+            &mut TemplateRenderer::default()?,
+        );
+
+        assert!(page.is_err());
+        assert_eq!(
+            page.err().unwrap().to_string(),
+            "Failed to parse page.md: first heading in file should be level 1, instead was level 2"
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn it_translates_file_links_to_title_links() -> TestResult {
