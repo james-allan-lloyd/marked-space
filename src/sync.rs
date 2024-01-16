@@ -13,8 +13,8 @@ use crate::{
     confluence_client::ConfluenceClient,
     confluence_page::ConfluencePage,
     confluence_space::ConfluenceSpace,
+    confluence_storage_renderer::LinkGenerator,
     error::ConfluenceError,
-    html::LinkGenerator,
     markdown_page::RenderedPage,
     markdown_space::MarkdownSpace,
     responses::{

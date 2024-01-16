@@ -6,8 +6,8 @@ use std::{
 use crate::{
     checksum::sha256_digest,
     confluence_page::ConfluencePage,
+    confluence_storage_renderer::{format_document_with_plugins, LinkGenerator},
     helpers::collect_text,
-    html::{format_document_with_plugins, LinkGenerator},
     markdown_space::MarkdownSpace,
     parent::get_parent_title,
     template_renderer::TemplateRenderer,
@@ -249,8 +249,8 @@ mod tests {
 
     use comrak::{nodes::AstNode, Arena};
 
+    use crate::confluence_storage_renderer::LinkGenerator;
     use crate::error::TestResult;
-    use crate::html::LinkGenerator;
     use crate::markdown_page::MarkdownPage;
     use crate::template_renderer::TemplateRenderer;
 

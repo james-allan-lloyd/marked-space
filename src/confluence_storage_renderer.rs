@@ -1,4 +1,5 @@
-//! The HTML renderer for the CommonMark AST, as well as helper functions.
+//! A renderer for the CommonMark AST to the Confluence Storage format.
+//! This was adapted from https://github.com/kivikakk/comrak/blob/main/src/html.rs
 use comrak::nodes::{
     AstNode, ListType, NodeCode, NodeFootnoteDefinition, NodeLink, NodeTable, NodeValue,
     TableAlignment,
@@ -82,7 +83,7 @@ pub fn format_document_with_plugins<'a>(
         output,
         last_was_lf: Cell::new(true),
     };
-    let mut f = ConfluenceFormatter::new(options, &mut writer, plugins, link_generator);
+    let mut f = ConfluenceStorageRenderer::new(options, &mut writer, plugins, link_generator);
     f.format(root, false)?;
     if f.footnote_ix > 0 {
         f.output.write_all(b"</ol>\n</section>\n")?;
@@ -176,7 +177,7 @@ impl Anchorizer {
     }
 }
 
-struct ConfluenceFormatter<'o> {
+struct ConfluenceStorageRenderer<'o> {
     output: &'o mut WriteWithLast<'o>,
     options: &'o Options,
     anchorizer: Anchorizer,
@@ -426,7 +427,7 @@ impl LinkGenerator {
     fn enter(
         &self,
         nl: &NodeLink,
-        confluence_formatter: &mut ConfluenceFormatter,
+        confluence_formatter: &mut ConfluenceStorageRenderer,
     ) -> io::Result<()> {
         if let Some(confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
             confluence_formatter
@@ -454,7 +455,7 @@ impl LinkGenerator {
     fn exit(
         &self,
         nl: &NodeLink,
-        confluence_formatter: &mut ConfluenceFormatter,
+        confluence_formatter: &mut ConfluenceStorageRenderer,
     ) -> io::Result<()> {
         if let Some(_confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
             confluence_formatter
@@ -466,14 +467,14 @@ impl LinkGenerator {
     }
 }
 
-impl<'o> ConfluenceFormatter<'o> {
+impl<'o> ConfluenceStorageRenderer<'o> {
     fn new(
         options: &'o Options,
         output: &'o mut WriteWithLast<'o>,
         plugins: &'o Plugins,
         link_generator: &'o LinkGenerator,
     ) -> Self {
-        ConfluenceFormatter {
+        ConfluenceStorageRenderer {
             options,
             output,
             anchorizer: Anchorizer::new(),

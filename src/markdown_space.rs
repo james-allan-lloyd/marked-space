@@ -3,8 +3,8 @@ use comrak::{nodes::AstNode, Arena};
 use walkdir::WalkDir;
 
 use crate::{
+    confluence_storage_renderer::LinkGenerator,
     error::{ConfluenceError, Result},
-    html::LinkGenerator,
     markdown_page::MarkdownPage,
     template_renderer::TemplateRenderer,
 };
@@ -174,7 +174,7 @@ mod tests {
 
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
-    use crate::html::LinkGenerator;
+    use crate::confluence_storage_renderer::LinkGenerator;
 
     use super::MarkdownSpace;
 
