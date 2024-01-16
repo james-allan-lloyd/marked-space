@@ -87,7 +87,7 @@ impl<'a> MarkdownSpace<'a> {
                     &content,
                     &self.arena,
                     String::from(
-                        self.relative_page_path(&markdown_page_path)?
+                        self.relative_page_path(markdown_page_path)?
                             .as_os_str()
                             .to_str()
                             .unwrap(),
@@ -157,11 +157,11 @@ impl<'a> MarkdownSpace<'a> {
                 .map(|e| format!("{:#}", e))
                 .collect::<Vec<String>>()
                 .join("\n  ");
-            return Err(ConfluenceError::generic_error(String::from(format!(
+            return Err(ConfluenceError::generic_error(format!(
                 "{} Error(s) parsing space:\n  {}",
                 parse_errors.len(),
                 &error_string
-            ))));
+            )));
         }
 
         Ok(markdown_pages)

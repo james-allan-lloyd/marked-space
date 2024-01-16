@@ -84,7 +84,7 @@ impl<'a> MarkdownPage<'a> {
         source: String,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
-        let content = template_renderer.expand_html(source.as_str(), &content)?;
+        let content = template_renderer.expand_html(source.as_str(), content)?;
         let root: &AstNode<'_> = parse_document(arena, &content, &Self::options());
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
@@ -111,7 +111,7 @@ impl<'a> MarkdownPage<'a> {
                     .unwrap()
                     .strip_suffix("---\n")
                     .unwrap();
-                match serde_yaml::from_str(&front_matter_str) {
+                match serde_yaml::from_str(front_matter_str) {
                     Ok(front_matter_yaml) => {
                         front_matter = Some(front_matter_yaml);
                     }
