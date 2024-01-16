@@ -1,5 +1,6 @@
 use clap::builder::OsStr;
 use comrak::{nodes::AstNode, Arena};
+use regex::Regex;
 use walkdir::WalkDir;
 
 use crate::{
@@ -13,6 +14,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+fn is_valid_space_key(space_key: &str) -> bool {
+    Regex::new("^[A-Za-z0-9]+$").unwrap().is_match(space_key)
+}
+
 pub struct MarkdownSpace<'a> {
     pub key: String,
     pub arena: Arena<AstNode<'a>>,
@@ -22,6 +27,13 @@ pub struct MarkdownSpace<'a> {
 
 impl<'a> MarkdownSpace<'a> {
     pub fn from_directory(dir: &Path) -> Result<Self> {
+        let space_key = dir.file_name().unwrap().to_str().unwrap();
+        if !is_valid_space_key(space_key) {
+            return Err(ConfluenceError::generic_error(format!(
+                "Invalid space directory/key '{}': can only be letters and numbers",
+                space_key
+            )));
+        }
         let mut markdown_pages = Vec::<PathBuf>::default();
         for entry in WalkDir::new(dir) {
             let entry = entry?;
@@ -170,7 +182,7 @@ impl<'a> MarkdownSpace<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
@@ -182,7 +194,7 @@ mod tests {
 
     #[test]
     fn it_fails_if_space_directory_doesnt_exist() {
-        let space = MarkdownSpace::from_directory(Path::new("test"));
+        let space = MarkdownSpace::from_directory(Path::new("brand_new"));
 
         assert!(space.is_err(), "Should fail if directory does not exist");
     }
@@ -218,8 +230,32 @@ mod tests {
         Ok(())
     }
 
-    fn _it_fails_if_space_directory_is_invalid_space_key() {}
-    fn _it_skips_subpages_if_directory_contains_no_markdown_files() {}
+    #[test]
+    fn it_fails_if_space_directory_is_invalid_space_key() {
+        let invalid_space_key = "123-#@$@!"; // can only be letters and numbers
+        let result = MarkdownSpace::from_directory(PathBuf::from(invalid_space_key).as_path());
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            format!(
+                "Invalid space directory/key '{}': can only be letters and numbers",
+                invalid_space_key
+            )
+        )
+    }
+
+    #[test]
+    fn it_skips_subpages_if_directory_contains_no_markdown_files() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.child("test/markdown1.md")
+            .write_str("# Minimum Heading")
+            .unwrap();
+        temp.child("test/img/image.png").touch().unwrap();
+
+        let result = MarkdownSpace::from_directory(temp.child("test").path());
+        assert!(result.is_ok());
+    }
 
     #[test]
     fn it_fails_when_headings_are_duplicated() {
