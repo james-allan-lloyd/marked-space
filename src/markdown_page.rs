@@ -409,6 +409,26 @@ mod tests {
     }
 
     #[test]
+    fn it_renders_links_to_external_pages() -> TestResult {
+        let external_url = "https://example.com";
+        let markdown_content = format!(
+            "# My Page Title\n\nExternal Link: [example]({})",
+            external_url
+        );
+        let arena = Arena::<AstNode>::new();
+        let page = page_from_str(markdown_content.as_str(), &arena)?;
+        let html_content = page.to_html_string(&LinkGenerator::new())?;
+
+        println!("Got content: {:#}", html_content);
+
+        assert!(
+            html_content.contains(format!(r#"<a href="{}">example</a>"#, external_url).as_str())
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn it_renders_templates() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let page = MarkdownPage::from_str(

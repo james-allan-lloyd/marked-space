@@ -330,6 +330,13 @@ impl LinkGenerator {
         nl: &NodeLink,
         confluence_formatter: &mut ConfluenceStorageRenderer,
     ) -> io::Result<()> {
+        if nl.url.contains("://") {
+            confluence_formatter.output.write_all(b"<a href=\"")?;
+            confluence_formatter.output.write_all(nl.url.as_bytes())?;
+            confluence_formatter.output.write_all(b"\">")?;
+            return Ok(());
+        }
+
         if let Some(confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
             confluence_formatter
                 .output
@@ -358,6 +365,10 @@ impl LinkGenerator {
         nl: &NodeLink,
         confluence_formatter: &mut ConfluenceStorageRenderer,
     ) -> io::Result<()> {
+        if nl.url.contains("://") {
+            confluence_formatter.output.write_all(b"</a>")?;
+            return Ok(());
+        }
         if let Some(_confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
             confluence_formatter
                 .output
