@@ -262,13 +262,8 @@ mod tests {
     #[test]
     fn it_get_first_heading_as_title() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
-            &String::from("# My Page Title\n\nMy page content"),
-            &arena,
-            "page.md".into(),
-            &mut TemplateRenderer::default()?,
-        )?;
+        let markdown_content = &String::from("# My Page Title\n\nMy page content");
+        let page = page_from_str(markdown_content, &arena)?;
 
         assert_eq!(page.title, "My Page Title");
 
@@ -278,13 +273,8 @@ mod tests {
     #[test]
     fn it_removes_title_heading_and_renders_content() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
-            &String::from("# My Page Title\n\nMy page content"),
-            &arena,
-            "page.md".into(),
-            &mut TemplateRenderer::default()?,
-        )?;
+        let markdown_content = &String::from("# My Page Title\n\nMy page content");
+        let page = page_from_str(markdown_content, &arena)?;
 
         let content = page.to_html_string(&LinkGenerator::new())?;
 
@@ -297,13 +287,8 @@ mod tests {
     #[test]
     fn it_errors_if_no_heading() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
-            &String::from("My page content"),
-            &arena,
-            "page.md".into(),
-            &mut TemplateRenderer::default()?,
-        );
+        let markdown_content = &String::from("My page content");
+        let page = page_from_str(markdown_content, &arena);
 
         assert!(page.is_err());
         assert_eq!(
@@ -317,13 +302,8 @@ mod tests {
     #[test]
     fn it_fails_if_first_non_frontmatter_element_is_not_h1() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
-            &String::from("## First Heading Needs to be H1"),
-            &arena,
-            "page.md".into(),
-            &mut TemplateRenderer::default()?,
-        );
+        let markdown_content = &String::from("## First Heading Needs to be H1");
+        let page = page_from_str(markdown_content, &arena);
 
         assert!(page.is_err());
         assert_eq!(
@@ -340,17 +320,12 @@ mod tests {
         let link_file_title = String::from("This is the title parsed from the linked file");
         let link_text = String::from("Link text");
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
-            &format!(
-                "# My Page Title\n\nMy page content: [{}]({})",
-                link_text,
-                link_filename.display()
-            ),
-            &arena,
-            "page.md".into(),
-            &mut TemplateRenderer::default()?,
-        )?;
+        let markdown_content = &format!(
+            "# My Page Title\n\nMy page content: [{}]({})",
+            link_text,
+            link_filename.display()
+        );
+        let page = page_from_str(markdown_content, &arena)?;
 
         let mut link_generator = LinkGenerator::new();
 
@@ -431,13 +406,8 @@ mod tests {
     #[test]
     fn it_renders_templates() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
-            "# compulsory title\n{{filename}}",
-            &arena,
-            "page.md".into(),
-            &mut TemplateRenderer::default()?,
-        )?;
+        let markdown_content = "# compulsory title\n{{filename}}";
+        let page = page_from_str(markdown_content, &arena)?;
 
         let rendered_page = page.render(&LinkGenerator::new())?;
 
@@ -449,13 +419,8 @@ mod tests {
     #[test]
     fn it_renders_predefined_functions() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
-            "# compulsory title\n{{hello_world()|safe}}",
-            &arena,
-            "page.md".into(),
-            &mut TemplateRenderer::default()?,
-        )?;
+        let markdown_content = "# compulsory title\n{{hello_world()}}";
+        let page = page_from_str(markdown_content, &arena)?;
 
         let rendered_page = page.render(&LinkGenerator::new())?;
 
@@ -467,14 +432,9 @@ mod tests {
     #[test]
     fn it_renders_builtins() -> TestResult {
         let arena = Arena::<AstNode>::new();
-        let page = MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
-            "# compulsory title\n{{hello_world(name=\"world!\")}}",
-            &arena,
-            "page.md".into(),
-            &mut TemplateRenderer::default()?,
-        )?;
+        let markdown_content = "# compulsory title\n{{hello_world(name=\"world!\")}}";
 
+        let page = page_from_str(markdown_content, &arena)?;
         let rendered_page = page.render(&LinkGenerator::new())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
