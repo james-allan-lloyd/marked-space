@@ -4,8 +4,7 @@ use comrak::nodes::{
     AstNode, ListType, NodeCode, NodeFootnoteDefinition, NodeLink, NodeTable, NodeValue,
     TableAlignment,
 };
-use comrak::{Options, Plugins};
-use std::borrow::Cow;
+use comrak::Options;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
@@ -13,11 +12,8 @@ use std::path::Path;
 use std::str;
 
 use once_cell::sync::Lazy;
-use regex::Regex;
 
 use crate::error::Result;
-use crate::helpers::collect_text;
-use comrak::adapters::HeadingMeta;
 
 use crate::error::ConfluenceError;
 
@@ -46,44 +42,18 @@ pub fn isspace(ch: u8) -> bool {
     CMARK_CTYPE_CLASS[ch as usize] == 1
 }
 
-// pub fn ispunct(ch: u8) -> bool {
-//     CMARK_CTYPE_CLASS[ch as usize] == 2
-// }
-
-// pub fn isdigit(ch: u8) -> bool {
-//     CMARK_CTYPE_CLASS[ch as usize] == 3
-// }
-
-// pub fn isalpha(ch: u8) -> bool {
-//     CMARK_CTYPE_CLASS[ch as usize] == 4
-// }
-
-// pub fn isalnum(ch: u8) -> bool {
-//     CMARK_CTYPE_CLASS[ch as usize] == 3 || CMARK_CTYPE_CLASS[ch as usize] == 4
-// }
-
-/// Formats an AST as HTML, modified by the given options.
-// pub fn format_document<'a>(
-//     root: &'a AstNode<'a>,
-//     options: &Options,
-//     output: &mut dyn Write,
-// ) -> io::Result<()> {
-//     format_document_with_plugins(root, options, output, &Plugins::default())
-// }
-
 /// Formats an AST as HTML, modified by the given options. Accepts custom plugins.
-pub fn format_document_with_plugins<'a>(
+pub fn render_confluence_storage<'a>(
     root: &'a AstNode<'a>,
     options: &Options,
     output: &mut dyn Write,
-    plugins: &Plugins,
     link_generator: &LinkGenerator,
 ) -> io::Result<()> {
     let mut writer = WriteWithLast {
         output,
         last_was_lf: Cell::new(true),
     };
-    let mut f = ConfluenceStorageRenderer::new(options, &mut writer, plugins, link_generator);
+    let mut f = ConfluenceStorageRenderer::new(options, &mut writer, link_generator);
     f.format(root, false)?;
     if f.footnote_ix > 0 {
         f.output.write_all(b"</ol>\n</section>\n")?;
@@ -110,80 +80,11 @@ impl<'w> Write for WriteWithLast<'w> {
     }
 }
 
-/// Converts header Strings to canonical, unique, but still human-readable, anchors.
-///
-/// To guarantee uniqueness, an anchorizer keeps track of the anchors
-/// it has returned.  So, for example, to parse several MarkDown
-/// files, use a new anchorizer per file.
-///
-/// ## Example
-///
-/// ```
-/// use comrak::Anchorizer;
-///
-/// let mut anchorizer = Anchorizer::new();
-///
-/// // First "stuff" is unsuffixed.
-/// assert_eq!("stuff".to_string(), anchorizer.anchorize("Stuff".to_string()));
-/// // Second "stuff" has "-1" appended to make it unique.
-/// assert_eq!("stuff-1".to_string(), anchorizer.anchorize("Stuff".to_string()));
-/// ```
-#[derive(Debug, Default)]
-pub struct Anchorizer(HashSet<String>);
-
-impl Anchorizer {
-    /// Construct a new anchorizer.
-    pub fn new() -> Self {
-        Anchorizer(HashSet::new())
-    }
-
-    /// Returns a String that has been converted into an anchor using the
-    /// GFM algorithm, which involves changing spaces to dashes, removing
-    /// problem characters and, if needed, adding a suffix to make the
-    /// resultant anchor unique.
-    ///
-    /// ```
-    /// use comrak::Anchorizer;
-    ///
-    /// let mut anchorizer = Anchorizer::new();
-    ///
-    /// let source = "Ticks aren't in";
-    ///
-    /// assert_eq!("ticks-arent-in".to_string(), anchorizer.anchorize(source.to_string()));
-    /// ```
-    pub fn anchorize(&mut self, header: String) -> String {
-        static REJECTED_CHARS: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"[^\p{L}\p{M}\p{N}\p{Pc} -]").unwrap());
-
-        let mut id = header.to_lowercase();
-        id = REJECTED_CHARS.replace_all(&id, "").replace(' ', "-");
-
-        let mut uniq = 0;
-        id = loop {
-            let anchor = if uniq == 0 {
-                Cow::from(&id)
-            } else {
-                Cow::from(format!("{}-{}", id, uniq))
-            };
-
-            if !self.0.contains(&*anchor) {
-                break anchor.into_owned();
-            }
-
-            uniq += 1;
-        };
-        self.0.insert(id.clone());
-        id
-    }
-}
-
 struct ConfluenceStorageRenderer<'o> {
     output: &'o mut WriteWithLast<'o>,
     options: &'o Options,
-    anchorizer: Anchorizer,
     footnote_ix: u32,
     written_footnote_ix: u32,
-    plugins: &'o Plugins<'o>,
     link_generator: &'o LinkGenerator,
     next_task_id: u32,
 }
@@ -471,16 +372,13 @@ impl<'o> ConfluenceStorageRenderer<'o> {
     fn new(
         options: &'o Options,
         output: &'o mut WriteWithLast<'o>,
-        plugins: &'o Plugins,
         link_generator: &'o LinkGenerator,
     ) -> Self {
         ConfluenceStorageRenderer {
             options,
             output,
-            anchorizer: Anchorizer::new(),
             footnote_ix: 0,
             written_footnote_ix: 0,
-            plugins,
             link_generator,
             next_task_id: 1,
         }
@@ -633,57 +531,16 @@ impl<'o> ConfluenceStorageRenderer<'o> {
                     self.output.write_all(b"</dd>\n")?;
                 }
             }
-            NodeValue::Heading(ref nch) => match self.plugins.render.heading_adapter {
-                None => {
-                    if entering {
-                        self.cr()?;
-                        write!(self.output, "<h{}", nch.level)?;
-                        self.render_sourcepos(node)?;
-                        self.output.write_all(b">")?;
-
-                        // if let Some(ref prefix) = self.options.extension.header_ids {
-                        //     let mut text_content = Vec::with_capacity(20);
-                        //     collect_text(node, &mut text_content);
-
-                        //     let mut id = String::from_utf8(text_content).unwrap();
-                        //     id = self.anchorizer.anchorize(id);
-                        //     write!(
-                        //                 self.output,
-                        //                 "<a href=\"#{}\" aria-hidden=\"true\" class=\"anchor\" id=\"{}{}\"></a>",
-                        //                 id,
-                        //                 prefix,
-                        //                 id
-                        //             )?;
-                        // }
-                    } else {
-                        writeln!(self.output, "</h{}>", nch.level)?;
-                    }
+            NodeValue::Heading(ref nch) => {
+                if entering {
+                    self.cr()?;
+                    write!(self.output, "<h{}", nch.level)?;
+                    self.render_sourcepos(node)?;
+                    self.output.write_all(b">")?;
+                } else {
+                    writeln!(self.output, "</h{}>", nch.level)?;
                 }
-                Some(adapter) => {
-                    let mut text_content = Vec::with_capacity(20);
-                    collect_text(node, &mut text_content);
-                    let content = String::from_utf8(text_content).unwrap();
-                    let heading = HeadingMeta {
-                        level: nch.level,
-                        content,
-                    };
-
-                    if entering {
-                        self.cr()?;
-                        adapter.enter(
-                            self.output,
-                            &heading,
-                            if self.options.render.sourcepos {
-                                Some(node.data.borrow().sourcepos)
-                            } else {
-                                None
-                            },
-                        )?;
-                    } else {
-                        adapter.exit(self.output, &heading)?;
-                    }
-                }
-            },
+            }
             NodeValue::CodeBlock(ref ncb) => {
                 if entering {
                     self.cr()?;

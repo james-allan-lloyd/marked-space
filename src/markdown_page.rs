@@ -6,7 +6,7 @@ use std::{
 use crate::{
     checksum::sha256_digest,
     confluence_page::ConfluencePage,
-    confluence_storage_renderer::{format_document_with_plugins, LinkGenerator},
+    confluence_storage_renderer::{render_confluence_storage, LinkGenerator},
     helpers::collect_text,
     markdown_space::MarkdownSpace,
     parent::get_parent_title,
@@ -14,7 +14,7 @@ use crate::{
 };
 use comrak::{
     nodes::{AstNode, NodeValue},
-    parse_document, Arena, Options, Plugins,
+    parse_document, Arena, Options,
 };
 use serde::Deserialize;
 
@@ -184,17 +184,8 @@ impl<'a> MarkdownPage<'a> {
     }
 
     fn to_html_string(&self, link_generator: &LinkGenerator) -> Result<String> {
-        let plugins = Plugins::default();
-
         let mut html = vec![];
-        format_document_with_plugins(
-            self.root,
-            &Self::options(),
-            &mut html,
-            &plugins,
-            link_generator,
-        )
-        .unwrap();
+        render_confluence_storage(self.root, &Self::options(), &mut html, link_generator).unwrap();
 
         match String::from_utf8(html) {
             Ok(content) => Ok(content),
@@ -416,8 +407,6 @@ mod tests {
 
         Ok(())
     }
-
-    fn _it_checks_attachment_links() {}
 
     #[test]
     fn it_renders_templates() -> TestResult {
