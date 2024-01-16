@@ -1,0 +1,1 @@
+{% macro example_macro(name) -%}<em>hello {{name}}</em>{%- endmacro hello %}

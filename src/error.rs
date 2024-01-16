@@ -18,16 +18,16 @@ pub enum ConfluenceError {
     #[error("Duplicate title '{title}' in [{file}]")]
     DuplicateTitle { title: String, file: String },
 
-    #[error("Missing file for link in [{source_file}] to [{local_link}]")]
+    #[error("Missing file for link in [{source_file}] to [{local_links}]")]
     MissingFileLink {
         source_file: String,
-        local_link: String,
+        local_links: String,
     },
 
-    #[error("Missing file for attachment link in [{source_file}] to [{attachment_path}]")]
+    #[error("Missing file for attachment link in [{source_file}] to [{attachment_paths}]")]
     MissingAttachmentLink {
         source_file: String,
-        attachment_path: String,
+        attachment_paths: String,
     },
 }
 

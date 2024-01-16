@@ -6,8 +6,12 @@ use crate::{
     error::{ConfluenceError, Result},
     html::LinkGenerator,
     markdown_page::MarkdownPage,
+    template_renderer::TemplateRenderer,
 };
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub struct MarkdownSpace<'a> {
     pub key: String,
@@ -21,6 +25,9 @@ impl<'a> MarkdownSpace<'a> {
         let mut markdown_pages = Vec::<PathBuf>::default();
         for entry in WalkDir::new(dir) {
             let entry = entry?;
+            if entry.path().starts_with(dir.join("_tera")) {
+                continue;
+            }
             if entry.path().is_dir() {
                 if !entry.path().join("index.md").exists() {
                     println!(
@@ -60,77 +67,103 @@ impl<'a> MarkdownSpace<'a> {
 
     pub(crate) fn parse(&'a self, link_generator: &mut LinkGenerator) -> Result<Vec<MarkdownPage>> {
         let mut parse_errors = Vec::<anyhow::Error>::default();
+        let mut template_renderer = TemplateRenderer::new(self)?;
         let markdown_pages: Vec<MarkdownPage> = self
             .markdown_pages
             .iter()
             .map(|markdown_page_path| {
-                MarkdownPage::from_file(self, markdown_page_path, &self.arena)
+                let content = match fs::read_to_string(markdown_page_path) {
+                    Ok(c) => c,
+                    Err(err) => {
+                        return Err(ConfluenceError::generic_error(format!(
+                            "Failed to read file {}: {}",
+                            markdown_page_path.display(),
+                            err
+                        )))
+                    }
+                };
+                let markdown_page = MarkdownPage::from_str(
+                    markdown_page_path,
+                    &content,
+                    &self.arena,
+                    String::from(
+                        self.relative_page_path(&markdown_page_path)?
+                            .as_os_str()
+                            .to_str()
+                            .unwrap(),
+                    ),
+                    &mut template_renderer,
+                )?;
+
+                link_generator.add_file_title(
+                    &PathBuf::from(markdown_page.source.clone()),
+                    &markdown_page.title,
+                )?;
+
+                let missing_files: Vec<String> = markdown_page
+                    .local_links
+                    .iter()
+                    .filter_map(|local_link| {
+                        if !self.dir.join(local_link).exists() {
+                            Some(local_link.display().to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                if !missing_files.is_empty() {
+                    return Err(ConfluenceError::MissingFileLink {
+                        source_file: markdown_page.source.clone(),
+                        local_links: missing_files.join(","),
+                    }
+                    .into());
+                };
+
+                let missing_attachments: Vec<String> = markdown_page
+                    .attachments
+                    .iter()
+                    .filter_map(|attachment| {
+                        if !attachment.exists() {
+                            Some(
+                                attachment
+                                    .strip_prefix(self.dir.as_path())
+                                    .unwrap()
+                                    .display()
+                                    .to_string(),
+                            )
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                if !missing_attachments.is_empty() {
+                    return Err(ConfluenceError::MissingAttachmentLink {
+                        source_file: markdown_page.source.clone(),
+                        attachment_paths: missing_attachments.join(","),
+                    }
+                    .into());
+                }
+
+                Ok(markdown_page)
             })
             .filter_map(|r| r.map_err(|e| parse_errors.push(e)).ok())
             .collect();
 
-        let title_errors = markdown_pages
-            .iter()
-            .map(|markdown_page| {
-                link_generator.add_file_title(
-                    &PathBuf::from(markdown_page.source.clone()),
-                    &markdown_page.title,
-                )
-            })
-            .filter_map(|r| r.err());
-
-        let missing_files = markdown_pages
-            .iter()
-            .flat_map(|markdown_page| {
-                markdown_page.local_links.iter().map(|local_link| {
-                    if self.dir.join(local_link).exists() {
-                        Ok(local_link)
-                    } else {
-                        Err(ConfluenceError::MissingFileLink {
-                            source_file: markdown_page.source.clone(),
-                            local_link: local_link.display().to_string(),
-                        }
-                        .into())
-                    }
-                })
-            })
-            .filter_map(|r| r.err());
-
-        let missing_attachments = markdown_pages
-            .iter()
-            .flat_map(|markdown_page| {
-                markdown_page.attachments.iter().map(|attachment| {
-                    if attachment.exists() {
-                        Ok(attachment)
-                    } else {
-                        Err(ConfluenceError::MissingAttachmentLink {
-                            source_file: markdown_page.source.clone(),
-                            attachment_path: attachment
-                                .strip_prefix(self.dir.as_path())
-                                .unwrap()
-                                .display()
-                                .to_string(),
-                        }
-                        .into())
-                    }
-                })
-            })
-            .filter_map(|r| r.err());
-
-        parse_errors.extend(title_errors);
-        parse_errors.extend(missing_files);
-        parse_errors.extend(missing_attachments);
-
         if !parse_errors.is_empty() {
             let error_string: String = parse_errors
                 .iter()
-                .map(|e| e.to_string())
+                .map(|e| format!("{:#}", e))
                 .collect::<Vec<String>>()
-                .join(", ");
-            return Err(ConfluenceError::generic_error(
-                String::from("Error parsing space: ") + &error_string,
-            ));
+                .join("\n  ");
+            return Err(ConfluenceError::generic_error(String::from(format!(
+                "{} Error(s) parsing space:\n  {}",
+                parse_errors.len(),
+                &error_string
+            ))));
         }
+
         Ok(markdown_pages)
     }
 }
@@ -206,10 +239,8 @@ mod tests {
         let result = space.parse(&mut LinkGenerator::new());
 
         assert!(result.is_err());
-        assert_eq!(
-            format!("{}", result.err().unwrap()),
-            "Error parsing space: Duplicate title 'The Same Heading' in [markdown2.md]"
-        )
+        assert!(format!("{:#}", result.err().unwrap())
+            .contains("Duplicate title 'The Same Heading' in [markdown2.md]"))
     }
 
     #[test]
@@ -233,10 +264,9 @@ mod tests {
 
         let result = space.parse(&mut LinkGenerator::new());
         assert!(result.is_err());
-        assert_eq!(
-            format!("{:#}", result.err().unwrap()),
-            "Error parsing space: Missing file for link in [subpage\\markdown2.md] to [subpage\\does_not_exist.md]"
-        )
+        assert!(format!("{:#}", result.err().unwrap()).contains(
+            "Missing file for link in [subpage\\markdown2.md] to [subpage\\does_not_exist.md]",
+        ))
     }
 
     #[test]
@@ -260,9 +290,8 @@ mod tests {
 
         let result = space.parse(&mut LinkGenerator::new());
         assert!(result.is_err());
-        assert_eq!(
-            format!("{:#}", result.err().unwrap()),
-            "Error parsing space: Missing file for attachment link in [subpage\\image.md] to [subpage\\image_does_not_exist.png]"
-        )
+        assert!(format!("{:#}", result.err().unwrap()).contains(
+            "Missing file for attachment link in [subpage\\image.md] to [subpage\\image_does_not_exist.png]"
+        ));
     }
 }

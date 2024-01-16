@@ -1,8 +1,9 @@
+{% import "macros.md" as macros %}
 # Hello World 2
 
 ## Table of Contents
 
-{{ macros::toc() }}
+{{ toc() }}
 
 ## Basic Usage
 
@@ -77,4 +78,24 @@ some-map:
 
 ## Macros
 
-{{ filename }}
+There is basic macro support available, some of which have already been used in this file:
+
+- `{{ '{{toc()}}' }}` inserts the confluence Table of Contents macro
+- `{{ '{{children()}}' }}` inserts the confluence Children macro
+- `{{ '{{filename}}' }}` inserts the current filename (which for this file is `{{filename}}`)
+
+You can also write your own macros and place them in files in the `_tera` directory under your space directory. As the first line of the file, you should import them (as we did with this file: there's a `{{ "{% import 'macros.md' as macros %}" }}` all the way back up there). You can then call the macros defined within like this:
+
+```markdown
+{{ "{{macros::example_macro(name='Your Name')}}" }}
+```
+
+Which should give:
+
+```markdown
+{{macros::example_macro(name='Your Name')}}
+```
+
+Note that you _must_ use the keyword arguments or Tera will complain "expected an identifier".
+
+You can also [include templates](https://keats.github.io/tera/docs/#include) from the `_tera` directory, and even [extend them](https://keats.github.io/tera/docs/#inheritance). See [Subpage Example](subpages/index.md) for a further example.

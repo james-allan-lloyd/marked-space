@@ -33,14 +33,6 @@ impl ConfluencePage {
                 })
                 .collect();
 
-        let page_titles: Vec<String> = results.iter().map(|p| p.title.clone()).collect();
-
-        println!(
-            "Found {} pages already in space:\n{}",
-            results.len(),
-            page_titles.join("\n")
-        );
-
         Ok(results)
     }
 

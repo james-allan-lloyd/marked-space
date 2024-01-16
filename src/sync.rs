@@ -20,7 +20,6 @@ use crate::{
     responses::{
         self, Attachment, MultiEntityResult, PageBulkWithoutBody, PageSingleWithoutBody, Version,
     },
-    template_renderer::TemplateRenderer,
     Result,
 };
 
@@ -284,9 +283,8 @@ pub fn sync_space<'a>(
         );
     });
     space.set_orphans(orphaned_pages);
-    let mut template_renderer = TemplateRenderer::new(markdown_space)?;
     for markdown_page in markdown_pages.iter() {
-        let page = markdown_page.render(&link_generator, &mut template_renderer)?;
+        let page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {
             output_content(d, &page)?;
         }
@@ -363,7 +361,7 @@ fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
 mod tests {
     use std::path::Path;
 
-    use crate::markdown_page::MarkdownPage;
+    use crate::{markdown_page::MarkdownPage, template_renderer::TemplateRenderer};
 
     use super::*;
 
@@ -380,12 +378,17 @@ mod tests {
     ) -> Result<RenderedPage> {
         // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
         let arena = Arena::<AstNode>::new();
-        let markdown_page = MarkdownPage::from_file(markdown_space, markdown_page_path, &arena)?;
+        let markdown_page = MarkdownPage::from_file(
+            markdown_space,
+            markdown_page_path,
+            &arena,
+            &mut TemplateRenderer::default()?,
+        )?;
         link_generator.add_file_title(
             &PathBuf::from(markdown_page.source.clone()),
             &markdown_page.title,
         )?;
-        markdown_page.render(link_generator, &mut TemplateRenderer::default()?)
+        markdown_page.render(link_generator)
     }
 
     #[test]
@@ -457,8 +460,6 @@ mod tests {
             temp.child("test/subpages/child.md").path(),
             &mut link_generator,
         )?;
-
-        println!("child {:#?}", child_page);
 
         assert!(child_page.parent.is_some());
         assert_eq!(child_page.parent.unwrap(), "Subpages Parent");

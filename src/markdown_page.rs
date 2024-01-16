@@ -36,10 +36,12 @@ pub struct MarkdownPage<'a> {
 }
 
 impl<'a> MarkdownPage<'a> {
+    #[allow(dead_code)]
     pub fn from_file(
         markdown_space: &MarkdownSpace,
         markdown_page: &Path,
         arena: &'a Arena<AstNode<'a>>,
+        template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
         let content = match fs::read_to_string(markdown_page) {
             Ok(c) => c,
@@ -59,11 +61,13 @@ impl<'a> MarkdownPage<'a> {
                 .relative_page_path(markdown_page)?
                 .display()
                 .to_string(),
+            template_renderer,
         )
     }
 
     fn options() -> Options {
         let mut options = Options::default();
+        options.render.unsafe_ = true;
         // options.extension.autolink = true;
         options.extension.table = true;
         options.extension.tasklist = true;
@@ -78,8 +82,10 @@ impl<'a> MarkdownPage<'a> {
         content: &str,
         arena: &'a Arena<AstNode<'a>>,
         source: String,
+        template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
-        let root: &AstNode<'_> = parse_document(arena, content, &Self::options());
+        let content = template_renderer.expand_html(source.as_str(), &content)?;
+        let root: &AstNode<'_> = parse_document(arena, &content, &Self::options());
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
         where
@@ -195,13 +201,9 @@ impl<'a> MarkdownPage<'a> {
         }
     }
 
-    pub fn render(
-        &self,
-        link_generator: &LinkGenerator,
-        template_renderer: &mut TemplateRenderer,
-    ) -> Result<RenderedPage> {
+    pub fn render(&self, link_generator: &LinkGenerator) -> Result<RenderedPage> {
         let rendered_html = self.to_html_string(link_generator)?.clone();
-        let content = template_renderer.expand_html(self, &rendered_html)?;
+        let content = rendered_html;
         let title = self.title.clone();
         let page_path = PathBuf::from(self.source.clone());
         let parent = get_parent_title(page_path, link_generator)?;
@@ -260,6 +262,7 @@ mod tests {
             &String::from("# My Page Title\n\nMy page content"),
             &arena,
             "page.md".into(),
+            &mut TemplateRenderer::default()?,
         )?;
 
         assert_eq!(page.title, "My Page Title");
@@ -275,6 +278,7 @@ mod tests {
             &String::from("# My Page Title\n\nMy page content"),
             &arena,
             "page.md".into(),
+            &mut TemplateRenderer::default()?,
         )?;
 
         let content = page.to_html_string(&LinkGenerator::new())?;
@@ -293,6 +297,7 @@ mod tests {
             &String::from("My page content"),
             &arena,
             "page.md".into(),
+            &mut TemplateRenderer::default()?,
         );
 
         assert!(page.is_err());
@@ -322,6 +327,7 @@ mod tests {
             ),
             &arena,
             "page.md".into(),
+            &mut TemplateRenderer::default()?,
         )?;
 
         let mut link_generator = LinkGenerator::new();
@@ -350,6 +356,7 @@ mod tests {
             "# My Page Title\n\nMy page content: ![myimage](myimage.png)",
             &arena,
             "page.md".into(),
+            &mut TemplateRenderer::default()?,
         )?;
 
         assert_eq!(page.attachments.len(), 1);
@@ -380,10 +387,10 @@ mod tests {
             "# compulsory title\n{{filename}}",
             &arena,
             "page.md".into(),
+            &mut TemplateRenderer::default()?,
         )?;
 
-        let rendered_page =
-            page.render(&LinkGenerator::new(), &mut TemplateRenderer::default()?)?;
+        let rendered_page = page.render(&LinkGenerator::new())?;
 
         assert_eq!(rendered_page.content.trim(), "<p>page.md</p>");
 
@@ -398,10 +405,10 @@ mod tests {
             "# compulsory title\n{{hello_world()|safe}}",
             &arena,
             "page.md".into(),
+            &mut TemplateRenderer::default()?,
         )?;
 
-        let rendered_page =
-            page.render(&LinkGenerator::new(), &mut TemplateRenderer::default()?)?;
+        let rendered_page = page.render(&LinkGenerator::new())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
 
@@ -409,17 +416,17 @@ mod tests {
     }
 
     #[test]
-    fn it_renders_macros() -> TestResult {
+    fn it_renders_builtins() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let page = MarkdownPage::from_str(
             PathBuf::from("page.md").as_path(),
-            "# compulsory title\n{{macros::hello(name=\"world!\")}}",
+            "# compulsory title\n{{hello_world(name=\"world!\")}}",
             &arena,
             "page.md".into(),
+            &mut TemplateRenderer::default()?,
         )?;
 
-        let rendered_page =
-            page.render(&LinkGenerator::new(), &mut TemplateRenderer::default()?)?;
+        let rendered_page = page.render(&LinkGenerator::new())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
 

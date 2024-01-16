@@ -1,8 +1,5 @@
----
-labels: [baz]
----
-# A page with sub pages
+{% extends "index-page.md" %}
 
-This is a page with sub pages.
+{% block title %} A page with sub pages {% endblock title %}
 
-{{ macros::children() }}
+{% block description %}This is a page with sub pages. {% endblock description %}
