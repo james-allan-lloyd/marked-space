@@ -32,7 +32,6 @@ pub struct MarkdownPage<'a> {
     pub attachments: Vec<PathBuf>,
     pub local_links: Vec<PathBuf>,
     pub front_matter: Option<FrontMatter>,
-    pub headings: Vec<(u8, String)>,
 }
 
 impl<'a> MarkdownPage<'a> {
@@ -98,8 +97,6 @@ impl<'a> MarkdownPage<'a> {
             }
         }
 
-        let mut headings = Vec::<(u8, String)>::new();
-
         let mut errors = Vec::<String>::default();
         let mut attachments = Vec::<PathBuf>::default();
         let mut local_links = Vec::<PathBuf>::default();
@@ -121,7 +118,7 @@ impl<'a> MarkdownPage<'a> {
                     }
                 }
             }
-            NodeValue::Heading(heading) => {
+            NodeValue::Heading(_heading) => {
                 if first_heading.is_none() {
                     first_heading = Some(node);
                 } else {
@@ -129,7 +126,6 @@ impl<'a> MarkdownPage<'a> {
                     for n in node.children() {
                         collect_text(n, &mut text_content);
                     }
-                    headings.push((heading.level, String::from_utf8(text_content).unwrap()));
                 }
             }
             NodeValue::Image(image) => {
@@ -176,7 +172,6 @@ impl<'a> MarkdownPage<'a> {
                 attachments,
                 local_links,
                 front_matter,
-                headings,
             })
         } else {
             Err(ConfluenceError::parsing_errors(source, errors))
