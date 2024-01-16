@@ -518,10 +518,6 @@ mod tests {
         Ok(())
     }
 
-    fn _it_renames_default_parent_page_when_index_md_is_added() -> TestResult {
-        todo!()
-    }
-
     #[test]
     fn it_updates_title() -> TestResult {
         let confluence_page = ConfluencePage {

@@ -65,20 +65,6 @@ impl TemplateRenderer {
         tera.register_function("hello_world", hello_world);
         tera.register_function("toc", toc);
         tera.register_function("children", children);
-        // tera.add_raw_template(
-        //     "macros.md",
-        //     r##"
-        //     {% macro hello(name) -%}<em>hello {{name}}</em>{%- endmacro hello %}
-
-        //     {% macro toc() -%}
-        //     <ac:structured-macro ac:name="toc" ac:schema-version="1" data-layout="default" ac:macro-id="334277ff-40b1-45ec-b5c7-ba6091fd0df3"><ac:parameter ac:name="minLevel">1</ac:parameter><ac:parameter ac:name="maxLevel">6</ac:parameter><ac:parameter ac:name="include" /><ac:parameter ac:name="outline">false</ac:parameter><ac:parameter ac:name="indent" /><ac:parameter ac:name="exclude" /><ac:parameter ac:name="type">list</ac:parameter><ac:parameter ac:name="class" /><ac:parameter ac:name="printable">false</ac:parameter></ac:structured-macro>
-        //     {%- endmacro toc %}
-
-        //     {% macro children() -%}
-        //     <ac:structured-macro ac:name="children" ac:schema-version="2" data-layout="default" ac:macro-id="4172775450124db364aa2f7e7faf4cb3" />
-        //     {%- endmacro chidlren %}
-        //     "##,
-        // )?;
         Ok(())
     }
 
