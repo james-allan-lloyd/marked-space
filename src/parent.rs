@@ -13,10 +13,10 @@ pub fn get_parent_file(page_path: &Path) -> Option<PathBuf> {
             if parent_path == PathBuf::default() {
                 return None;
             }
-            return Some(parent_path.join("index.md"));
+            Some(parent_path.join("index.md"))
         }
     } else {
-        return None;
+        None
     }
 }
 

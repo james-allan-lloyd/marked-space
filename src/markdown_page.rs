@@ -137,7 +137,7 @@ impl<'a> MarkdownPage<'a> {
                 {
                     if let Ok(local_link) = LocalLink::from_str(
                         &node_link.url,
-                        &PathBuf::from(source.as_str()).parent().unwrap(),
+                        PathBuf::from(source.as_str()).parent().unwrap(),
                     ) {
                         local_links.push(local_link);
                     } else {

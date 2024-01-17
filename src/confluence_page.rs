@@ -24,9 +24,9 @@ impl ConfluencePage {
     pub fn extract_path(version: &responses::Version) -> Option<PathBuf> {
         if let Some(data) = version.message.strip_prefix(Self::version_message_prefix()) {
             let kvs: HashMap<&str, &str> = data
-                .split(";")
+                .split(';')
                 .map(|kv| {
-                    let (key, value) = kv.split_once("=").unwrap();
+                    let (key, value) = kv.split_once('=').unwrap();
                     (key.trim(), value.trim())
                 })
                 .collect();

@@ -33,7 +33,7 @@ fn simplify_path(p: &Path) -> Result<PathBuf> {
 
 impl LocalLink {
     pub fn from_str(s: &str, relative_path: &Path) -> Result<Self> {
-        let result = if let Some(hash_pos) = s.find("#") {
+        let result = if let Some(hash_pos) = s.find('#') {
             let (p, a) = s.split_at(hash_pos);
             if a.len() <= 1 {
                 return Err(ConfluenceError::generic_error("Cannot have empty anchors"));

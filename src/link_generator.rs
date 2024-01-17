@@ -38,14 +38,14 @@ impl LinkGenerator {
         let title = markdown_page.title.to_owned();
         if self.title_to_file.contains_key(&title) {
             return Err(ConfluenceError::DuplicateTitle {
-                file: markdown_page.source.replace("\\", "/"),
+                file: markdown_page.source.replace('\\', "/"),
                 title,
             }
             .into());
         }
         // println!("register {:#?}", markdown_page.source);
         self.title_to_file
-            .insert(title.clone(), markdown_page.source.replace("\\", "/"));
+            .insert(title.clone(), markdown_page.source.replace('\\', "/"));
         Ok(())
     }
 
@@ -60,7 +60,7 @@ impl LinkGenerator {
 
     fn path_to_string(p: &Path) -> Result<String> {
         if let Some(s) = p.to_str() {
-            Ok(s.to_string().replace("\\", "/"))
+            Ok(s.to_string().replace('\\', "/"))
         } else {
             Err(ConfluenceError::generic_error(
                 "Failed to convert path to string",
@@ -72,27 +72,25 @@ impl LinkGenerator {
         self.title_to_file.contains_key(&title.to_owned())
     }
 
-    pub fn get_file_id(&self, filename: &std::path::PathBuf) -> Option<String> {
+    pub fn get_file_id(&self, filename: &Path) -> Option<String> {
         Self::path_to_string(filename)
             .ok()
             .and_then(|s| self.filename_to_id.get(&s))
             .cloned()
     }
 
-    pub fn get_file_url(&self, filename: &Path) -> Option<String> {
+    fn get_file_url(&self, filename: &Path) -> Option<String> {
         // println!("{:#?}", filename);
         // println!("{:#?}", self.filename_to_id);
         // println!("{:#?}", self.title_to_file);
         // println!("{:#?}", self.title_to_id);
-        if let Some(s) = Self::path_to_string(filename).ok() {
-            if let Some(id) = self.filename_to_id.get(&s) {
-                Some(format!(
+        if let Ok(s) = Self::path_to_string(filename) {
+            self.filename_to_id.get(&s).map(|id| {
+                format!(
                     "https://{}/wiki/spaces/{}/pages/{}",
                     self.host, self.space_key, id
-                ))
-            } else {
-                None
-            }
+                )
+            })
         } else {
             None
         }
@@ -142,5 +140,5 @@ fn relative_local_link(
     nl: &NodeLink,
     confluence_formatter: &mut ConfluenceStorageRenderer<'_>,
 ) -> LocalLink {
-    LocalLink::from_str(&nl.url, &confluence_formatter.source.parent().unwrap()).unwrap()
+    LocalLink::from_str(&nl.url, confluence_formatter.source.parent().unwrap()).unwrap()
 }
