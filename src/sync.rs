@@ -17,9 +17,7 @@ use crate::{
     link_generator::LinkGenerator,
     markdown_page::RenderedPage,
     markdown_space::MarkdownSpace,
-    responses::{
-        self, Attachment, MultiEntityResult, PageBulkWithoutBody, PageSingleWithoutBody, Version,
-    },
+    responses::{self, Attachment, MultiEntityResult, PageSingleWithoutBody, Version},
     Result,
 };
 
@@ -344,10 +342,7 @@ fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
 mod tests {
     use std::path::Path;
 
-    use crate::{
-        markdown_page::{self, MarkdownPage},
-        template_renderer::TemplateRenderer,
-    };
+    use crate::{markdown_page::MarkdownPage, template_renderer::TemplateRenderer};
 
     use super::*;
 

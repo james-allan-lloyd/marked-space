@@ -1,8 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use crate::Result;
-use crate::{error::ConfluenceError, link_generator::LinkGenerator};
-
 pub fn get_parent_file(page_path: &Path) -> Option<PathBuf> {
     if let Some(parent_path) = page_path.parent() {
         if parent_path == PathBuf::default() {
@@ -27,8 +24,6 @@ pub fn get_parent_file(page_path: &Path) -> Option<PathBuf> {
 mod tests {
 
     use super::*;
-
-    type TestResult = std::result::Result<(), anyhow::Error>;
 
     #[test]
     fn it_returns_none_for_top_level_pages() {
