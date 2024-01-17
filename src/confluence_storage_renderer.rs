@@ -356,8 +356,16 @@ impl LinkGenerator {
         }
 
         let local_link = relative_local_link(nl, confluence_formatter);
+        if local_link.path == PathBuf::default() {
+            confluence_formatter.output.write_all(b"<a href=\"#")?;
 
-        if let Some(confluence_title_for_file) = self.get_file_title(&local_link.path) {
+            if let Some(anchor) = local_link.anchor {
+                confluence_formatter.output.write_all(anchor.as_bytes())?;
+                confluence_formatter.output.write_all(b"\"")?;
+            }
+
+            confluence_formatter.output.write_all(b">")?;
+        } else if let Some(confluence_title_for_file) = self.get_file_title(&local_link.path) {
             confluence_formatter.output.write_all(b"<ac:link")?;
 
             if let Some(anchor) = local_link.anchor {
@@ -399,7 +407,9 @@ impl LinkGenerator {
             return Ok(());
         }
         let local_link = relative_local_link(nl, confluence_formatter);
-        if let Some(_confluence_title_for_file) = self.get_file_title(&local_link.path) {
+        if local_link.path == PathBuf::default() {
+            confluence_formatter.output.write_all(b"</a>")?;
+        } else if let Some(_confluence_title_for_file) = self.get_file_title(&local_link.path) {
             confluence_formatter
                 .output
                 .write_all(b"]]></ac:plain-text-link-body></ac:link>")?;

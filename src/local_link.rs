@@ -56,7 +56,7 @@ impl LocalLink {
 mod test {
     use std::{path::PathBuf, str::FromStr};
 
-    use crate::{error::TestResult, local_link};
+    use crate::error::TestResult;
 
     use super::LocalLink;
 
@@ -100,6 +100,15 @@ mod test {
     fn it_errors_if_link_is_outside_of_space() -> TestResult {
         let result = LocalLink::from_str("../test.md#a", &PathBuf::default());
         assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_parses_local_links() -> TestResult {
+        let result = LocalLink::from_str("#anchor", &PathBuf::default());
+        println!("{:#?}", result);
+        assert!(result.is_ok());
 
         Ok(())
     }
