@@ -195,6 +195,7 @@ fn sync_page_content(
                 number: 1,
                 message: String::default(),
             },
+            path: None,
         });
     }
 
@@ -243,24 +244,6 @@ fn page_up_to_date(
         && existing_page.title == page.title
 }
 
-fn get_orphaned_pages(
-    confluence_client: &ConfluenceClient,
-    link_generator: &LinkGenerator,
-    space_id: &str,
-) -> Result<Vec<ConfluencePage>> {
-    let pages = ConfluencePage::get_all(confluence_client, space_id)?;
-    Ok(pages
-        .into_iter()
-        .filter(|confluence_page| {
-            confluence_page
-                .version
-                .message
-                .starts_with(ConfluencePage::version_message_prefix())
-                && !link_generator.has_title(confluence_page.title.as_str())
-        })
-        .collect())
-}
-
 pub fn sync_space<'a>(
     confluence_client: ConfluenceClient,
     markdown_space: &'a MarkdownSpace<'a>,
@@ -281,17 +264,8 @@ pub fn sync_space<'a>(
         space_key, confluence_client.hostname
     );
 
-    // let space = get_space(&confluence_client, space_key.as_str())?;
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
-    let orphaned_pages = get_orphaned_pages(&confluence_client, &link_generator, &space.id)?;
-    orphaned_pages.iter().for_each(|p| {
-        // todo: filter for orphans whose files still exist
-        println!(
-            "Orphaned page detected \"{}\", version comment: {}",
-            p.title, p.version.message
-        );
-    });
-    space.set_orphans(orphaned_pages);
+    space.find_orphaned_pages(&confluence_client, &link_generator, &markdown_space.dir)?;
     for markdown_page in markdown_pages.iter() {
         let page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {
@@ -528,6 +502,7 @@ mod tests {
                 message: String::default(),
                 number: 1,
             },
+            path: None,
         };
         let rendered_page = RenderedPage {
             title: String::from("New title"),

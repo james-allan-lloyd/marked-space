@@ -1,5 +1,8 @@
+use std::path::Path;
+
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
+use crate::confluence_storage_renderer::LinkGenerator;
 use crate::error::{ConfluenceError, Result};
 use crate::markdown_page::RenderedPage;
 use crate::responses;
@@ -42,8 +45,40 @@ impl ConfluenceSpace {
         })
     }
 
-    pub fn set_orphans(&mut self, orphans: Vec<ConfluencePage>) {
-        self.orphans = orphans
+    pub fn find_orphaned_pages(
+        &mut self,
+        confluence_client: &ConfluenceClient,
+        link_generator: &LinkGenerator,
+        space_dir: &Path,
+    ) -> Result<()> {
+        let orphaned_pages: Vec<ConfluencePage> =
+            ConfluencePage::get_all(confluence_client, &self.id)?
+                .into_iter()
+                .filter(|confluence_page| {
+                    confluence_page
+                        .version
+                        .message
+                        .starts_with(ConfluencePage::version_message_prefix())
+                        && !link_generator.has_title(confluence_page.title.as_str())
+                })
+                .collect();
+        orphaned_pages.iter().for_each(|p| {
+            if let Some(path) = &p.path {
+                if !space_dir.join(path).exists() {
+                    println!(
+                        "Orphaned page detected \"{}\" (probably deleted), version comment: {}",
+                        p.title, p.version.message
+                    );
+                }
+            } else {
+                println!(
+                    "Orphaned page detected \"{}\" (probably created outside of markedspace), version comment: {}",
+                    p.title, p.version.message
+                );
+            }
+        });
+        self.orphans = orphaned_pages;
+        Ok(())
     }
 
     pub fn get_existing_page(
