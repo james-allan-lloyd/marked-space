@@ -7,7 +7,7 @@ use crate::{
     checksum::sha256_digest, confluence_page::ConfluencePage,
     confluence_storage_renderer::render_confluence_storage, helpers::collect_text,
     link_generator::LinkGenerator, local_link::LocalLink, markdown_space::MarkdownSpace,
-    parent::get_parent_title, template_renderer::TemplateRenderer,
+    parent::get_parent_file, template_renderer::TemplateRenderer,
 };
 use comrak::{
     nodes::{AstNode, NodeValue},
@@ -205,7 +205,7 @@ impl<'a> MarkdownPage<'a> {
         let content = rendered_html;
         let title = self.title.clone();
         let page_path = PathBuf::from(self.source.clone());
-        let parent = get_parent_title(page_path, link_generator)?;
+        let parent = get_parent_file(&page_path).and_then(|f| link_generator.get_file_id(&f));
         let checksum = sha256_digest(content.as_bytes())?;
 
         Ok(RenderedPage {
@@ -283,7 +283,7 @@ mod tests {
         let markdown_content = &String::from("# My Page Title\n\nMy page content");
         let page = page_from_str(markdown_content, &arena)?;
 
-        let content = page.to_html_string(&LinkGenerator::new())?;
+        let content = page.to_html_string(&LinkGenerator::default())?;
 
         assert!(content.contains("My page content"));
         assert!(!content.contains("<h1>My Page Title</h1>"));
@@ -346,6 +346,7 @@ mod tests {
         let link_filename = PathBuf::from("hello-world.md");
         let link_file_title = String::from("This is the title parsed from the linked file");
         let link_text = String::from("Link text");
+        let link_url = String::from("https://my.atlassian.net/wiki/spaces/TEAM/pages/47");
         let arena = Arena::<AstNode>::new();
         let markdown_content = &format!(
             "# My Page Title\n\nMy page content: [{}]({})",
@@ -354,14 +355,16 @@ mod tests {
         );
         let page = page_from_str(markdown_content, &arena)?;
 
-        let mut link_generator = LinkGenerator::new();
+        let mut link_generator = LinkGenerator::new("my.atlassian.net", "TEAM");
 
         link_generator.add_file_title(&link_filename, &link_file_title)?;
+        link_generator.add_title_id(&link_file_title, &"47".to_string())?;
 
         let content = page.to_html_string(&link_generator)?;
-
-        assert!(content.contains(format!("ri:content-title=\"{}\"", link_file_title).as_str()));
-        assert!(content.contains(format!("<![CDATA[{}]]>", link_text).as_str()));
+        println!("actual {:#?}", content);
+        let expected = format!("<a href=\"{}\">{}</a>", link_url, link_text);
+        println!("expect {:#?}", expected);
+        assert!(content.contains(expected.as_str()));
 
         Ok(())
     }
@@ -374,7 +377,7 @@ mod tests {
 
         assert_eq!(page.attachments.len(), 1);
 
-        let content = page.to_html_string(&LinkGenerator::new())?;
+        let content = page.to_html_string(&LinkGenerator::default())?;
 
         assert!(content.contains(r#"<ri:attachment ri:filename="myimage.png"/>"#));
 
@@ -395,7 +398,7 @@ mod tests {
         let page = page_from_str(markdown_content.as_str(), &arena)?;
 
         assert_eq!(page.attachments.len(), 0); // should not view the external link as an attachment
-        let html_content = page.to_html_string(&LinkGenerator::new())?;
+        let html_content = page.to_html_string(&LinkGenerator::default())?;
 
         println!("Got content: {:#}", html_content);
 
@@ -419,7 +422,7 @@ mod tests {
         );
         let arena = Arena::<AstNode>::new();
         let page = page_from_str(markdown_content.as_str(), &arena)?;
-        let html_content = page.to_html_string(&LinkGenerator::new())?;
+        let html_content = page.to_html_string(&LinkGenerator::default())?;
 
         println!("Got content: {:#}", html_content);
 
@@ -436,7 +439,7 @@ mod tests {
         let markdown_content = "# compulsory title\n{{filename}}";
         let page = page_from_str(markdown_content, &arena)?;
 
-        let rendered_page = page.render(&LinkGenerator::new())?;
+        let rendered_page = page.render(&LinkGenerator::default())?;
 
         assert_eq!(rendered_page.content.trim(), "<p>page.md</p>");
 
@@ -449,7 +452,7 @@ mod tests {
         let markdown_content = "# compulsory title\n{{hello_world()}}";
         let page = page_from_str(markdown_content, &arena)?;
 
-        let rendered_page = page.render(&LinkGenerator::new())?;
+        let rendered_page = page.render(&LinkGenerator::default())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
 
@@ -462,7 +465,7 @@ mod tests {
         let markdown_content = "# compulsory title\n{{hello_world(name=\"world!\")}}";
 
         let page = page_from_str(markdown_content, &arena)?;
-        let rendered_page = page.render(&LinkGenerator::new())?;
+        let rendered_page = page.render(&LinkGenerator::default())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
 

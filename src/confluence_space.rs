@@ -48,18 +48,26 @@ impl ConfluenceSpace {
     pub fn find_orphaned_pages(
         &mut self,
         confluence_client: &ConfluenceClient,
-        link_generator: &LinkGenerator,
+        link_generator: &mut LinkGenerator,
         space_dir: &Path,
     ) -> Result<()> {
         let orphaned_pages: Vec<ConfluencePage> =
             ConfluencePage::get_all(confluence_client, &self.id)?
                 .into_iter()
-                .filter(|confluence_page| {
-                    confluence_page
+                .filter_map(|confluence_page| {
+                    link_generator
+                        .add_title_id(&confluence_page.title, &confluence_page.id)
+                        .unwrap();
+                    if confluence_page
                         .version
                         .message
                         .starts_with(ConfluencePage::version_message_prefix())
                         && !link_generator.has_title(confluence_page.title.as_str())
+                    {
+                        Some(confluence_page)
+                    } else {
+                        None
+                    }
                 })
                 .collect();
         orphaned_pages.iter().for_each(|p| {

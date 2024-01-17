@@ -272,7 +272,7 @@ mod tests {
         assert!(result.is_ok());
 
         let space = result.unwrap();
-        let result = space.parse(&mut LinkGenerator::new());
+        let result = space.parse(&mut LinkGenerator::default());
 
         assert!(result.is_err());
         assert!(format!("{:#}", result.err().unwrap())
@@ -298,7 +298,7 @@ mod tests {
 
         let space = result.unwrap();
 
-        let result = space.parse(&mut LinkGenerator::new());
+        let result = space.parse(&mut LinkGenerator::default());
         assert!(result.is_err());
         let acutal_error = format!("{:#}", result.err().unwrap());
 
@@ -327,7 +327,7 @@ mod tests {
 
         let space = result.unwrap();
 
-        let result = space.parse(&mut LinkGenerator::new());
+        let result = space.parse(&mut LinkGenerator::default());
         assert!(result.is_err());
         assert!(format!("{:#}", result.err().unwrap()).contains(
             "Missing file for attachment link in [subpage\\image.md] to [subpage\\image_does_not_exist.png]"

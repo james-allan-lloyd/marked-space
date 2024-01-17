@@ -7,4 +7,4 @@ Sub page contents.
 
 ## Sub Page Section
 
-A section linked to from another page. Return here: [Return here](../hello-world.md#Links)
+A section linked to from another page. Return here: [Return here](../getting-started.md#Links)

@@ -90,25 +90,25 @@ fn sync_page_attachments(
     Ok(())
 }
 
-fn get_page_id_by_title(
-    confluence_client: &ConfluenceClient,
-    space_id: &str,
-    title: &str,
-) -> Result<Option<String>> {
-    let resp = confluence_client
-        .get_page_by_title(space_id, title, false)?
-        .error_for_status()?;
+// fn get_page_id_by_title(
+//     confluence_client: &ConfluenceClient,
+//     space_id: &str,
+//     title: &str,
+// ) -> Result<Option<String>> {
+//     let resp = confluence_client
+//         .get_page_by_title(space_id, title, false)?
+//         .error_for_status()?;
 
-    let content = resp.text()?;
-    let existing_page: responses::MultiEntityResult<PageBulkWithoutBody> =
-        serde_json::from_str(content.as_str())?;
+//     let content = resp.text()?;
+//     let existing_page: responses::MultiEntityResult<PageBulkWithoutBody> =
+//         serde_json::from_str(content.as_str())?;
 
-    if existing_page.results.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(existing_page.results[0].id.clone()))
-    }
-}
+//     if existing_page.results.is_empty() {
+//         Ok(None)
+//     } else {
+//         Ok(Some(existing_page.results[0].id.clone()))
+//     }
+// }
 
 struct SyncOperation {
     desc: String,
@@ -162,8 +162,8 @@ fn sync_page_content(
 
     let parent_id = if page.is_home_page() {
         None
-    } else if let Some(parent) = page.parent.as_ref() {
-        get_page_id_by_title(confluence_client, &space.id, parent)?
+    } else if let Some(parent) = page.parent.clone() {
+        Some(parent)
     } else {
         Some(space.homepage_id.clone())
     };
@@ -255,7 +255,7 @@ pub fn sync_space<'a>(
         space_key,
         markdown_space.dir.display()
     );
-    let mut link_generator = LinkGenerator::new();
+    let mut link_generator = LinkGenerator::new(&confluence_client.hostname, &markdown_space.key);
 
     let markdown_pages = markdown_space.parse(&mut link_generator)?;
 
@@ -265,7 +265,7 @@ pub fn sync_space<'a>(
     );
 
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
-    space.find_orphaned_pages(&confluence_client, &link_generator, &markdown_space.dir)?;
+    space.find_orphaned_pages(&confluence_client, &mut link_generator, &markdown_space.dir)?;
     for markdown_page in markdown_pages.iter() {
         let page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {
@@ -371,6 +371,7 @@ mod tests {
             &PathBuf::from(markdown_page.source.clone()),
             &markdown_page.title,
         )?;
+        link_generator.add_title_id(&markdown_page.title, "29")?;
         markdown_page.render(link_generator)
     }
 
@@ -384,7 +385,7 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/markdown1.md").path(),
-            &mut LinkGenerator::new(),
+            &mut LinkGenerator::default(),
         );
 
         assert!(parsed_page.is_ok());
@@ -401,7 +402,7 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/markdown1.md").path(),
-            &mut LinkGenerator::new(),
+            &mut LinkGenerator::default(),
         );
 
         assert!(parsed_page.is_ok());
@@ -422,7 +423,7 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/index.md").path(),
-            &mut LinkGenerator::new(),
+            &mut LinkGenerator::default(),
         )?;
 
         assert!(parsed_page.parent.is_none());
@@ -442,7 +443,7 @@ mod tests {
             .write_str("# Subpages Parent\nparent content")?;
         temp.child("test/subpages/child.md")
             .write_str("# Subpage Child\nchild content")?;
-        let mut link_generator = LinkGenerator::new();
+        let mut link_generator = LinkGenerator::default();
         let space = MarkdownSpace::from_directory(temp.child("test").path())?;
         let _home_page = parse_page(
             &space,
@@ -461,7 +462,7 @@ mod tests {
         )?;
 
         assert!(child_page.parent.is_some());
-        assert_eq!(child_page.parent.unwrap(), "Subpages Parent");
+        assert_eq!(child_page.parent.unwrap(), "29");
 
         Ok(())
     }

@@ -1,5 +1,5 @@
 {% import "macros.md" as macros %}
-# Hello World 2
+# Getting Started
 
 ## Table of Contents
 
@@ -69,11 +69,11 @@ Entering `---` should result in a horizontal rule in Confluence like this:
 
 ## Links
 
-Check out the home page here: [](index.md)
+Check out the home page here: [Home Page](index.md)
 
 And a link to a section in this page: [Code](#Code)
 
-And a link to a section in another page: [](subpages/subpage1.md#Sub-Page-Section)
+And a link to a section in another page: [Sub page section](subpages/subpage1.md#Sub-Page-Section)
 
 ![Alt text](image.png "A rusty crustation")
 

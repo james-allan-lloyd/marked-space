@@ -1,7 +1,7 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use comrak::nodes::NodeLink;
@@ -14,27 +14,44 @@ use crate::{
 
 #[derive(Default)]
 pub struct LinkGenerator {
-    filename_to_title: HashMap<String, String>,
-    titles: HashSet<String>,
+    host: String,
+    space_key: String,
+    filename_to_id: HashMap<String, String>,
+    title_to_file: HashMap<String, String>,
+    title_to_id: HashMap<String, String>,
 }
 
 impl LinkGenerator {
-    pub fn new() -> Self {
-        LinkGenerator::default()
+    pub fn new(host: &str, space_key: &str) -> Self {
+        LinkGenerator {
+            host: host.to_string(),
+            space_key: space_key.to_string(),
+            filename_to_id: HashMap::default(),
+            title_to_file: HashMap::default(),
+            title_to_id: HashMap::default(),
+        }
     }
 
     pub fn add_file_title(&mut self, filename: &Path, title: &str) -> Result<()> {
         let title = title.to_owned();
-        if self.titles.contains(&title) {
+        if self.title_to_file.contains_key(&title) {
             return Err(ConfluenceError::DuplicateTitle {
                 file: filename.display().to_string(),
                 title,
             }
             .into());
         }
-        self.titles.insert(title.clone());
-        self.filename_to_title
-            .insert(Self::path_to_string(filename)?, title.to_owned());
+        self.title_to_file
+            .insert(title.clone(), Self::path_to_string(filename)?);
+        Ok(())
+    }
+
+    pub fn add_title_id(&mut self, title: &str, id: &str) -> Result<()> {
+        self.title_to_id.insert(title.to_string(), id.to_string());
+
+        if let Some(filename) = self.title_to_file.get(title) {
+            self.filename_to_id.insert(filename.clone(), id.to_string());
+        }
         Ok(())
     }
 
@@ -49,12 +66,26 @@ impl LinkGenerator {
     }
 
     pub fn has_title(&self, title: &str) -> bool {
-        self.titles.contains(&title.to_owned())
+        self.title_to_file.contains_key(&title.to_owned())
     }
 
-    pub fn get_file_title(&self, filename: &Path) -> Option<&String> {
+    pub fn get_file_id(&self, filename: &std::path::PathBuf) -> Option<String> {
+        Self::path_to_string(filename)
+            .ok()
+            .and_then(|s| self.filename_to_id.get(&s))
+            .cloned()
+    }
+
+    pub fn get_file_url(&self, filename: &Path) -> Option<String> {
         if let Some(s) = Self::path_to_string(filename).ok() {
-            self.filename_to_title.get(&s)
+            if let Some(id) = self.filename_to_id.get(&s) {
+                Some(format!(
+                    "https://{}/wiki/spaces/{}/pages/{}",
+                    self.host, self.space_key, id
+                ))
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -73,64 +104,28 @@ impl LinkGenerator {
         }
 
         let local_link = relative_local_link(nl, confluence_formatter);
-        if local_link.path == PathBuf::default() {
-            confluence_formatter.output.write_all(b"<a href=\"#")?;
+        confluence_formatter.output.write_all(b"<a href=\"")?;
 
-            if let Some(anchor) = local_link.anchor {
-                confluence_formatter.output.write_all(anchor.as_bytes())?;
-                confluence_formatter.output.write_all(b"\"")?;
-            }
-
-            confluence_formatter.output.write_all(b">")?;
-        } else if let Some(confluence_title_for_file) = self.get_file_title(&local_link.path) {
-            confluence_formatter.output.write_all(b"<ac:link")?;
-
-            if let Some(anchor) = local_link.anchor {
-                confluence_formatter.output.write_all(b" ac:anchor=\"")?;
-                confluence_formatter.output.write_all(anchor.as_bytes())?;
-                confluence_formatter.output.write_all(b"\"")?;
-            }
-
-            confluence_formatter.output.write_all(b"><ri:page")?;
-            confluence_formatter
-                .output
-                .write_all(b" ri:content-title=\"")?;
-            confluence_formatter.escape(confluence_title_for_file.as_bytes())?;
-            confluence_formatter.output.write_all(b"\"/>")?;
-
-            confluence_formatter.output.write_all(
-                b"<ac:plain-text-link-body>
-        <![CDATA[",
-            )?;
-        } else {
-            println!("url: {:#?}", nl.url);
-            println!("locallink: {:#?}", local_link.path);
-            println!("file titles: {:#?}", self.filename_to_title);
-            confluence_formatter
-                .output
-                .write_all(b"<!-- skipping unknown local link type -->")?;
+        if let Some(url) = self.get_file_url(&local_link.path) {
+            confluence_formatter.output.write_all(url.as_bytes())?;
         }
+
+        if let Some(anchor) = local_link.anchor {
+            confluence_formatter.output.write_all(b"#")?;
+            confluence_formatter.output.write_all(anchor.as_bytes())?;
+        }
+
+        confluence_formatter.output.write_all(b"\">")?;
 
         Ok(())
     }
 
     pub fn exit(
         &self,
-        nl: &NodeLink,
+        _nl: &NodeLink,
         confluence_formatter: &mut ConfluenceStorageRenderer,
     ) -> io::Result<()> {
-        if nl.url.contains("://") {
-            confluence_formatter.output.write_all(b"</a>")?;
-            return Ok(());
-        }
-        let local_link = relative_local_link(nl, confluence_formatter);
-        if local_link.path == PathBuf::default() {
-            confluence_formatter.output.write_all(b"</a>")?;
-        } else if let Some(_confluence_title_for_file) = self.get_file_title(&local_link.path) {
-            confluence_formatter
-                .output
-                .write_all(b"]]></ac:plain-text-link-body></ac:link>")?;
-        }
+        confluence_formatter.output.write_all(b"</a>")?;
 
         Ok(())
     }
