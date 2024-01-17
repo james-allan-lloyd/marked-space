@@ -4,14 +4,10 @@ use std::{
 };
 
 use crate::{
-    checksum::sha256_digest,
-    confluence_page::ConfluencePage,
-    confluence_storage_renderer::{render_confluence_storage, LinkGenerator},
-    helpers::collect_text,
-    local_link::LocalLink,
-    markdown_space::MarkdownSpace,
-    parent::get_parent_title,
-    template_renderer::TemplateRenderer,
+    checksum::sha256_digest, confluence_page::ConfluencePage,
+    confluence_storage_renderer::render_confluence_storage, helpers::collect_text,
+    link_generator::LinkGenerator, local_link::LocalLink, markdown_space::MarkdownSpace,
+    parent::get_parent_title, template_renderer::TemplateRenderer,
 };
 use comrak::{
     nodes::{AstNode, NodeValue},
@@ -252,8 +248,8 @@ mod tests {
 
     use comrak::{nodes::AstNode, Arena};
 
-    use crate::confluence_storage_renderer::LinkGenerator;
     use crate::error::TestResult;
+    use crate::link_generator::LinkGenerator;
     use crate::markdown_page::{LocalLink, MarkdownPage};
     use crate::template_renderer::TemplateRenderer;
 

@@ -4,8 +4,8 @@ use regex::Regex;
 use walkdir::WalkDir;
 
 use crate::{
-    confluence_storage_renderer::LinkGenerator,
     error::{ConfluenceError, Result},
+    link_generator::LinkGenerator,
     markdown_page::MarkdownPage,
     template_renderer::TemplateRenderer,
 };
@@ -186,7 +186,7 @@ mod tests {
 
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
-    use crate::confluence_storage_renderer::LinkGenerator;
+    use crate::link_generator::LinkGenerator;
 
     use super::MarkdownSpace;
 

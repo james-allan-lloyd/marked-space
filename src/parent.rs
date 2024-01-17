@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::Result;
-use crate::{confluence_storage_renderer::LinkGenerator, error::ConfluenceError};
+use crate::{error::ConfluenceError, link_generator::LinkGenerator};
 
 pub fn get_parent_title(
     page_path: PathBuf,

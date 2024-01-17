@@ -2,8 +2,8 @@ use std::path::Path;
 
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
-use crate::confluence_storage_renderer::LinkGenerator;
 use crate::error::{ConfluenceError, Result};
+use crate::link_generator::LinkGenerator;
 use crate::markdown_page::RenderedPage;
 use crate::responses;
 
