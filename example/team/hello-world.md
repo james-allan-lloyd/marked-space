@@ -71,6 +71,10 @@ Entering `---` should result in a horizontal rule in Confluence like this:
 
 Check out the home page here: [](index.md)
 
+And a link to a section in this page: [](#code)
+
+And a link to a section in another page: [](subpages/subpage1.md#Sub-Page-Section)
+
 ![Alt text](image.png "A rusty crustation")
 
 ![External Image](http://confluence.atlassian.com/images/logo/confluence_48_trans.png "An external image")

@@ -5,10 +5,11 @@ use comrak::nodes::{
     TableAlignment,
 };
 use comrak::Options;
+use std::borrow::Borrow;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str;
 
 use once_cell::sync::Lazy;
@@ -16,6 +17,7 @@ use once_cell::sync::Lazy;
 use crate::error::Result;
 
 use crate::error::ConfluenceError;
+use crate::local_link::LocalLink;
 
 #[rustfmt::skip]
 const CMARK_CTYPE_CLASS: [u8; 256] = [
@@ -48,12 +50,13 @@ pub fn render_confluence_storage<'a>(
     options: &Options,
     output: &mut dyn Write,
     link_generator: &LinkGenerator,
+    source: &Path,
 ) -> io::Result<()> {
     let mut writer = WriteWithLast {
         output,
         last_was_lf: Cell::new(true),
     };
-    let mut f = ConfluenceStorageRenderer::new(options, &mut writer, link_generator);
+    let mut f = ConfluenceStorageRenderer::new(options, &mut writer, link_generator, source);
     f.format(root, false)?;
     if f.footnote_ix > 0 {
         f.output.write_all(b"</ol>\n</section>\n")?;
@@ -87,6 +90,7 @@ struct ConfluenceStorageRenderer<'o> {
     written_footnote_ix: u32,
     link_generator: &'o LinkGenerator,
     next_task_id: u32,
+    source: PathBuf,
 }
 
 #[rustfmt::skip]
@@ -313,8 +317,18 @@ impl LinkGenerator {
         }
         self.titles.insert(title.clone());
         self.filename_to_title
-            .insert(filename.display().to_string(), title.to_owned());
+            .insert(Self::path_to_string(filename)?, title.to_owned());
         Ok(())
+    }
+
+    fn path_to_string(p: &Path) -> Result<String> {
+        if let Some(s) = p.to_str() {
+            Ok(s.to_string().replace("\\", "/"))
+        } else {
+            Err(ConfluenceError::generic_error(
+                "Failed to convert path to string",
+            ))
+        }
     }
 
     pub fn has_title(&self, title: &str) -> bool {
@@ -322,7 +336,11 @@ impl LinkGenerator {
     }
 
     pub fn get_file_title(&self, filename: &Path) -> Option<&String> {
-        self.filename_to_title.get(&filename.display().to_string())
+        if let Some(s) = Self::path_to_string(filename).ok() {
+            self.filename_to_title.get(&s)
+        } else {
+            None
+        }
     }
 
     fn enter(
@@ -337,10 +355,18 @@ impl LinkGenerator {
             return Ok(());
         }
 
-        if let Some(confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
-            confluence_formatter
-                .output
-                .write_all(b"<ac:link>\n<ri:page")?;
+        let local_link = relative_local_link(nl, confluence_formatter);
+
+        if let Some(confluence_title_for_file) = self.get_file_title(&local_link.path) {
+            confluence_formatter.output.write_all(b"<ac:link")?;
+
+            if let Some(anchor) = local_link.anchor {
+                confluence_formatter.output.write_all(b" ac:anchor=\"")?;
+                confluence_formatter.output.write_all(anchor.as_bytes())?;
+                confluence_formatter.output.write_all(b"\"")?;
+            }
+
+            confluence_formatter.output.write_all(b"><ri:page")?;
             confluence_formatter
                 .output
                 .write_all(b" ri:content-title=\"")?;
@@ -352,6 +378,9 @@ impl LinkGenerator {
         <![CDATA[",
             )?;
         } else {
+            println!("url: {:#?}", nl.url);
+            println!("locallink: {:#?}", local_link.path);
+            println!("file titles: {:#?}", self.filename_to_title);
             confluence_formatter
                 .output
                 .write_all(b"<!-- skipping unknown local link type -->")?;
@@ -369,7 +398,8 @@ impl LinkGenerator {
             confluence_formatter.output.write_all(b"</a>")?;
             return Ok(());
         }
-        if let Some(_confluence_title_for_file) = self.filename_to_title.get(&nl.url) {
+        let local_link = relative_local_link(nl, confluence_formatter);
+        if let Some(_confluence_title_for_file) = self.get_file_title(&local_link.path) {
             confluence_formatter
                 .output
                 .write_all(b"]]></ac:plain-text-link-body></ac:link>")?;
@@ -379,11 +409,19 @@ impl LinkGenerator {
     }
 }
 
+fn relative_local_link(
+    nl: &NodeLink,
+    confluence_formatter: &mut ConfluenceStorageRenderer<'_>,
+) -> LocalLink {
+    LocalLink::from_str(&nl.url, &confluence_formatter.source.parent().unwrap()).unwrap()
+}
+
 impl<'o> ConfluenceStorageRenderer<'o> {
     fn new(
         options: &'o Options,
         output: &'o mut WriteWithLast<'o>,
         link_generator: &'o LinkGenerator,
+        source: &Path,
     ) -> Self {
         ConfluenceStorageRenderer {
             options,
@@ -392,6 +430,7 @@ impl<'o> ConfluenceStorageRenderer<'o> {
             written_footnote_ix: 0,
             link_generator,
             next_task_id: 1,
+            source: PathBuf::from(source),
         }
     }
 

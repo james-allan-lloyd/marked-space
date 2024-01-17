@@ -116,8 +116,8 @@ impl<'a> MarkdownSpace<'a> {
                     .local_links
                     .iter()
                     .filter_map(|local_link| {
-                        if !self.dir.join(local_link).exists() {
-                            Some(local_link.display().to_string())
+                        if !self.dir.join(&local_link.path).exists() {
+                            Some(local_link.path.display().to_string())
                         } else {
                             None
                         }
@@ -300,9 +300,12 @@ mod tests {
 
         let result = space.parse(&mut LinkGenerator::new());
         assert!(result.is_err());
-        assert!(format!("{:#}", result.err().unwrap()).contains(
-            "Missing file for link in [subpage\\markdown2.md] to [subpage\\does_not_exist.md]",
-        ))
+        let acutal_error = format!("{:#}", result.err().unwrap());
+
+        assert_eq!(
+            acutal_error,
+            "1 Error(s) parsing space:\n  Missing file for link in [subpage\\markdown2.md] to [subpage\\does_not_exist.md]",
+        )
     }
 
     #[test]

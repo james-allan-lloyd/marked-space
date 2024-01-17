@@ -8,6 +8,7 @@ use crate::{
     confluence_page::ConfluencePage,
     confluence_storage_renderer::{render_confluence_storage, LinkGenerator},
     helpers::collect_text,
+    local_link::LocalLink,
     markdown_space::MarkdownSpace,
     parent::get_parent_title,
     template_renderer::TemplateRenderer,
@@ -30,7 +31,7 @@ pub struct MarkdownPage<'a> {
     pub source: String,
     root: &'a AstNode<'a>,
     pub attachments: Vec<PathBuf>,
-    pub local_links: Vec<PathBuf>,
+    pub local_links: Vec<LocalLink>,
     pub front_matter: Option<FrontMatter>,
 }
 
@@ -99,7 +100,7 @@ impl<'a> MarkdownPage<'a> {
 
         let mut errors = Vec::<String>::default();
         let mut attachments = Vec::<PathBuf>::default();
-        let mut local_links = Vec::<PathBuf>::default();
+        let mut local_links = Vec::<LocalLink>::default();
         let mut first_heading: Option<&AstNode> = None;
         let mut front_matter: Option<FrontMatter> = None;
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
@@ -138,11 +139,14 @@ impl<'a> MarkdownPage<'a> {
             NodeValue::Link(node_link) => {
                 if !(node_link.url.starts_with("http://") || node_link.url.starts_with("https://"))
                 {
-                    let link_path = PathBuf::from(source.as_str())
-                        .parent()
-                        .unwrap()
-                        .join(&node_link.url);
-                    local_links.push(link_path);
+                    if let Ok(local_link) = LocalLink::from_str(
+                        &node_link.url,
+                        &PathBuf::from(source.as_str()).parent().unwrap(),
+                    ) {
+                        local_links.push(local_link);
+                    } else {
+                        errors.push(format!("Failed to parse local link: {}", node_link.url));
+                    }
                 }
             }
             _ => (),
@@ -185,7 +189,14 @@ impl<'a> MarkdownPage<'a> {
 
     fn to_html_string(&self, link_generator: &LinkGenerator) -> Result<String> {
         let mut html = vec![];
-        render_confluence_storage(self.root, &Self::options(), &mut html, link_generator).unwrap();
+        render_confluence_storage(
+            self.root,
+            &Self::options(),
+            &mut html,
+            link_generator,
+            &PathBuf::from(self.source.clone()),
+        )
+        .unwrap();
 
         match String::from_utf8(html) {
             Ok(content) => Ok(content),
@@ -243,7 +254,7 @@ mod tests {
 
     use crate::confluence_storage_renderer::LinkGenerator;
     use crate::error::TestResult;
-    use crate::markdown_page::MarkdownPage;
+    use crate::markdown_page::{LocalLink, MarkdownPage};
     use crate::template_renderer::TemplateRenderer;
 
     fn page_from_str<'a>(
@@ -309,6 +320,26 @@ mod tests {
         assert_eq!(
             page.err().unwrap().to_string(),
             "Failed to parse page.md: first heading in file should be level 1, instead was level 2"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_parses_file_links_with_anchors() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let link_filename = PathBuf::from("some-page.md");
+        let markdown_content = &format!(
+            "# My Page Title\n\nMy page content: [link text]({}#some-anchor)",
+            link_filename.display()
+        );
+        let page = page_from_str(markdown_content, &arena)?;
+        assert_eq!(
+            page.local_links,
+            vec![LocalLink {
+                path: link_filename,
+                anchor: Some(String::from("some-anchor"))
+            }]
         );
 
         Ok(())

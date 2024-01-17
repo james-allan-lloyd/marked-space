@@ -16,6 +16,7 @@ mod confluence_space;
 mod confluence_storage_renderer;
 mod error;
 mod helpers;
+mod local_link;
 mod markdown_page;
 mod markdown_space;
 mod moves;
