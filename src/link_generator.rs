@@ -7,9 +7,11 @@ use std::{
 use comrak::nodes::NodeLink;
 
 use crate::{
+    confluence_page::ConfluencePage,
     confluence_storage_renderer::ConfluenceStorageRenderer,
     error::{ConfluenceError, Result},
     local_link::LocalLink,
+    markdown_page::MarkdownPage,
 };
 
 #[derive(Default)]
@@ -32,27 +34,28 @@ impl LinkGenerator {
         }
     }
 
-    pub fn add_file_title(&mut self, filename: &Path, title: &str) -> Result<()> {
-        let title = title.to_owned();
+    pub fn register_markdown_page(&mut self, markdown_page: &MarkdownPage) -> Result<()> {
+        let title = markdown_page.title.to_owned();
         if self.title_to_file.contains_key(&title) {
             return Err(ConfluenceError::DuplicateTitle {
-                file: filename.display().to_string(),
+                file: markdown_page.source.replace("\\", "/"),
                 title,
             }
             .into());
         }
+        // println!("register {:#?}", markdown_page.source);
         self.title_to_file
-            .insert(title.clone(), Self::path_to_string(filename)?);
+            .insert(title.clone(), markdown_page.source.replace("\\", "/"));
         Ok(())
     }
 
-    pub fn add_title_id(&mut self, title: &str, id: &str) -> Result<()> {
-        self.title_to_id.insert(title.to_string(), id.to_string());
-
-        if let Some(filename) = self.title_to_file.get(title) {
-            self.filename_to_id.insert(filename.clone(), id.to_string());
+    pub fn register_confluence_page(&mut self, confluence_page: &ConfluencePage) {
+        let title = confluence_page.title.clone();
+        let id = confluence_page.id.clone();
+        if let Some(filename) = self.title_to_file.get(&title) {
+            self.filename_to_id.insert(filename.clone(), id.clone());
         }
-        Ok(())
+        self.title_to_id.insert(title, id);
     }
 
     fn path_to_string(p: &Path) -> Result<String> {
@@ -77,6 +80,10 @@ impl LinkGenerator {
     }
 
     pub fn get_file_url(&self, filename: &Path) -> Option<String> {
+        // println!("{:#?}", filename);
+        // println!("{:#?}", self.filename_to_id);
+        // println!("{:#?}", self.title_to_file);
+        // println!("{:#?}", self.title_to_id);
         if let Some(s) = Self::path_to_string(filename).ok() {
             if let Some(id) = self.filename_to_id.get(&s) {
                 Some(format!(

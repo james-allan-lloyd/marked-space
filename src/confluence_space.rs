@@ -55,9 +55,7 @@ impl ConfluenceSpace {
             ConfluencePage::get_all(confluence_client, &self.id)?
                 .into_iter()
                 .filter_map(|confluence_page| {
-                    link_generator
-                        .add_title_id(&confluence_page.title, &confluence_page.id)
-                        .unwrap();
+                    link_generator.register_confluence_page(&confluence_page);
                     if confluence_page
                         .version
                         .message

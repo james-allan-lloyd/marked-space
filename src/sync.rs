@@ -344,7 +344,10 @@ fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
 mod tests {
     use std::path::Path;
 
-    use crate::{markdown_page::MarkdownPage, template_renderer::TemplateRenderer};
+    use crate::{
+        markdown_page::{self, MarkdownPage},
+        template_renderer::TemplateRenderer,
+    };
 
     use super::*;
 
@@ -367,11 +370,17 @@ mod tests {
             &arena,
             &mut TemplateRenderer::default()?,
         )?;
-        link_generator.add_file_title(
-            &PathBuf::from(markdown_page.source.clone()),
-            &markdown_page.title,
-        )?;
-        link_generator.add_title_id(&markdown_page.title, "29")?;
+        link_generator.register_markdown_page(&markdown_page)?;
+        link_generator.register_confluence_page(&ConfluencePage {
+            id: "29".to_string(),
+            title: markdown_page.title.clone(),
+            parent_id: None,
+            version: Version {
+                message: String::default(),
+                number: 1,
+            },
+            path: None, // "foo.md".to_string(),
+        });
         markdown_page.render(link_generator)
     }
 

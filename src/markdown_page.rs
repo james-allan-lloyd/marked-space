@@ -248,20 +248,23 @@ mod tests {
 
     use comrak::{nodes::AstNode, Arena};
 
+    use crate::confluence_page::ConfluencePage;
     use crate::error::TestResult;
     use crate::link_generator::LinkGenerator;
     use crate::markdown_page::{LocalLink, MarkdownPage};
+    use crate::responses::Version;
     use crate::template_renderer::TemplateRenderer;
 
     fn page_from_str<'a>(
+        filename: &str,
         content: &str,
         arena: &'a Arena<AstNode<'a>>,
     ) -> crate::error::Result<MarkdownPage<'a>> {
         MarkdownPage::from_str(
-            PathBuf::from("page.md").as_path(),
+            &PathBuf::from(filename),
             content,
             arena,
-            "page.md".into(),
+            filename.to_string(),
             &mut TemplateRenderer::default()?,
         )
     }
@@ -270,7 +273,7 @@ mod tests {
     fn it_get_first_heading_as_title() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let markdown_content = &String::from("# My Page Title\n\nMy page content");
-        let page = page_from_str(markdown_content, &arena)?;
+        let page = page_from_str("page.md", markdown_content, &arena)?;
 
         assert_eq!(page.title, "My Page Title");
 
@@ -281,7 +284,7 @@ mod tests {
     fn it_removes_title_heading_and_renders_content() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let markdown_content = &String::from("# My Page Title\n\nMy page content");
-        let page = page_from_str(markdown_content, &arena)?;
+        let page = page_from_str("page.md", markdown_content, &arena)?;
 
         let content = page.to_html_string(&LinkGenerator::default())?;
 
@@ -295,7 +298,7 @@ mod tests {
     fn it_errors_if_no_heading() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let markdown_content = &String::from("My page content");
-        let page = page_from_str(markdown_content, &arena);
+        let page = page_from_str("page.md", markdown_content, &arena);
 
         assert!(page.is_err());
         assert_eq!(
@@ -310,7 +313,7 @@ mod tests {
     fn it_fails_if_first_non_frontmatter_element_is_not_h1() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let markdown_content = &String::from("## First Heading Needs to be H1");
-        let page = page_from_str(markdown_content, &arena);
+        let page = page_from_str("page.md", markdown_content, &arena);
 
         assert!(page.is_err());
         assert_eq!(
@@ -329,7 +332,7 @@ mod tests {
             "# My Page Title\n\nMy page content: [link text]({}#some-anchor)",
             link_filename.display()
         );
-        let page = page_from_str(markdown_content, &arena)?;
+        let page = page_from_str("page.md", markdown_content, &arena)?;
         assert_eq!(
             page.local_links,
             vec![LocalLink {
@@ -341,10 +344,22 @@ mod tests {
         Ok(())
     }
 
+    fn dummy_confluence_page(title: &str, id: &str) -> ConfluencePage {
+        ConfluencePage {
+            id: id.to_string(),
+            title: title.to_string(),
+            parent_id: None,
+            version: Version {
+                message: String::default(),
+                number: 1,
+            },
+            path: None, // "foo.md".to_string(),
+        }
+    }
+
     #[test]
     fn it_translates_file_links_to_title_links() -> TestResult {
         let link_filename = PathBuf::from("hello-world.md");
-        let link_file_title = String::from("This is the title parsed from the linked file");
         let link_text = String::from("Link text");
         let link_url = String::from("https://my.atlassian.net/wiki/spaces/TEAM/pages/47");
         let arena = Arena::<AstNode>::new();
@@ -353,12 +368,18 @@ mod tests {
             link_text,
             link_filename.display()
         );
-        let page = page_from_str(markdown_content, &arena)?;
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+        let linked_page = page_from_str(
+            link_filename.as_os_str().to_str().unwrap(),
+            "# A Linked Page\n",
+            &arena,
+        )?;
 
         let mut link_generator = LinkGenerator::new("my.atlassian.net", "TEAM");
 
-        link_generator.add_file_title(&link_filename, &link_file_title)?;
-        link_generator.add_title_id(&link_file_title, &"47".to_string())?;
+        link_generator.register_markdown_page(&page)?;
+        link_generator.register_markdown_page(&linked_page)?;
+        link_generator.register_confluence_page(&dummy_confluence_page("A Linked Page", "47"));
 
         let content = page.to_html_string(&link_generator)?;
         println!("actual {:#?}", content);
@@ -373,7 +394,7 @@ mod tests {
     fn it_renders_local_file_as_attached_image() -> TestResult {
         let content = "# My Page Title\n\nMy page content: ![myimage](myimage.png)";
         let arena = Arena::<AstNode>::new();
-        let page = page_from_str(content, &arena)?;
+        let page = page_from_str("page.md", content, &arena)?;
 
         assert_eq!(page.attachments.len(), 1);
 
@@ -395,7 +416,7 @@ mod tests {
             image_url
         );
         let arena = Arena::<AstNode>::new();
-        let page = page_from_str(markdown_content.as_str(), &arena)?;
+        let page = page_from_str("page.md", markdown_content.as_str(), &arena)?;
 
         assert_eq!(page.attachments.len(), 0); // should not view the external link as an attachment
         let html_content = page.to_html_string(&LinkGenerator::default())?;
@@ -421,7 +442,7 @@ mod tests {
             external_url
         );
         let arena = Arena::<AstNode>::new();
-        let page = page_from_str(markdown_content.as_str(), &arena)?;
+        let page = page_from_str("page.md", markdown_content.as_str(), &arena)?;
         let html_content = page.to_html_string(&LinkGenerator::default())?;
 
         println!("Got content: {:#}", html_content);
@@ -437,7 +458,7 @@ mod tests {
     fn it_renders_templates() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let markdown_content = "# compulsory title\n{{filename}}";
-        let page = page_from_str(markdown_content, &arena)?;
+        let page = page_from_str("page.md", markdown_content, &arena)?;
 
         let rendered_page = page.render(&LinkGenerator::default())?;
 
@@ -450,7 +471,7 @@ mod tests {
     fn it_renders_predefined_functions() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let markdown_content = "# compulsory title\n{{hello_world()}}";
-        let page = page_from_str(markdown_content, &arena)?;
+        let page = page_from_str("page.md", markdown_content, &arena)?;
 
         let rendered_page = page.render(&LinkGenerator::default())?;
 
@@ -464,7 +485,7 @@ mod tests {
         let arena = Arena::<AstNode>::new();
         let markdown_content = "# compulsory title\n{{hello_world(name=\"world!\")}}";
 
-        let page = page_from_str(markdown_content, &arena)?;
+        let page = page_from_str("page.md", markdown_content, &arena)?;
         let rendered_page = page.render(&LinkGenerator::default())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");

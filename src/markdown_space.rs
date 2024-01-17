@@ -107,10 +107,7 @@ impl<'a> MarkdownSpace<'a> {
                     &mut template_renderer,
                 )?;
 
-                link_generator.add_file_title(
-                    &PathBuf::from(markdown_page.source.clone()),
-                    &markdown_page.title,
-                )?;
+                link_generator.register_markdown_page(&markdown_page)?;
 
                 let missing_files: Vec<String> = markdown_page
                     .local_links
