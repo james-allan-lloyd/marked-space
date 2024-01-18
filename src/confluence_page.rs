@@ -21,6 +21,16 @@ impl ConfluencePage {
         "updated by markedspace:"
     }
 
+    fn new_from_page_bulk(bulk_page: &responses::PageBulkWithoutBody) -> Self {
+        ConfluencePage {
+            id: bulk_page.id.clone(),
+            version: bulk_page.version.clone(),
+            parent_id: bulk_page.parent_id.clone(),
+            title: bulk_page.title.clone(),
+            path: Self::extract_path(&bulk_page.version),
+        }
+    }
+
     pub fn extract_path(version: &responses::Version) -> Option<PathBuf> {
         if let Some(data) = version.message.strip_prefix(Self::version_message_prefix()) {
             let kvs: HashMap<&str, &str> = data
@@ -37,16 +47,6 @@ impl ConfluencePage {
             }
         } else {
             None
-        }
-    }
-
-    fn new_from_page_bulk(bulk_page: &responses::PageBulkWithoutBody) -> Self {
-        ConfluencePage {
-            id: bulk_page.id.clone(),
-            version: bulk_page.version.clone(),
-            parent_id: bulk_page.parent_id.clone(),
-            title: bulk_page.title.clone(),
-            path: Self::extract_path(&bulk_page.version),
         }
     }
 

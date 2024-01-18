@@ -88,26 +88,6 @@ fn sync_page_attachments(
     Ok(())
 }
 
-// fn get_page_id_by_title(
-//     confluence_client: &ConfluenceClient,
-//     space_id: &str,
-//     title: &str,
-// ) -> Result<Option<String>> {
-//     let resp = confluence_client
-//         .get_page_by_title(space_id, title, false)?
-//         .error_for_status()?;
-
-//     let content = resp.text()?;
-//     let existing_page: responses::MultiEntityResult<PageBulkWithoutBody> =
-//         serde_json::from_str(content.as_str())?;
-
-//     if existing_page.results.is_empty() {
-//         Ok(None)
-//     } else {
-//         Ok(Some(existing_page.results[0].id.clone()))
-//     }
-// }
-
 struct SyncOperation {
     desc: String,
     verbose: bool,
