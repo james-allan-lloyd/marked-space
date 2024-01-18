@@ -56,7 +56,7 @@ impl ConfluenceSpace {
     pub fn link_pages(&mut self, link_generator: &mut LinkGenerator, space_dir: &Path) {
         link_generator.homepage_id = Some(self.homepage_id.clone());
         self.pages.iter().for_each(|confluence_page| {
-            link_generator.register_confluence_page(&confluence_page);
+            link_generator.register_confluence_page(confluence_page);
         });
 
         // TODO: would like to move the orphan calculation into LinkGenerator, similar to the pages to create
@@ -106,7 +106,7 @@ impl ConfluenceSpace {
         link_generator: &mut LinkGenerator,
         confluence_client: &ConfluenceClient,
     ) -> Result<()> {
-        Ok(for title in link_generator.get_pages_to_create() {
+        for title in link_generator.get_pages_to_create() {
             let op = SyncOperation::start(format!("Creating new page \"{}\"", title), true);
             // it's important that we have a version message to make move detection
             // work, but you can't set the version string for a create call, so we
@@ -137,6 +137,7 @@ impl ConfluenceSpace {
             link_generator.register_confluence_page(&existing_page);
             self.add_page(existing_page);
             op.end(SyncOperationResult::Created);
-        })
+        };
+        Ok(())
     }
 }

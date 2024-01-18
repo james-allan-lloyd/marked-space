@@ -111,7 +111,7 @@ fn sync_page_content(
 
     let id = existing_page.id.clone();
     let version_message = rendered_page.version_message();
-    if page_up_to_date(&existing_page, &rendered_page, &parent_id, &version_message) {
+    if page_up_to_date(existing_page, &rendered_page, &parent_id, &version_message) {
         op.end(SyncOperationResult::Skipped);
         return Ok(());
     }

@@ -63,11 +63,9 @@ impl LinkGenerator {
         }
         self.title_to_id.insert(title, id.clone());
         if let Some(version_path) = &confluence_page.path {
-            if let Ok(p) = Self::path_to_string(&version_path) {
+            if let Ok(p) = Self::path_to_string(version_path) {
                 // this is the move logic: use the path from the version string if there isn't already a mapping to the id through title.
-                if !self.filename_to_id.contains_key(&p) {
-                    self.filename_to_id.insert(p, id);
-                }
+                self.filename_to_id.entry(p).or_insert(id);
             } else {
                 println!(
                     "Warning: failed to convert {} to string",
@@ -288,7 +286,7 @@ mod test {
         )?)?;
         link_generator.register_confluence_page(&ConfluencePage {
             id: "9991".to_string(),
-            title: title,
+            title,
             parent_id: None,
             version: responses::Version {
                 message: String::default(),
