@@ -17,7 +17,8 @@ use crate::{
     link_generator::LinkGenerator,
     markdown_page::RenderedPage,
     markdown_space::MarkdownSpace,
-    responses::{self, Attachment, MultiEntityResult, PageSingleWithoutBody, Version},
+    responses::{self, Attachment, MultiEntityResult},
+    sync_operation::{SyncOperation, SyncOperationResult},
     Result,
 };
 
@@ -88,51 +89,17 @@ fn sync_page_attachments(
     Ok(())
 }
 
-struct SyncOperation {
-    desc: String,
-    verbose: bool,
-}
-
-enum SyncOperationResult {
-    Updated,
-    Skipped,
-    Created,
-    Error,
-    Deleted,
-}
-
-impl SyncOperation {
-    fn start(desc: String, verbose: bool) -> SyncOperation {
-        // print!("  {}", desc);
-        SyncOperation { desc, verbose }
-    }
-
-    fn end(&self, result: SyncOperationResult) {
-        let result_str = match result {
-            SyncOperationResult::Updated => "Updated",
-            SyncOperationResult::Skipped => "Skipped",
-            SyncOperationResult::Created => "Created",
-            SyncOperationResult::Error => "Error",
-            SyncOperationResult::Deleted => "Deleted",
-        };
-        if self.verbose || !matches!(result, SyncOperationResult::Skipped) {
-            println!("{}:  {}", self.desc, result_str);
-        }
-    }
-}
-
 // Returns the ID of the page that the content was synced to.
 fn sync_page_content(
     confluence_client: &ConfluenceClient,
     space: &ConfluenceSpace,
     rendered_page: RenderedPage,
-) -> Result<String> {
+    existing_page: &ConfluencePage,
+) -> Result<()> {
     let op = SyncOperation::start(
         format!("[{}] \"{}\"", rendered_page.source, rendered_page.title),
         true,
     );
-
-    let existing_page = space.get_existing_page(&rendered_page);
 
     let parent_id = if rendered_page.is_home_page() {
         None
@@ -143,14 +110,12 @@ fn sync_page_content(
     };
 
     let op_result = SyncOperationResult::Updated;
-    assert!(existing_page.is_some());
 
-    let existing_page = existing_page.unwrap();
     let id = existing_page.id.clone();
     let version_message = rendered_page.version_message();
     if page_up_to_date(&existing_page, &rendered_page, &parent_id, &version_message) {
         op.end(SyncOperationResult::Skipped);
-        return Ok(id);
+        return Ok(());
     }
 
     let update_payload = json!({
@@ -175,7 +140,7 @@ fn sync_page_content(
         Err(ConfluenceError::failed_request(resp))
     } else {
         op.end(op_result);
-        Ok(id)
+        Ok(())
     }
 }
 
@@ -213,53 +178,24 @@ pub fn sync_space<'a>(
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     space.read_all_pages(&confluence_client)?;
     space.find_orphaned_pages(&mut link_generator, &markdown_space.dir)?;
-
-    for title in link_generator.get_pages_to_create() {
-        let op = SyncOperation::start(format!("Creating new page \"{}\"", title), true);
-        // it's important that we have a version message to make move detection
-        // work, but you can't set the version string for a create call, so we
-        // create a page with empty content, then update it with the new stuff.
-        // Means we'll always have at least two versions.
-        let resp = confluence_client.create_page(json!({
-            "spaceId": space.id,
-            "status": "current",
-            "title": title,
-            "parentId": space.homepage_id.clone(),
-        }))?;
-        if !resp.status().is_success() {
-            op.end(SyncOperationResult::Error);
-            return Err(ConfluenceError::failed_request(resp));
-        }
-
-        let page: PageSingleWithoutBody = resp.json()?;
-        let existing_page = ConfluencePage {
-            id: page.id,
-            title: title.clone(),
-            parent_id: Some(space.homepage_id.clone()),
-            version: Version {
-                number: 1,
-                message: String::default(),
-            },
-            path: None,
-        };
-        link_generator.register_confluence_page(&existing_page);
-        space.add_page(existing_page);
-        op.end(SyncOperationResult::Created);
-    }
+    space.create_initial_pages(&mut link_generator, &confluence_client)?;
 
     for markdown_page in markdown_pages.iter() {
-        let page = markdown_page.render(&link_generator)?;
+        let rendered_page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {
-            output_content(d, &page)?;
+            output_content(d, &rendered_page)?;
         }
-        let page_id = sync_page_content(&confluence_client, &space, page)?;
+        let existing_page = space
+            .get_existing_page(&rendered_page)
+            .expect("Page should have been created already.");
+        sync_page_content(&confluence_client, &space, rendered_page, &existing_page)?;
         sync_page_attachments(
             &confluence_client,
-            page_id.as_str(),
+            &existing_page.id,
             &markdown_page.attachments,
         )?;
         if let Some(front_matter) = &markdown_page.front_matter {
-            sync_page_labels(&confluence_client, page_id.as_str(), &front_matter.labels)?;
+            sync_page_labels(&confluence_client, &existing_page.id, &front_matter.labels)?;
         }
     }
 
@@ -326,6 +262,8 @@ mod tests {
     use std::path::Path;
 
     use crate::{markdown_page::MarkdownPage, template_renderer::TemplateRenderer};
+
+    use self::responses::Version;
 
     use super::*;
 

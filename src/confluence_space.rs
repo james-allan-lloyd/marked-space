@@ -1,11 +1,14 @@
 use std::path::{Path, PathBuf};
 
+use serde_json::json;
+
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
 use crate::error::{ConfluenceError, Result};
 use crate::link_generator::LinkGenerator;
 use crate::markdown_page::RenderedPage;
-use crate::responses;
+use crate::responses::{self, PageSingleWithoutBody, Version};
+use crate::sync_operation::{SyncOperation, SyncOperationResult};
 
 #[derive(Debug)]
 pub struct ConfluenceSpace {
@@ -132,6 +135,45 @@ impl ConfluenceSpace {
 
     pub fn add_page(&mut self, from: ConfluencePage) {
         self.pages.push(from);
+    }
+
+    pub fn create_initial_pages(
+        &mut self,
+        link_generator: &mut LinkGenerator,
+        confluence_client: &ConfluenceClient,
+    ) -> Result<()> {
+        Ok(for title in link_generator.get_pages_to_create() {
+            let op = SyncOperation::start(format!("Creating new page \"{}\"", title), true);
+            // it's important that we have a version message to make move detection
+            // work, but you can't set the version string for a create call, so we
+            // create a page with empty content, then update it with the new stuff.
+            // Means we'll always have at least two versions.
+            let resp = confluence_client.create_page(json!({
+                "spaceId": self.id,
+                "status": "current",
+                "title": title,
+                "parentId": self.homepage_id.clone(),
+            }))?;
+            if !resp.status().is_success() {
+                op.end(SyncOperationResult::Error);
+                return Err(ConfluenceError::failed_request(resp));
+            }
+
+            let page: PageSingleWithoutBody = resp.json()?;
+            let existing_page = ConfluencePage {
+                id: page.id,
+                title: title.clone(),
+                parent_id: Some(self.homepage_id.clone()),
+                version: Version {
+                    number: 1,
+                    message: String::default(),
+                },
+                path: None,
+            };
+            link_generator.register_confluence_page(&existing_page);
+            self.add_page(existing_page);
+            op.end(SyncOperationResult::Created);
+        })
     }
 }
 
