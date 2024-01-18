@@ -177,7 +177,7 @@ pub fn sync_space<'a>(
 
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     space.read_all_pages(&confluence_client)?;
-    space.find_orphaned_pages(&mut link_generator, &markdown_space.dir)?;
+    space.link_pages(&mut link_generator, &markdown_space.dir);
     space.create_initial_pages(&mut link_generator, &confluence_client)?;
 
     for markdown_page in markdown_pages.iter() {

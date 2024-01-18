@@ -53,17 +53,17 @@ impl ConfluenceSpace {
         Ok(())
     }
 
-    pub fn find_orphaned_pages(
-        &mut self,
-        link_generator: &mut LinkGenerator,
-        space_dir: &Path,
-    ) -> Result<()> {
+    pub fn link_pages(&mut self, link_generator: &mut LinkGenerator, space_dir: &Path) {
         link_generator.homepage_id = Some(self.homepage_id.clone());
+        self.pages.iter().for_each(|confluence_page| {
+            link_generator.register_confluence_page(&confluence_page);
+        });
+
+        // TODO: would like to move the orphan calculation into LinkGenerator, similar to the pages to create
         let orphaned_pages: Vec<ConfluencePage> = self
             .pages
             .iter()
             .filter_map(|confluence_page| {
-                link_generator.register_confluence_page(&confluence_page);
                 if confluence_page
                     .version
                     .message
@@ -91,7 +91,6 @@ impl ConfluenceSpace {
                 );
             }
         });
-        Ok(())
     }
 
     pub fn get_existing_page(&self, page_id: &str) -> Option<ConfluencePage> {
