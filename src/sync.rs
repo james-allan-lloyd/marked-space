@@ -132,7 +132,7 @@ fn sync_page_content(
         true,
     );
 
-    let mut existing_page = space.get_existing_page(&rendered_page);
+    let existing_page = space.get_existing_page(&rendered_page);
 
     let parent_id = if rendered_page.is_home_page() {
         None
@@ -142,36 +142,8 @@ fn sync_page_content(
         Some(space.homepage_id.clone())
     };
 
-    let mut op_result = SyncOperationResult::Updated;
-    if existing_page.is_none() {
-        // it's important that we have a version message to make move detection
-        // work, but you can't set the version string for a create call, so we
-        // create a page with empty content, then update it with the new stuff.
-        // Means we'll always have at least two versions.
-        op_result = SyncOperationResult::Created;
-        let resp = confluence_client.create_page(json!({
-            "spaceId": space.id,
-            "status": "current",
-            "title": rendered_page.title.clone(),
-            "parentId": parent_id,
-        }))?;
-        if !resp.status().is_success() {
-            op.end(SyncOperationResult::Error);
-            return Err(ConfluenceError::failed_request(resp));
-        }
-
-        let page: PageSingleWithoutBody = resp.json()?;
-        existing_page = Some(ConfluencePage {
-            id: page.id,
-            title: page.title.clone(),
-            parent_id: parent_id.clone(),
-            version: Version {
-                number: 1,
-                message: String::default(),
-            },
-            path: None,
-        });
-    }
+    let op_result = SyncOperationResult::Updated;
+    assert!(existing_page.is_some());
 
     let existing_page = existing_page.unwrap();
     let id = existing_page.id.clone();
@@ -241,6 +213,40 @@ pub fn sync_space<'a>(
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     space.read_all_pages(&confluence_client)?;
     space.find_orphaned_pages(&mut link_generator, &markdown_space.dir)?;
+
+    for title in link_generator.get_pages_to_create() {
+        let op = SyncOperation::start(format!("Creating new page \"{}\"", title), true);
+        // it's important that we have a version message to make move detection
+        // work, but you can't set the version string for a create call, so we
+        // create a page with empty content, then update it with the new stuff.
+        // Means we'll always have at least two versions.
+        let resp = confluence_client.create_page(json!({
+            "spaceId": space.id,
+            "status": "current",
+            "title": title,
+            "parentId": space.homepage_id.clone(),
+        }))?;
+        if !resp.status().is_success() {
+            op.end(SyncOperationResult::Error);
+            return Err(ConfluenceError::failed_request(resp));
+        }
+
+        let page: PageSingleWithoutBody = resp.json()?;
+        let existing_page = ConfluencePage {
+            id: page.id,
+            title: title.clone(),
+            parent_id: Some(space.homepage_id.clone()),
+            version: Version {
+                number: 1,
+                message: String::default(),
+            },
+            path: None,
+        };
+        link_generator.register_confluence_page(&existing_page);
+        space.add_page(existing_page);
+        op.end(SyncOperationResult::Created);
+    }
+
     for markdown_page in markdown_pages.iter() {
         let page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {

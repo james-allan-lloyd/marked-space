@@ -67,6 +67,7 @@ impl ConfluenceSpace {
         link_generator: &mut LinkGenerator,
         space_dir: &Path,
     ) -> Result<()> {
+        link_generator.homepage_id = Some(self.homepage_id.clone());
         let orphaned_pages: Vec<ConfluencePage> = self
             .pages
             .iter()
@@ -106,7 +107,6 @@ impl ConfluenceSpace {
     pub fn get_existing_page(&self, rendered_page: &RenderedPage) -> Option<ConfluencePage> {
         // TODO: this should be a map
         let filename = rendered_page.source.replace('\\', "/");
-        println!("{}", filename);
         if filename == "index.md" {
             return self
                 .pages
@@ -130,8 +130,7 @@ impl ConfluenceSpace {
         }
     }
 
-    #[cfg(test)]
-    fn add_page(&mut self, from: ConfluencePage) {
+    pub fn add_page(&mut self, from: ConfluencePage) {
         self.pages.push(from);
     }
 }

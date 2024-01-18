@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     io::{self, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use comrak::nodes::NodeLink;
@@ -18,6 +18,7 @@ use crate::{
 pub struct LinkGenerator {
     host: String,
     space_key: String,
+    pub homepage_id: Option<String>,
     filename_to_id: HashMap<String, String>,
     filename_to_title: HashMap<String, String>,
     title_to_file: HashMap<String, String>,
@@ -30,6 +31,7 @@ impl LinkGenerator {
         LinkGenerator {
             host: host.to_string(),
             space_key: space_key.to_string(),
+            homepage_id: None,
             filename_to_id: HashMap::default(),
             filename_to_title: HashMap::default(),
             title_to_file: HashMap::default(),
@@ -103,6 +105,10 @@ impl LinkGenerator {
     }
 
     fn get_file_url(&self, filename: &Path) -> Option<String> {
+        if filename == PathBuf::from("index.md") {
+            // return Some((unwrap().as_ref()));
+            return self.homepage_id.clone().map(|id| self.id_to_url(&id));
+        }
         if let Ok(s) = Self::path_to_string(filename) {
             self.filename_to_id
                 .get(&s)
@@ -172,6 +178,20 @@ impl LinkGenerator {
 
         Ok(())
     }
+
+    pub fn get_pages_to_create(&self) -> Vec<String> {
+        self.title_to_file
+            .iter()
+            .filter_map(|(title, file)| {
+                if !self.filename_to_id.contains_key(file) {
+                    Some(title.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+        // return Vec::default();
+    }
 }
 
 fn relative_local_link(
@@ -206,6 +226,19 @@ mod test {
             filename.to_string(),
             &mut TemplateRenderer::default()?,
         )
+    }
+
+    #[test]
+    fn it_returns_homepage_link_for_root_index_md() -> TestResult {
+        let mut link_generator = LinkGenerator::new("example.atlassian.net", "Test");
+        link_generator.homepage_id = Some("999".to_string());
+
+        let url_for_file = link_generator.get_file_url(&PathBuf::from("index.md"));
+        assert_eq!(
+            url_for_file,
+            Some("https://example.atlassian.net/wiki/spaces/Test/pages/999".into())
+        );
+        Ok(())
     }
 
     #[test]
@@ -300,6 +333,28 @@ mod test {
 
         let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
         assert_eq!(url_for_file, None);
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_knows_which_pages_need_creating() -> TestResult {
+        let mut link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+
+        let new_title = String::from("New Title");
+        let new_source = String::from("new-test.md");
+
+        let arena = Arena::<AstNode>::new();
+        link_generator.register_markdown_page(&markdown_page_from_str(
+            &new_source,
+            &format!("# {} \n", new_title),
+            &arena,
+        )?)?;
+
+        let pages_to_create = link_generator.get_pages_to_create();
+
+        // let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
+        assert_eq!(pages_to_create, vec![new_title]);
 
         Ok(())
     }
