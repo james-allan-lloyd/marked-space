@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::confluence_paginator::ConfluencePaginator;
-use crate::{confluence_client::ConfluenceClient, markdown_page::RenderedPage, responses};
+use crate::{confluence_client::ConfluenceClient, responses};
 
 use crate::error::Result;
 
@@ -81,25 +81,6 @@ impl ConfluencePage {
             title: existing_page.title,
             path: Self::extract_path(&existing_page.version),
         })
-    }
-
-    pub fn get_page(
-        confluence_client: &ConfluenceClient,
-        space_id: &str,
-        page: &RenderedPage,
-    ) -> Result<Option<ConfluencePage>> {
-        let existing_page: responses::MultiEntityResult<responses::PageBulkWithoutBody> =
-            confluence_client
-                .get_page_by_title(space_id, page.title.as_str(), true)?
-                .error_for_status()?
-                .json()?;
-
-        if existing_page.results.is_empty() {
-            return Ok(None);
-        }
-
-        let bulk_page = &existing_page.results[0];
-        Ok(Some(ConfluencePage::new_from_page_bulk(bulk_page)))
     }
 }
 

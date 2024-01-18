@@ -1,6 +1,6 @@
 use reqwest::blocking::multipart::Form;
 use serde_json::Value;
-use std::{collections::HashMap, env, path::Path};
+use std::{env, path::Path};
 
 pub struct ConfluenceClient {
     client: reqwest::blocking::Client,
@@ -47,25 +47,6 @@ impl ConfluenceClient {
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
             .header("Accept", "application/json")
             // .query(&[("body-format", "storage")])
-            .send()
-    }
-
-    pub fn get_page_by_title(&self, space_id: &str, title: &str, with_body: bool) -> Result {
-        let url = format!(
-            "https://{}/wiki/api/v2/spaces/{}/pages",
-            self.hostname, space_id
-        );
-
-        let mut query_params = HashMap::from([("title", title)]);
-        if with_body {
-            query_params.insert("body-format", "storage");
-        }
-
-        self.client
-            .get(url)
-            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
-            .header("Accept", "application/json")
-            .query(&query_params)
             .send()
     }
 

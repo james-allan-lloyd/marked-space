@@ -12,6 +12,7 @@ pub struct ConfluenceSpace {
     pub id: String,
     pub homepage_id: String,
     orphans: Vec<ConfluencePage>,
+    pages: Vec<ConfluencePage>,
 }
 
 impl ConfluenceSpace {
@@ -42,32 +43,37 @@ impl ConfluenceSpace {
             id: parsed_space.id,
             homepage_id: parsed_space.homepage_id,
             orphans: Vec::default(),
+            pages: Vec::default(),
         })
+    }
+
+    pub fn read_all_pages(&mut self, confluence_client: &ConfluenceClient) -> Result<()> {
+        self.pages = ConfluencePage::get_all(confluence_client, &self.id)?;
+        Ok(())
     }
 
     pub fn find_orphaned_pages(
         &mut self,
-        confluence_client: &ConfluenceClient,
         link_generator: &mut LinkGenerator,
         space_dir: &Path,
     ) -> Result<()> {
-        let orphaned_pages: Vec<ConfluencePage> =
-            ConfluencePage::get_all(confluence_client, &self.id)?
-                .into_iter()
-                .filter_map(|confluence_page| {
-                    link_generator.register_confluence_page(&confluence_page);
-                    if confluence_page
-                        .version
-                        .message
-                        .starts_with(ConfluencePage::version_message_prefix())
-                        && !link_generator.has_title(confluence_page.title.as_str())
-                    {
-                        Some(confluence_page)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+        let orphaned_pages: Vec<ConfluencePage> = self
+            .pages
+            .iter()
+            .filter_map(|confluence_page| {
+                link_generator.register_confluence_page(&confluence_page);
+                if confluence_page
+                    .version
+                    .message
+                    .starts_with(ConfluencePage::version_message_prefix())
+                    && !link_generator.has_title(confluence_page.title.as_str())
+                {
+                    Some(confluence_page.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
         orphaned_pages.iter().for_each(|p| {
             if let Some(path) = &p.path {
                 if !space_dir.join(path).exists() {
@@ -89,18 +95,26 @@ impl ConfluenceSpace {
 
     pub fn get_existing_page(
         &self,
-        confluence_client: &ConfluenceClient,
-        page: &RenderedPage,
+        rendered_page: &RenderedPage,
     ) -> Result<Option<ConfluencePage>> {
-        let result = ConfluencePage::get_page(confluence_client, &self.id, page)?;
-        if result.is_some() {
-            return Ok(result);
+        // TODO: this should be a map
+        if let Some(page) = self
+            .pages
+            .iter()
+            .find(|page| page.title == rendered_page.title)
+        {
+            return Ok(Some(page.clone()));
         }
-        let source_marker = format!("source={}", &page.source.replace('\\', "/"));
-        Ok(self
+        let source_marker = format!("source={}", &rendered_page.source.replace('\\', "/"));
+
+        if let Some(page) = self
             .orphans
             .iter()
             .find(|orphan| orphan.version.message.contains(&source_marker))
-            .cloned())
+        {
+            Ok(Some(page.to_owned().clone()))
+        } else {
+            Ok(None)
+        }
     }
 }

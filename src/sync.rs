@@ -135,7 +135,7 @@ fn sync_page_content(
             &space.homepage_id,
         )?)
     } else {
-        space.get_existing_page(confluence_client, &page)?
+        space.get_existing_page(&page)?
     };
 
     let parent_id = if page.is_home_page() {
@@ -243,7 +243,8 @@ pub fn sync_space<'a>(
     );
 
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
-    space.find_orphaned_pages(&confluence_client, &mut link_generator, &markdown_space.dir)?;
+    space.read_all_pages(&confluence_client)?;
+    space.find_orphaned_pages(&mut link_generator, &markdown_space.dir)?;
     for markdown_page in markdown_pages.iter() {
         let page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = output_dir {
