@@ -23,7 +23,6 @@ pub struct LinkGenerator {
     filename_to_title: HashMap<String, String>,
     title_to_file: HashMap<String, String>,
     title_to_id: HashMap<String, String>,
-    version_path_to_id: HashMap<String, String>, // version paths to the id
 }
 
 impl LinkGenerator {
@@ -36,7 +35,6 @@ impl LinkGenerator {
             filename_to_title: HashMap::default(),
             title_to_file: HashMap::default(),
             title_to_id: HashMap::default(),
-            version_path_to_id: HashMap::default(),
         }
     }
 
@@ -66,7 +64,10 @@ impl LinkGenerator {
         self.title_to_id.insert(title, id.clone());
         if let Some(version_path) = &confluence_page.path {
             if let Ok(p) = Self::path_to_string(&version_path) {
-                self.version_path_to_id.insert(p, id);
+                // this is the move logic: use the path from the version string if there isn't already a mapping to the id through title.
+                if !self.filename_to_id.contains_key(&p) {
+                    self.filename_to_id.insert(p, id);
+                }
             } else {
                 println!(
                     "Warning: failed to convert {} to string",
@@ -110,10 +111,8 @@ impl LinkGenerator {
             return self.homepage_id.clone().map(|id| self.id_to_url(&id));
         }
         if let Ok(s) = Self::path_to_string(filename) {
-            self.filename_to_id
-                .get(&s)
-                .map(|id| self.id_to_url(id))
-                .or_else(|| self.version_path_to_id.get(&s).map(|id| self.id_to_url(id)))
+            self.filename_to_id.get(&s).map(|id| self.id_to_url(id))
+            // .or_else(|| self.version_path_to_id.get(&s).map(|id| self.id_to_url(id)))
         } else {
             None
         }
@@ -266,6 +265,8 @@ mod test {
             path: Some(PathBuf::from(&source)),
         });
 
+        assert!(link_generator.get_pages_to_create().is_empty());
+
         let url_for_file = link_generator.get_file_url(&PathBuf::from(&source));
         assert!(url_for_file.is_some());
 
@@ -296,6 +297,8 @@ mod test {
             },
             path: Some(PathBuf::from(&old_source)),
         });
+
+        assert!(link_generator.get_pages_to_create().is_empty());
 
         let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
         let expected_url =

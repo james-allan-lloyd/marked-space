@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::json;
 
@@ -6,7 +6,7 @@ use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
 use crate::error::{ConfluenceError, Result};
 use crate::link_generator::LinkGenerator;
-use crate::markdown_page::RenderedPage;
+
 use crate::responses::{self, PageSingleWithoutBody, Version};
 use crate::sync_operation::{SyncOperation, SyncOperationResult};
 
@@ -107,30 +107,31 @@ impl ConfluenceSpace {
         Ok(())
     }
 
-    pub fn get_existing_page(&self, rendered_page: &RenderedPage) -> Option<ConfluencePage> {
+    pub fn get_existing_page(&self, page_id: &str) -> Option<ConfluencePage> {
+        self.pages.iter().find(|page| page.id == page_id).cloned()
         // TODO: this should be a map
-        let filename = rendered_page.source.replace('\\', "/");
-        if filename == "index.md" {
-            return self
-                .pages
-                .iter()
-                .find(|page| page.id == self.homepage_id)
-                .cloned();
-        }
-        if let Some(page) = self.pages.iter().find(|page| {
-            page.title == rendered_page.title || page.path == Some(PathBuf::from(&filename))
-        }) {
-            return Some(page.clone());
-        }
-        if let Some(page) = self
-            .orphans
-            .iter()
-            .find(|orphan| orphan.path == Some(PathBuf::from(&filename)))
-        {
-            Some(page.to_owned().clone())
-        } else {
-            None
-        }
+        // let filename = rendered_page.source.replace('\\', "/");
+        // if filename == "index.md" {
+        //     return self
+        //         .pages
+        //         .iter()
+        //         .find(|page| page.id == self.homepage_id)
+        //         .cloned();
+        // }
+        // if let Some(page) = self.pages.iter().find(|page| {
+        //     page.title == rendered_page.title || page.path == Some(PathBuf::from(&filename))
+        // }) {
+        //     return Some(page.clone());
+        // }
+        // if let Some(page) = self
+        //     .orphans
+        //     .iter()
+        //     .find(|orphan| orphan.path == Some(PathBuf::from(&filename)))
+        // {
+        //     Some(page.to_owned().clone())
+        // } else {
+        //     None
+        // }
     }
 
     pub fn add_page(&mut self, from: ConfluencePage) {
@@ -181,7 +182,7 @@ impl ConfluenceSpace {
 mod test {
     use std::path::PathBuf;
 
-    use crate::{confluence_page::ConfluencePage, markdown_page::RenderedPage, responses};
+    use crate::{confluence_page::ConfluencePage, responses};
 
     use super::ConfluenceSpace;
 
@@ -200,13 +201,7 @@ mod test {
             path: Some(PathBuf::from("test.md")),
         });
 
-        let existing_page = space.get_existing_page(&RenderedPage {
-            title: "New Title".to_string(),
-            content: String::default(),
-            source: "test.md".to_string(),
-            parent: None,
-            checksum: String::default(),
-        });
+        let existing_page = space.get_existing_page("1"); // FIXME: doesn't really test
 
         assert!(existing_page.is_some())
     }
@@ -227,13 +222,7 @@ mod test {
             path: None,
         });
 
-        let existing_page = space.get_existing_page(&RenderedPage {
-            title: "New Title".to_string(),
-            content: String::default(),
-            source: "index.md".to_string(),
-            parent: None,
-            checksum: String::default(),
-        });
+        let existing_page = space.get_existing_page(&space.homepage_id);
 
         assert!(existing_page.is_some());
         let existing_page = existing_page.unwrap();

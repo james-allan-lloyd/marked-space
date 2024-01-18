@@ -185,9 +185,13 @@ pub fn sync_space<'a>(
         if let Some(ref d) = output_dir {
             output_content(d, &rendered_page)?;
         }
+        let page_id = link_generator
+            .get_file_id(&PathBuf::from(&rendered_page.source))
+            .expect("All pages should have been created already.");
         let existing_page = space
-            .get_existing_page(&rendered_page)
+            .get_existing_page(&page_id)
             .expect("Page should have been created already.");
+        assert_eq!(page_id, existing_page.id);
         sync_page_content(&confluence_client, &space, rendered_page, &existing_page)?;
         sync_page_attachments(
             &confluence_client,
