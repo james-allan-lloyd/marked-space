@@ -358,7 +358,40 @@ mod tests {
     }
 
     #[test]
-    fn it_translates_file_links_to_title_links() -> TestResult {
+    fn it_uses_the_title_when_linktext_is_empty() -> TestResult {
+        let link_filename = PathBuf::from("hello-world.md");
+        let link_text = String::from("");
+        let link_url = String::from("https://my.atlassian.net/wiki/spaces/TEAM/pages/47");
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = &format!(
+            "# My Page Title\n\nMy page content: [{}]({})",
+            link_text,
+            link_filename.display()
+        );
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+        let linked_page = page_from_str(
+            link_filename.as_os_str().to_str().unwrap(),
+            "# A Linked Page\n",
+            &arena,
+        )?;
+
+        let mut link_generator = LinkGenerator::new("my.atlassian.net", "TEAM");
+
+        link_generator.register_markdown_page(&page)?;
+        link_generator.register_markdown_page(&linked_page)?;
+        link_generator.register_confluence_page(&dummy_confluence_page("A Linked Page", "47"));
+
+        let content = page.to_html_string(&link_generator)?;
+        println!("actual {:#?}", content);
+        let expected = format!("<a href=\"{}\">{}</a>", link_url, "A Linked Page");
+        println!("expect {:#?}", expected);
+        assert!(content.contains(expected.as_str()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_translates_file_links() -> TestResult {
         let link_filename = PathBuf::from("hello-world.md");
         let link_text = String::from("Link text");
         let link_url = String::from("https://my.atlassian.net/wiki/spaces/TEAM/pages/47");

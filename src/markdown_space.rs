@@ -51,7 +51,7 @@ impl<'a> MarkdownSpace<'a> {
                 markdown_pages.push(entry.into_path());
             }
         }
-        let key = String::from(dir.file_stem().unwrap().to_str().unwrap()).to_uppercase();
+        let key = String::from(dir.file_stem().unwrap().to_str().unwrap());
         if dir.exists() {
             Ok(MarkdownSpace {
                 markdown_pages,
@@ -222,7 +222,7 @@ mod tests {
         std::env::set_current_dir(old_pwd)?;
 
         assert!(result.is_ok());
-        assert_eq!(result?.key, "TEST");
+        assert_eq!(result?.key, "test");
 
         Ok(())
     }

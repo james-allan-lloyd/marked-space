@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
@@ -16,6 +16,16 @@ pub struct ConfluenceSpace {
 }
 
 impl ConfluenceSpace {
+    #[cfg(test)]
+    pub fn new(id: &str) -> ConfluenceSpace {
+        ConfluenceSpace {
+            id: id.to_string(),
+            homepage_id: "99".to_string(),
+            orphans: Vec::default(),
+            pages: Vec::default(),
+        }
+    }
+
     pub fn get(confluence_client: &ConfluenceClient, space_key: &str) -> Result<ConfluenceSpace> {
         let resp = match confluence_client.get_space_by_key(space_key) {
             Ok(resp) => resp,
@@ -93,28 +103,99 @@ impl ConfluenceSpace {
         Ok(())
     }
 
-    pub fn get_existing_page(
-        &self,
-        rendered_page: &RenderedPage,
-    ) -> Result<Option<ConfluencePage>> {
+    pub fn get_existing_page(&self, rendered_page: &RenderedPage) -> Option<ConfluencePage> {
         // TODO: this should be a map
-        if let Some(page) = self
-            .pages
-            .iter()
-            .find(|page| page.title == rendered_page.title)
-        {
-            return Ok(Some(page.clone()));
+        let filename = rendered_page.source.replace('\\', "/");
+        println!("{}", filename);
+        if filename == "index.md" {
+            return self
+                .pages
+                .iter()
+                .find(|page| page.id == self.homepage_id)
+                .cloned();
         }
-        let source_marker = format!("source={}", &rendered_page.source.replace('\\', "/"));
-
+        if let Some(page) = self.pages.iter().find(|page| {
+            page.title == rendered_page.title || page.path == Some(PathBuf::from(&filename))
+        }) {
+            return Some(page.clone());
+        }
         if let Some(page) = self
             .orphans
             .iter()
-            .find(|orphan| orphan.version.message.contains(&source_marker))
+            .find(|orphan| orphan.path == Some(PathBuf::from(&filename)))
         {
-            Ok(Some(page.to_owned().clone()))
+            Some(page.to_owned().clone())
         } else {
-            Ok(None)
+            None
         }
+    }
+
+    #[cfg(test)]
+    fn add_page(&mut self, from: ConfluencePage) {
+        self.pages.push(from);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::path::PathBuf;
+
+    use crate::{confluence_page::ConfluencePage, markdown_page::RenderedPage, responses};
+
+    use super::ConfluenceSpace;
+
+    #[test]
+    fn it_finds_retitled_files() {
+        let mut space = ConfluenceSpace::new("TEST");
+
+        space.add_page(ConfluencePage {
+            id: "1".to_string(),
+            title: "Old Title".to_string(),
+            parent_id: None,
+            version: responses::Version {
+                message: String::default(),
+                number: 2,
+            },
+            path: Some(PathBuf::from("test.md")),
+        });
+
+        let existing_page = space.get_existing_page(&RenderedPage {
+            title: "New Title".to_string(),
+            content: String::default(),
+            source: "test.md".to_string(),
+            parent: None,
+            checksum: String::default(),
+        });
+
+        assert!(existing_page.is_some())
+    }
+
+    #[test]
+    fn it_returns_homepage_for_root_index_md() {
+        let mut space = ConfluenceSpace::new("TEST");
+
+        space.add_page(ConfluencePage {
+            id: space.homepage_id.clone(),
+            title: "Existing Home Page".to_string(),
+            parent_id: None,
+            version: responses::Version {
+                message: String::default(),
+                number: 2,
+            },
+            // path: Some(PathBuf::from("test.md")),
+            path: None,
+        });
+
+        let existing_page = space.get_existing_page(&RenderedPage {
+            title: "New Title".to_string(),
+            content: String::default(),
+            source: "index.md".to_string(),
+            parent: None,
+            checksum: String::default(),
+        });
+
+        assert!(existing_page.is_some());
+        let existing_page = existing_page.unwrap();
+        assert_eq!(existing_page.id, space.homepage_id);
     }
 }

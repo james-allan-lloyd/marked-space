@@ -64,24 +64,6 @@ impl ConfluencePage {
 
         Ok(results)
     }
-
-    pub fn get_homepage(
-        confluence_client: &ConfluenceClient,
-        homepage_id: &str,
-    ) -> Result<ConfluencePage> {
-        let existing_page: responses::PageSingleWithoutBody = confluence_client
-            .get_page_by_id(homepage_id)?
-            .error_for_status()?
-            .json()?;
-
-        Ok(ConfluencePage {
-            id: existing_page.id,
-            version: existing_page.version.clone(),
-            parent_id: None,
-            title: existing_page.title,
-            path: Self::extract_path(&existing_page.version),
-        })
-    }
 }
 
 #[cfg(test)]

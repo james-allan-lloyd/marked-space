@@ -125,22 +125,18 @@ impl SyncOperation {
 fn sync_page_content(
     confluence_client: &ConfluenceClient,
     space: &ConfluenceSpace,
-    page: RenderedPage,
+    rendered_page: RenderedPage,
 ) -> Result<String> {
-    let op = SyncOperation::start(format!("[{}] \"{}\"", page.source, page.title), true);
+    let op = SyncOperation::start(
+        format!("[{}] \"{}\"", rendered_page.source, rendered_page.title),
+        true,
+    );
 
-    let mut existing_page = if page.is_home_page() {
-        Some(ConfluencePage::get_homepage(
-            confluence_client,
-            &space.homepage_id,
-        )?)
-    } else {
-        space.get_existing_page(&page)?
-    };
+    let mut existing_page = space.get_existing_page(&rendered_page);
 
-    let parent_id = if page.is_home_page() {
+    let parent_id = if rendered_page.is_home_page() {
         None
-    } else if let Some(parent) = page.parent.clone() {
+    } else if let Some(parent) = rendered_page.parent.clone() {
         Some(parent)
     } else {
         Some(space.homepage_id.clone())
@@ -156,7 +152,7 @@ fn sync_page_content(
         let resp = confluence_client.create_page(json!({
             "spaceId": space.id,
             "status": "current",
-            "title": page.title.clone(),
+            "title": rendered_page.title.clone(),
             "parentId": parent_id,
         }))?;
         if !resp.status().is_success() {
@@ -179,8 +175,8 @@ fn sync_page_content(
 
     let existing_page = existing_page.unwrap();
     let id = existing_page.id.clone();
-    let version_message = page.version_message();
-    if page_up_to_date(&existing_page, &page, &parent_id, &version_message) {
+    let version_message = rendered_page.version_message();
+    if page_up_to_date(&existing_page, &rendered_page, &parent_id, &version_message) {
         op.end(SyncOperationResult::Skipped);
         return Ok(id);
     }
@@ -189,11 +185,11 @@ fn sync_page_content(
         "id": id.clone(),
         "spaceId": space.id,
         "status": "current",
-        "title": page.title,
+        "title": rendered_page.title,
         "parentId": parent_id,
         "body": {
             "representation": "storage",
-            "value": page.content
+            "value": rendered_page.content
         },
         "version": {
             "message": version_message,

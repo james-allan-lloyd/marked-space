@@ -636,7 +636,8 @@ impl<'o> ConfluenceStorageRenderer<'o> {
             NodeValue::Link(ref nl) => {
                 let link_generator = self.link_generator;
                 if entering {
-                    link_generator.enter(nl, self)?;
+                    let no_children = node.first_child().is_none();
+                    link_generator.enter(nl, self, no_children)?;
                 } else {
                     link_generator.exit(nl, self)?;
                 }
