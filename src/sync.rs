@@ -109,8 +109,6 @@ fn sync_page_content(
         Some(space.homepage_id.clone())
     };
 
-    let op_result = SyncOperationResult::Updated;
-
     let id = existing_page.id.clone();
     let version_message = rendered_page.version_message();
     if page_up_to_date(&existing_page, &rendered_page, &parent_id, &version_message) {
@@ -139,7 +137,7 @@ fn sync_page_content(
         op.end(SyncOperationResult::Error);
         Err(ConfluenceError::failed_request(resp))
     } else {
-        op.end(op_result);
+        op.end(SyncOperationResult::Updated);
         Ok(())
     }
 }
@@ -191,7 +189,6 @@ pub fn sync_space<'a>(
         let existing_page = space
             .get_existing_page(&page_id)
             .expect("Page should have been created already.");
-        assert_eq!(page_id, existing_page.id);
         sync_page_content(&confluence_client, &space, rendered_page, &existing_page)?;
         sync_page_attachments(
             &confluence_client,
