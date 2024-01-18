@@ -189,7 +189,6 @@ impl LinkGenerator {
                 }
             })
             .collect()
-        // return Vec::default();
     }
 }
 
