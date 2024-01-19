@@ -71,7 +71,7 @@ docker image or build it for yourself from source.
 
 ```shell
 # assuming the documentation is in the subdirectory "TEAM"
-docker run --rm -ti --env-file .env -v $PWD/TEAM:/TEAM test-marked-space --space /TEAM
+docker run --rm -ti --env-file .env -v $PWD/TEAM:/TEAM jamesallanlloyd/marked-space --space /TEAM
 ```
 
 ## Building from Source
@@ -85,6 +85,6 @@ marked-space --space TEAM
 
 ## Further Reading
 
-Checkout the user guide in the [example space](example/TEAM/index.md)... this
+Checkout the user guide in the [example space](example/team/index.md)... this
 also serves as a test marked-space that is all deployable to your test instance
 (provided you've created the TEAM space).
