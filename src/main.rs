@@ -57,7 +57,20 @@ struct Args {
 }
 
 fn main() -> Result<ExitCode> {
-    dotenv().expect(".env file not found");
+    match dotenv() {
+        Err(e) => {
+            match e {
+                dotenvy::Error::Io(io_err) => {
+                    match io_err.kind() {
+                        std::io::ErrorKind::NotFound => (), // do nothing
+                        _ => eprintln!("Failure loading .env: {}", io_err),
+                    }
+                }
+                _ => eprintln!("Failure loading .env: {}", e),
+            }
+        }
+        _ => (),
+    }
 
     let args = Args::parse();
 

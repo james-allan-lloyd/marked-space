@@ -19,13 +19,7 @@ pub struct ConfluenceSpace {
 
 impl ConfluenceSpace {
     pub fn get(confluence_client: &ConfluenceClient, space_key: &str) -> Result<ConfluenceSpace> {
-        let resp = match confluence_client.get_space_by_key(space_key) {
-            Ok(resp) => resp,
-            Err(_) => {
-                return Err(ConfluenceError::generic_error("Failed to get space id"));
-            }
-        };
-
+        let resp = confluence_client.get_space_by_key(space_key)?;
         if !resp.status().is_success() {
             return Err(ConfluenceError::failed_request(resp));
         }
@@ -137,7 +131,7 @@ impl ConfluenceSpace {
             link_generator.register_confluence_page(&existing_page);
             self.add_page(existing_page);
             op.end(SyncOperationResult::Created);
-        };
+        }
         Ok(())
     }
 }

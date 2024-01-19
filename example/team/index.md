@@ -5,4 +5,3 @@ This Confluence space demonstrates how you can maintain an entire Confluence spa
 [](formatting.md)
 [](labels.md)
 [](macros.md)
-

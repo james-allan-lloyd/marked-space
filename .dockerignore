@@ -1,0 +1,6 @@
+target/
+output/
+example/
+.git/
+Dockerfile
+.env
