@@ -84,26 +84,10 @@ impl<'a> MarkdownSpace<'a> {
             .markdown_pages
             .iter()
             .map(|markdown_page_path| {
-                let content = match fs::read_to_string(markdown_page_path) {
-                    Ok(c) => c,
-                    Err(err) => {
-                        return Err(ConfluenceError::generic_error(format!(
-                            "Failed to read file {}: {}",
-                            markdown_page_path.display(),
-                            err
-                        )))
-                    }
-                };
-                let markdown_page = MarkdownPage::from_str(
+                let markdown_page = MarkdownPage::from_file(
+                    &self,
                     markdown_page_path,
-                    &content,
                     &self.arena,
-                    String::from(
-                        self.relative_page_path(markdown_page_path)?
-                            .as_os_str()
-                            .to_str()
-                            .unwrap(),
-                    ),
                     &mut template_renderer,
                 )?;
 

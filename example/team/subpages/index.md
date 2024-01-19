@@ -1,4 +1,4 @@
-{% extends "index-page.md" %}
+{% extends "_tera/index-page.md" %}
 
 {% block title %} A page with sub pages {% endblock title %}
 

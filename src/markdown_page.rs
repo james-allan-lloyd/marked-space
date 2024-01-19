@@ -9,6 +9,7 @@ use crate::{
     link_generator::LinkGenerator, local_link::LocalLink, markdown_space::MarkdownSpace,
     parent::get_parent_file, template_renderer::TemplateRenderer,
 };
+use anyhow::Context;
 use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options,
@@ -32,33 +33,31 @@ pub struct MarkdownPage<'a> {
 }
 
 impl<'a> MarkdownPage<'a> {
-    #[allow(dead_code)]
     pub fn from_file(
         markdown_space: &MarkdownSpace,
         markdown_page: &Path,
         arena: &'a Arena<AstNode<'a>>,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
-        let content = match fs::read_to_string(markdown_page) {
-            Ok(c) => c,
-            Err(err) => {
-                return Err(ConfluenceError::generic_error(format!(
-                    "Failed to read file {}: {}",
-                    markdown_page.display(),
-                    err
-                )))
-            }
-        };
-        Self::from_str(
-            markdown_page,
-            &content,
-            arena,
-            markdown_space
-                .relative_page_path(markdown_page)?
-                .display()
-                .to_string(),
-            template_renderer,
-        )
+        let source = markdown_space
+            .relative_page_path(markdown_page)?
+            .display()
+            .to_string();
+        let content = template_renderer
+            .render_template(&source)
+            .context(format!("Loading markdown from file {}", source))?;
+        Self::parse_markdown(arena, source, markdown_page, &content)
+    }
+
+    pub fn from_str(
+        markdown_page: &Path,
+        content: &str,
+        arena: &'a Arena<AstNode<'a>>,
+        source: String,
+        template_renderer: &mut TemplateRenderer,
+    ) -> Result<MarkdownPage<'a>> {
+        let content = template_renderer.expand_html_str(source.as_str(), content)?;
+        Self::parse_markdown(arena, source, markdown_page, &content)
     }
 
     fn options() -> Options {
@@ -74,14 +73,13 @@ impl<'a> MarkdownPage<'a> {
         options
     }
 
-    pub fn from_str(
-        markdown_page: &Path,
-        content: &str,
+    fn parse_markdown(
         arena: &'a Arena<AstNode<'a>>,
         source: String,
-        template_renderer: &mut TemplateRenderer,
+        markdown_page: &Path,
+        content: &str,
     ) -> Result<MarkdownPage<'a>> {
-        let content = template_renderer.expand_html(source.as_str(), content)?;
+        let parent = markdown_page.parent().unwrap();
         let root: &AstNode<'_> = parse_document(arena, &content, &Self::options());
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
@@ -127,7 +125,7 @@ impl<'a> MarkdownPage<'a> {
             }
             NodeValue::Image(image) => {
                 if !image.url.starts_with("http") {
-                    let mut attachment_path = PathBuf::from(markdown_page.parent().unwrap());
+                    let mut attachment_path = PathBuf::from(parent);
                     attachment_path.push(image.url.clone());
                     attachments.push(attachment_path);
                 }

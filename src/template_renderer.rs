@@ -45,16 +45,42 @@ fn children(
     )
 }
 
+fn labellist(
+    args: &HashMap<String, serde_json::Value>,
+) -> std::result::Result<serde_json::Value, tera::Error> {
+    let label = args
+        .get(&"labels".to_string())
+        .ok_or("Missing required argument 'labels'")?;
+
+    let parameter = match label {
+        serde_json::Value::String(s) => format!("label = \"{}\"", s),
+        serde_json::Value::Array(a) => {
+            if !a.is_empty() {
+                format!(
+                    "label in ({})",
+                    a.iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                )
+            } else {
+                Err(tera::Error::msg("labels needs to be a non-empty array"))?
+            }
+        }
+        _ => Err(tera::Error::msg("labels needs to be a string or array"))?,
+    };
+    Ok(
+        serde_json::to_value(
+format!(r#"<ac:structured-macro ac:name="contentbylabel" ac:schema-version="4" data-layout="default" ac:macro-id="808ece5f-14fd-4c2d-853a-bf87e0696e48">
+    <ac:parameter ac:name="cql">{} and space = currentSpace()</ac:parameter>
+</ac:structured-macro>"#, parameter) 
+        ).unwrap()
+    )
+}
+
 impl TemplateRenderer {
     pub fn new(space: &MarkdownSpace) -> Result<TemplateRenderer> {
-        let mut tera = Tera::new(
-            space
-                .dir
-                .join("_tera/**/*")
-                .into_os_string()
-                .to_str()
-                .unwrap(),
-        )?;
+        let mut tera = Tera::new(space.dir.join("**/*.md").into_os_string().to_str().unwrap())?;
 
         Self::add_builtins(&mut tera)?;
 
@@ -65,6 +91,7 @@ impl TemplateRenderer {
         tera.register_function("hello_world", hello_world);
         tera.register_function("toc", toc);
         tera.register_function("children", children);
+        tera.register_function("labellist", labellist);
         Ok(())
     }
 
@@ -76,15 +103,20 @@ impl TemplateRenderer {
         Ok(TemplateRenderer { tera })
     }
 
-    pub fn expand_html(&mut self, source: &str, content: &str) -> Result<String> {
+    pub fn render_template(&mut self, source: &str) -> Result<String> {
         let mut context = tera::Context::new();
         context.insert("filename", &source);
-        self.tera
-            .add_raw_template(source, content)
-            .context(format!("Failed to parse template '{}'", source))?;
 
-        let result = self.tera.render(source, &context);
-        self.tera.templates.remove(source);
+        let result = self.tera.render(&source.replace('\\', "/"), &context);
+
+        Ok(result?)
+    }
+
+    pub fn expand_html_str(&mut self, source: &str, content: &str) -> Result<String> {
+        let mut context = tera::Context::new();
+        context.insert("filename", &source);
+
+        let result = self.tera.render_str(content, &context);
 
         Ok(result?)
     }
@@ -92,19 +124,42 @@ impl TemplateRenderer {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use crate::error::TestResult;
 
-    use super::TemplateRenderer;
+    use super::{labellist, TemplateRenderer};
 
     #[test]
     fn it_puts_original_filename_in_message() -> TestResult {
         let mut template_renderer = TemplateRenderer::default()?;
-        let result = template_renderer.expand_html("test.md", "{{ func_does_not_exist() }}");
+        let result = template_renderer.expand_html_str("test.md", "{{ func_does_not_exist() }}");
         assert!(result.is_err());
         assert_eq!(
             format!("{:#}", result.unwrap_err()),
-            "Failed to render 'test.md': Function 'func_does_not_exist' not found"
+            "Failed to render '__tera_one_off': Function 'func_does_not_exist' not found"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn labellist_allows_multiple_labels() -> TestResult {
+        let args = HashMap::from([("labels".to_string(), serde_json::Value::from("foo"))]);
+        let result = labellist(&args);
+
+        assert!(result.is_ok());
+
+        let args = HashMap::from([(
+            "labels".to_string(),
+            serde_json::Value::from(vec!["foo", "bar"]),
+        )]);
+        let result = labellist(&args);
+
+        assert!(result.is_ok());
+        let s = result.unwrap();
+        println!("s: {:#}", s);
+        assert!(s.to_string().contains(r#"label in (\"foo\",\"bar\")"#));
+
         Ok(())
     }
 }

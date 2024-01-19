@@ -262,7 +262,10 @@ fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
 mod tests {
     use std::path::Path;
 
-    use crate::{markdown_page::MarkdownPage, template_renderer::TemplateRenderer};
+    use crate::{
+        markdown_page::MarkdownPage,
+        template_renderer::{self, TemplateRenderer},
+    };
 
     use self::responses::Version;
 
@@ -280,12 +283,13 @@ mod tests {
         link_generator: &mut LinkGenerator,
     ) -> Result<RenderedPage> {
         // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
+        let mut template_renderer = TemplateRenderer::new(markdown_space)?;
         let arena = Arena::<AstNode>::new();
         let markdown_page = MarkdownPage::from_file(
             markdown_space,
             markdown_page_path,
             &arena,
-            &mut TemplateRenderer::default()?,
+            &mut template_renderer,
         )?;
         link_generator.register_markdown_page(&markdown_page)?;
         link_generator.register_confluence_page(&ConfluencePage {
