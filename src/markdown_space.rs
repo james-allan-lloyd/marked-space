@@ -9,10 +9,7 @@ use crate::{
     markdown_page::MarkdownPage,
     template_renderer::TemplateRenderer,
 };
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 fn is_valid_space_key(space_key: &str) -> bool {
     Regex::new("^[A-Za-z0-9]+$").unwrap().is_match(space_key)
@@ -85,7 +82,7 @@ impl<'a> MarkdownSpace<'a> {
             .iter()
             .map(|markdown_page_path| {
                 let markdown_page = MarkdownPage::from_file(
-                    &self,
+                    self,
                     markdown_page_path,
                     &self.arena,
                     &mut template_renderer,

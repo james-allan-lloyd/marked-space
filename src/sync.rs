@@ -262,10 +262,7 @@ fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
 mod tests {
     use std::path::Path;
 
-    use crate::{
-        markdown_page::MarkdownPage,
-        template_renderer::{self, TemplateRenderer},
-    };
+    use crate::{markdown_page::MarkdownPage, template_renderer::TemplateRenderer};
 
     use self::responses::Version;
 

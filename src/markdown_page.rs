@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use crate::{
     checksum::sha256_digest, confluence_page::ConfluencePage,
@@ -49,6 +46,7 @@ impl<'a> MarkdownPage<'a> {
         Self::parse_markdown(arena, source, markdown_page, &content)
     }
 
+    #[cfg(test)]
     pub fn from_str(
         markdown_page: &Path,
         content: &str,
@@ -80,7 +78,7 @@ impl<'a> MarkdownPage<'a> {
         content: &str,
     ) -> Result<MarkdownPage<'a>> {
         let parent = markdown_page.parent().unwrap();
-        let root: &AstNode<'_> = parse_document(arena, &content, &Self::options());
+        let root: &AstNode<'_> = parse_document(arena, content, &Self::options());
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
         where
