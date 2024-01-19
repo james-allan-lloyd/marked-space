@@ -1,3 +1,8 @@
+---
+labels:
+- howto
+- intro
+---
 # Labels
 
 Labels are supported for your Confluence pages via "front matter" (this is currently the only supported use for front matter). Front matter is parsed as YAML surrounded by triple dashes like so:

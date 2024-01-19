@@ -18,7 +18,7 @@ use serde::Deserialize;
 
 use crate::{error::ConfluenceError, Result};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq)]
 pub struct FrontMatter {
     pub labels: Vec<String>,
 }
@@ -100,9 +100,10 @@ impl<'a> MarkdownPage<'a> {
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
             NodeValue::FrontMatter(front_matter_str) => {
                 let front_matter_str = front_matter_str
+                    .trim()
                     .strip_prefix("---")
                     .unwrap()
-                    .strip_suffix("---\n")
+                    .strip_suffix("---")
                     .unwrap();
                 match serde_yaml::from_str(front_matter_str) {
                     Ok(front_matter_yaml) => {
@@ -117,7 +118,7 @@ impl<'a> MarkdownPage<'a> {
                 if first_heading.is_none() {
                     first_heading = Some(node);
                 } else {
-                    let mut text_content = Vec::new(); //with_capacity(20);
+                    let mut text_content = Vec::with_capacity(20);
                     for n in node.children() {
                         collect_text(n, &mut text_content);
                     }
@@ -249,7 +250,7 @@ mod tests {
     use crate::confluence_page::ConfluencePage;
     use crate::error::TestResult;
     use crate::link_generator::LinkGenerator;
-    use crate::markdown_page::{LocalLink, MarkdownPage};
+    use crate::markdown_page::{FrontMatter, LocalLink, MarkdownPage};
     use crate::responses::Version;
     use crate::template_renderer::TemplateRenderer;
 
@@ -520,6 +521,29 @@ mod tests {
         let rendered_page = page.render(&LinkGenerator::default())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_parses_yaml_frontmatter() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = r##"---
+labels: 
+- foo
+- bar
+---
+# compulsory title
+"##;
+
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+
+        assert_eq!(
+            page.front_matter,
+            Some(FrontMatter {
+                labels: vec!["foo".to_string(), "bar".to_string()]
+            })
+        );
 
         Ok(())
     }
