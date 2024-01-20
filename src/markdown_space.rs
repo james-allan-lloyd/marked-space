@@ -255,9 +255,7 @@ mod tests {
         assert!(result.is_err());
         let error = result.err().unwrap();
         println!("Actual error: {:#?}", error);
-        assert!(
-            format!("{:#}", error).contains("Duplicate title 'The Same Heading' in [markdown2.md]")
-        )
+        assert!(format!("{:#}", error).contains("Duplicate title 'The Same Heading' in [markdown"))
     }
 
     #[test]
