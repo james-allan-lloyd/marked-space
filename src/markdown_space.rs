@@ -63,15 +63,21 @@ impl<'a> MarkdownSpace<'a> {
         }
     }
 
-    pub fn relative_page_path(&self, page_path: &Path) -> Result<PathBuf> {
-        match page_path.strip_prefix(&self.dir) {
-            Ok(p) => Ok(PathBuf::from(p)),
-            Err(_) => Err(ConfluenceError::generic_error(format!(
+    pub fn space_relative_path_string(&self, page_path: &Path) -> Result<String> {
+        let space_relative_path = page_path.strip_prefix(&self.dir).map_err(|_e| {
+            ConfluenceError::generic_error(format!(
                 "Page is not in space directory {}: {}",
                 self.dir.display(),
                 page_path.display()
-            ))),
-        }
+            ))
+        })?;
+
+        Ok(PathBuf::from(space_relative_path)
+            .to_str()
+            .ok_or(ConfluenceError::generic_error(
+                "Failed to convert path to str",
+            ))?
+            .replace("\\", "/"))
     }
 
     pub(crate) fn parse(&'a self, link_generator: &mut LinkGenerator) -> Result<Vec<MarkdownPage>> {
@@ -95,7 +101,7 @@ impl<'a> MarkdownSpace<'a> {
                     .iter()
                     .filter_map(|local_link| {
                         if !self.dir.join(&local_link.path).exists() {
-                            Some(local_link.path.display().to_string())
+                            Some(local_link.to_string())
                         } else {
                             None
                         }
@@ -115,13 +121,7 @@ impl<'a> MarkdownSpace<'a> {
                     .iter()
                     .filter_map(|attachment| {
                         if !attachment.exists() {
-                            Some(
-                                attachment
-                                    .strip_prefix(self.dir.as_path())
-                                    .unwrap()
-                                    .display()
-                                    .to_string(),
-                            )
+                            Some(self.space_relative_path_string(attachment).unwrap())
                         } else {
                             None
                         }
@@ -253,8 +253,11 @@ mod tests {
         let result = space.parse(&mut LinkGenerator::default());
 
         assert!(result.is_err());
-        assert!(format!("{:#}", result.err().unwrap())
-            .contains("Duplicate title 'The Same Heading' in [markdown2.md]"))
+        let error = result.err().unwrap();
+        println!("Actual error: {:#?}", error);
+        assert!(
+            format!("{:#}", error).contains("Duplicate title 'The Same Heading' in [markdown2.md]")
+        )
     }
 
     #[test]
@@ -282,7 +285,7 @@ mod tests {
 
         assert_eq!(
             acutal_error,
-            "1 Error(s) parsing space:\n  Missing file for link in [subpage\\markdown2.md] to [subpage\\does_not_exist.md]",
+            "1 Error(s) parsing space:\n  Missing file for link in [subpage/markdown2.md] to [subpage/does_not_exist.md]",
         )
     }
 
@@ -306,9 +309,10 @@ mod tests {
         let space = result.unwrap();
 
         let result = space.parse(&mut LinkGenerator::default());
-        assert!(result.is_err());
-        assert!(format!("{:#}", result.err().unwrap()).contains(
-            "Missing file for attachment link in [subpage\\image.md] to [subpage\\image_does_not_exist.png]"
+        let acutal_error = format!("{:#}", result.err().unwrap());
+        println!("Actual error: {:#}", acutal_error);
+        assert!(acutal_error.contains(
+            "Missing file for attachment link in [subpage/image.md] to [subpage/image_does_not_exist.png]"
         ));
     }
 }

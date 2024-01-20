@@ -36,10 +36,7 @@ impl<'a> MarkdownPage<'a> {
         arena: &'a Arena<AstNode<'a>>,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
-        let source = markdown_space
-            .relative_page_path(markdown_page)?
-            .display()
-            .to_string();
+        let source = markdown_space.space_relative_path_string(markdown_page)?;
         let content = template_renderer
             .render_template(&source)
             .context(format!("Loading markdown from file {}", source))?;

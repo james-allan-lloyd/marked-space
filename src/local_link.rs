@@ -50,6 +50,15 @@ impl LocalLink {
         };
         Ok(result)
     }
+
+    pub(crate) fn to_string(&self) -> String {
+        let mut result = self.path.to_str().unwrap().replace("\\", "/");
+        if let Some(anchor) = &self.anchor {
+            result += "#";
+            result += anchor.as_str();
+        }
+        result
+    }
 }
 
 #[cfg(test)]
