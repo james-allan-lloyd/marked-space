@@ -1,0 +1,32 @@
+name: release binaries
+
+on:
+  workflow_call:
+    inputs:
+      prerelease:
+        required: true
+        type: boolean
+
+jobs:
+  release:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+    # - uses: ncipollo/release-action@v1
+    #   with:
+    #     artifacts: "target/release/marked-space"
+    #     tag: ${{ steps.version.outputs.version }}
+    #     draft: true
+    - name: Download all workflow run artifacts
+      uses: actions/download-artifact@v4
+
+    - uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: ${{ github.token }}
+        automatic_release_tag: "latest"
+        prerelease: ${{ inputs.prerelease }}
+        title: ${{ inputs.prerelease && 'Development Build' || null }}
+        files: |
+          ubuntu-latest/marked-space
+          windows-latest/marked-space.exe
+        
