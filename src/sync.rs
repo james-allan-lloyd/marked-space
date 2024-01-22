@@ -379,7 +379,7 @@ mod tests {
         )?;
         let _parent_page = parse_page(
             &space,
-            temp.child("test\\subpages\\index.md").path(),
+            temp.child("test/subpages/index.md").path(),
             &mut link_generator,
         )?;
         let child_page = parse_page(
