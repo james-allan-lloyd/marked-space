@@ -45,6 +45,7 @@ Then create a space for your markdown using the same key:
 
 ```shell
 mkdir TEAM
+cd TEAM
 cat > index.md <<EOF
 # My First Marked Space
 
