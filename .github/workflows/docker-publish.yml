@@ -6,15 +6,9 @@ name: Docker
 # documentation.
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - 'master'
     tags:
-      - 'v*'
-  pull_request:
-    branches:
-      - 'master'
+      - 'disable-v*'
 
 env:
   # Use docker.io for Docker Hub if empty

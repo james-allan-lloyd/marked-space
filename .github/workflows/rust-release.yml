@@ -1,0 +1,22 @@
+name: Rust Pre Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    uses: ./.github/workflows/shared-build.yml
+    with:
+      os: ${{ matrix.os }}
+        
+  prerelease:
+    permissions: write-all
+    needs: build
+    uses: ./.github/workflows/shared-release.yml
+    with:
+      prerelease: false
