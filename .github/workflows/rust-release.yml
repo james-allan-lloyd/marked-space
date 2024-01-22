@@ -1,4 +1,4 @@
-name: Rust Pre Release
+name: Rust Release
 
 on:
   push:
