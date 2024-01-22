@@ -37,8 +37,18 @@ jobs:
       id: version
       run: echo "version=$(cargo metadata --no-deps --format-version 1 | jq '.packages[0].version' -r)" >> $GITHUB_OUTPUT
 
-    - uses: ncipollo/release-action@v1
+    # - uses: ncipollo/release-action@v1
+    #   with:
+    #     artifacts: "target/release/marked-space"
+    #     tag: ${{ steps.version.outputs.version }}
+    #     draft: true
+
+    - uses: "marvinpinto/action-automatic-releases@latest"
       with:
-        artifacts: "target/release/marked-space"
-        tag: ${{ steps.version.outputs.version }}
-        draft: true
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: "latest"
+        prerelease: true
+        title: "Development Build"
+        files: |
+          target/release/marked-space
+        
