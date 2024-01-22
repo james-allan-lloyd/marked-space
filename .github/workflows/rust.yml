@@ -11,7 +11,11 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: [10, 12, 14]
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v3
@@ -39,8 +43,8 @@ jobs:
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v4
       with:
-        name: linux-build
-        path: target/release/marked-space
+        name: ${{ matrix.os }}
+        path: target/release/marked-space${{ matrix.os == 'windows-latest' && '.exe' || '' }}
         retention-days: 5
         if-no-files-found: error
         
@@ -66,5 +70,6 @@ jobs:
         prerelease: true
         title: "Development Build"
         files: |
-          linux-build/marked-space
+          ubuntu-latest/marked-space
+          windows-latest/marked-space.exe
         
