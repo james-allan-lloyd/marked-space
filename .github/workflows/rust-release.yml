@@ -14,7 +14,7 @@ jobs:
     with:
       os: ${{ matrix.os }}
         
-  prerelease:
+  release:
     permissions: write-all
     needs: build
     uses: ./.github/workflows/shared-release.yml
