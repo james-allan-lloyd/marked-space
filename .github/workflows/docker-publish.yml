@@ -8,7 +8,7 @@ name: Docker
 on:
   push:
     tags:
-      - 'disable-v*'
+      - 'v*'
 
 env:
   # Use docker.io for Docker Hub if empty
