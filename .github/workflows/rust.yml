@@ -35,10 +35,10 @@ jobs:
 
     - name: Get Version from Cargo
       id: version
-      run: echo "::set-output name=version::$(cargo metadata --no-deps --format-version 1 | jq '.packages[0].version' -r)"
+      run: echo "version=$(cargo metadata --no-deps --format-version 1 | jq '.packages[0].version' -r)" >> $GITHUB_OUTPUT
 
     - uses: ncipollo/release-action@v1
       with:
         artifacts: "target/release/marked-space"
-        tag: ${{ steps.version.outputs }}
+        tag: ${{ steps.version.outputs.version }}
         draft: true
