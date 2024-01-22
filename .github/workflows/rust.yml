@@ -33,7 +33,12 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
 
+    - name: Get Version from Cargo
+      id: version
+      run: echo "::set-output name=version::$(cargo metadata --no-deps --format-version 1 | jq '.packages[0].version' -r)"
+
     - uses: ncipollo/release-action@v1
       with:
         artifacts: "target/release/marked-space"
+        tag: ${{ steps.version.outputs }}
         draft: true
