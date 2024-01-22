@@ -19,7 +19,10 @@ features:
   the Confluence system.
 - ... and more to come!
 
-`marked-space` would not be possible without these fantastic libraries:
+Marked Space was heavily inspired by the
+[Mark](https://github.com/kovetskiy/mark) tool, but adds a more "space wide" view.
+
+Additionally, Marked Space would not be possible without these fantastic libraries:
 
 - [comrak](https://github.com/kivikakk/comrak)
 - [serde](https://serde.rs/)
@@ -64,8 +67,9 @@ CONFLUENCE_HOST=<the_hostname_of_your_confluence_instance>
 Ideally you'll be executing updates from a CI/CD pipeline, which will have its
 own means of securely storing and setting environment variables.
 
-With credentials setup, you can noew either execute `marked-space` using the
-docker image or build it for yourself from source.
+With credentials setup, you can now either execute `marked-space` using the
+docker image, some of the prebuilt binaries or build it for yourself from
+source.
 
 ## Using the Docker Image
 
@@ -73,6 +77,14 @@ docker image or build it for yourself from source.
 # assuming the documentation is in the subdirectory "TEAM"
 docker run --rm -ti --env-file .env -v $PWD/TEAM:/TEAM jamesallanlloyd/marked-space --space /TEAM
 ```
+
+## Using Prebuilt Binaries
+
+See <https://github.com/james-allan-lloyd/marked-space/releases>. Currently
+build self-contained binaries for:
+
+- Ubuntu 22.04 LTS or compatible
+- Windows
 
 ## Building from Source
 
