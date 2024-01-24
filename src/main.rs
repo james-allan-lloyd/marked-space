@@ -57,20 +57,7 @@ struct Args {
 }
 
 fn main() -> Result<ExitCode> {
-    match dotenv() {
-        Err(e) => {
-            match e {
-                dotenvy::Error::Io(io_err) => {
-                    match io_err.kind() {
-                        std::io::ErrorKind::NotFound => (), // do nothing
-                        _ => eprintln!("Failure loading .env: {}", io_err),
-                    }
-                }
-                _ => eprintln!("Failure loading .env: {}", e),
-            }
-        }
-        _ => (),
-    }
+    load_dotenv_if_exists();
 
     let args = Args::parse();
 
@@ -94,6 +81,20 @@ fn main() -> Result<ExitCode> {
         Err(err) => {
             eprintln!("Error: {:#}", err);
             Ok(ExitCode::FAILURE)
+        }
+    }
+}
+
+fn load_dotenv_if_exists() {
+    if let Err(e) = dotenv() {
+        match e {
+            dotenvy::Error::Io(io_err) => {
+                match io_err.kind() {
+                    std::io::ErrorKind::NotFound => (), // do nothing
+                    _ => eprintln!("Failure loading .env: {}", io_err),
+                }
+            }
+            _ => eprintln!("Failure loading .env: {}", e),
         }
     }
 }
