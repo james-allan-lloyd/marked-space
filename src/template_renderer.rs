@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-
 use tera::{self, Tera};
 
 use crate::error::Result;
