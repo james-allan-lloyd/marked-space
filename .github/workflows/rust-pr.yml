@@ -5,17 +5,21 @@ on:
     branches: [ "main" ]
 
 jobs:
-  audit:
+  format:
     env:
       CARGO_TERM_COLOR: always
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Deny
-      uses: EmbarkStudios/cargo-deny-action@v1      
     - name: Check Format
       run: cargo fmt --all -- --check
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: EmbarkStudios/cargo-deny-action@v1      
   build:
+    name: "Build"
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
