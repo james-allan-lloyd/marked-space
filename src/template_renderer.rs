@@ -94,7 +94,7 @@ impl TemplateRenderer {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn default() -> Result<TemplateRenderer> {
         let mut tera = Tera::default();
         Self::add_builtins(&mut tera)?;
@@ -111,6 +111,7 @@ impl TemplateRenderer {
         Ok(result?)
     }
 
+    #[cfg(test)]
     pub fn expand_html_str(&mut self, source: &str, content: &str) -> Result<String> {
         let mut context = tera::Context::new();
         context.insert("filename", &source);
