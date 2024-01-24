@@ -27,6 +27,8 @@ jobs:
           target/            
         key: ${{ inputs.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: ${{ inputs.os }}-cargo-
+    - name: Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
     - name: Build
       run: cargo build --release
     - name: Run tests

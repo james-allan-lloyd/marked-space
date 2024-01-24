@@ -77,7 +77,7 @@ impl<'a> MarkdownSpace<'a> {
             .ok_or(ConfluenceError::generic_error(
                 "Failed to convert path to str",
             ))?
-            .replace("\\", "/"))
+            .replace('\\', "/"))
     }
 
     pub(crate) fn parse(&'a self, link_generator: &mut LinkGenerator) -> Result<Vec<MarkdownPage>> {

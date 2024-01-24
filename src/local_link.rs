@@ -1,5 +1,6 @@
 use crate::error::{ConfluenceError, Result};
 use std::{
+    fmt::{Display, Write},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -50,14 +51,16 @@ impl LocalLink {
         };
         Ok(result)
     }
+}
 
-    pub(crate) fn to_string(&self) -> String {
-        let mut result = self.path.to_str().unwrap().replace("\\", "/");
+impl Display for LocalLink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.path.to_str().unwrap().replace('\\', "/").as_str())?;
         if let Some(anchor) = &self.anchor {
-            result += "#";
-            result += anchor.as_str();
-        }
-        result
+            f.write_char('#')?;
+            f.write_str(anchor.as_str())?;
+        };
+        Ok(())
     }
 }
 
@@ -119,6 +122,13 @@ mod test {
         println!("{:#?}", result);
         assert!(result.is_ok());
 
+        Ok(())
+    }
+
+    #[test]
+    fn it_converts_to_string_with_platform_independent_separator() -> TestResult {
+        let local_link = LocalLink::from_str("foo/bar#baz", &PathBuf::default())?;
+        assert_eq!(local_link.to_string(), "foo/bar#baz");
         Ok(())
     }
 }
