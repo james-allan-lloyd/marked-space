@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::Context;
+use anyhow::{Context, Ok};
 use serde_json::json;
 
 use crate::{
@@ -89,6 +89,39 @@ fn sync_page_attachments(
     Ok(())
 }
 
+fn sync_page_properties(confluence_client: &ConfluenceClient, page_id: &str) -> Result<()> {
+    let prop_json = confluence_client
+        .get_properties(page_id)?
+        .error_for_status()?
+        .json::<MultiEntityResult<responses::ContentProperty>>()?;
+
+    let property_key: &str = "emoji-title-published";
+
+    if let Some(prop) = prop_json
+        .results
+        .into_iter()
+        .find(|prop| prop.key == property_key)
+    {
+        println!("Found property: {}", prop.key.clone());
+        confluence_client
+            .set_property(
+                page_id,
+                &prop.id,
+                json!({
+                    "key": property_key,
+                    "value": "1f60d",
+                    "version": {
+                        "message": "",
+                        "number": prop.version.number + 1
+                    },
+                }),
+            )?
+            .error_for_status()?;
+    }
+
+    Ok(())
+}
+
 // Returns the ID of the page that the content was synced to.
 fn sync_page_content(
     confluence_client: &ConfluenceClient,
@@ -129,7 +162,7 @@ fn sync_page_content(
         "version": {
             "message": version_message,
             "number": existing_page.version.number + 1
-        }
+        },
     });
 
     let resp = confluence_client.update_page(&id, update_payload)?;
@@ -198,6 +231,7 @@ pub fn sync_space<'a>(
         if let Some(front_matter) = &markdown_page.front_matter {
             sync_page_labels(&confluence_client, &existing_page.id, &front_matter.labels)?;
         }
+        sync_page_properties(&confluence_client, &existing_page.id)?;
     }
 
     Ok(())

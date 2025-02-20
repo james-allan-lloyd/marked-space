@@ -63,6 +63,7 @@ impl ConfluenceClient {
 
     pub fn update_page(&self, page_id: &String, payload: Value) -> Result {
         let url = format!("https://{}/wiki/api/v2/pages/{}", self.hostname, page_id);
+        // let url = format!("https://{}/wiki/api/content/{}", self.hostname, page_id);
         self.client
             .put(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
@@ -146,6 +147,50 @@ impl ConfluenceClient {
             .query(&[("name", label.name.clone())])
             .header("Accept", "application/json")
             .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
+    pub(crate) fn get_properties(&self, page_id: &str) -> Result {
+        let url = format!(
+            "https://{}/wiki/api/v2/pages/{}/properties",
+            self.hostname, page_id
+        );
+
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
+    pub(crate) fn create_property(&self, page_id: &str, value: Value) -> Result {
+        let url = format!(
+            "https://{}/wiki/api/v2/pages/{}/properties",
+            self.hostname, page_id
+        );
+
+        self.client
+            .post(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .json(&value)
+            .send()
+    }
+
+    pub(crate) fn set_property(&self, page_id: &str, property_id: &str, value: Value) -> Result {
+        let url = format!(
+            "https://{}/wiki/api/v2/pages/{}/properties/{}",
+            self.hostname, page_id, property_id
+        );
+
+        self.client
+            .put(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .json(&value)
             .send()
     }
 }

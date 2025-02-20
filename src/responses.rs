@@ -112,6 +112,15 @@ pub struct Label {
     pub label: String,
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ContentProperty {
+    pub id: String,
+    pub key: String,
+    pub value: serde_json::Value,
+    pub version: Version,
+}
+
 #[cfg(test)]
 mod test {
     use serde_json::json;
