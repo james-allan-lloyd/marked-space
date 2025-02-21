@@ -17,7 +17,11 @@ use crate::{error::ConfluenceError, Result};
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct FrontMatter {
+    #[serde(default)]
     pub labels: Vec<String>,
+
+    #[serde(default)]
+    pub emoji: Option<String>,
 }
 
 pub struct MarkdownPage<'a> {
@@ -237,7 +241,24 @@ impl RenderedPage {
 }
 
 #[cfg(test)]
+pub fn page_from_str<'a>(
+    filename: &str,
+    content: &str,
+    arena: &'a Arena<AstNode<'a>>,
+) -> crate::error::Result<MarkdownPage<'a>> {
+    MarkdownPage::from_str(
+        &PathBuf::from(filename),
+        content,
+        arena,
+        filename.to_string(),
+        &mut TemplateRenderer::default()?,
+    )
+}
+
+#[cfg(test)]
 mod tests {
+    use super::*;
+
     use std::path::PathBuf;
 
     use comrak::{nodes::AstNode, Arena};
@@ -247,21 +268,6 @@ mod tests {
     use crate::link_generator::LinkGenerator;
     use crate::markdown_page::{FrontMatter, LocalLink, MarkdownPage};
     use crate::responses::Version;
-    use crate::template_renderer::TemplateRenderer;
-
-    fn page_from_str<'a>(
-        filename: &str,
-        content: &str,
-        arena: &'a Arena<AstNode<'a>>,
-    ) -> crate::error::Result<MarkdownPage<'a>> {
-        MarkdownPage::from_str(
-            &PathBuf::from(filename),
-            content,
-            arena,
-            filename.to_string(),
-            &mut TemplateRenderer::default()?,
-        )
-    }
 
     #[test]
     fn it_get_first_heading_as_title() -> TestResult {
@@ -536,7 +542,8 @@ labels:
         assert_eq!(
             page.front_matter,
             Some(FrontMatter {
-                labels: vec!["foo".to_string(), "bar".to_string()]
+                labels: vec!["foo".to_string(), "bar".to_string()],
+                emoji: None
             })
         );
 

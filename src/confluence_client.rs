@@ -120,6 +120,20 @@ impl ConfluenceClient {
             .send()
     }
 
+    pub(crate) fn get_page_labels(&self, page_id: &str) -> Result {
+        let url = format!(
+            "https://{}/wiki/rest/api/content/{}/label",
+            self.hostname, page_id
+        );
+
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
     pub(crate) fn set_page_labels(&self, page_id: &str, body: Vec<Value>) -> Result {
         let url = format!(
             "https://{}/wiki/rest/api/content/{}/label",
@@ -191,6 +205,20 @@ impl ConfluenceClient {
             .header("Accept", "application/json")
             .header("X-Atlassian-Token", "no-check")
             .json(&value)
+            .send()
+    }
+
+    pub(crate) fn delete_property(&self, page_id: &str, property_id: &str) -> Result {
+        let url = format!(
+            "https://{}/wiki/api/v2/pages/{}/properties/{}",
+            self.hostname, page_id, property_id
+        );
+
+        self.client
+            .delete(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
             .send()
     }
 }
