@@ -266,7 +266,7 @@ mod tests {
     use crate::confluence_page::ConfluencePage;
     use crate::error::TestResult;
     use crate::link_generator::LinkGenerator;
-    use crate::markdown_page::{FrontMatter, LocalLink, MarkdownPage};
+    use crate::markdown_page::{FrontMatter, LocalLink};
     use crate::responses::Version;
 
     #[test]

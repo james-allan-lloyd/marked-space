@@ -63,7 +63,7 @@ pub struct WriteWithLast<'w> {
     last_was_lf: Cell<bool>,
 }
 
-impl<'w> Write for WriteWithLast<'w> {
+impl Write for WriteWithLast<'_> {
     fn flush(&mut self) -> io::Result<()> {
         self.output.flush()
     }

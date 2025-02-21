@@ -86,7 +86,7 @@ impl LinkGenerator {
     }
 
     pub fn has_title(&self, title: &str) -> bool {
-        self.title_to_file.contains_key(&title.to_owned())
+        self.title_to_file.contains_key(title)
     }
 
     pub fn get_file_id(&self, filename: &Path) -> Option<String> {

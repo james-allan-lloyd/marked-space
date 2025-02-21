@@ -302,7 +302,7 @@ fn sync_page_labels(
 
 fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
     let mut output_path = PathBuf::from(d);
-    output_path.push(&PathBuf::from(page.source.clone()).with_extension("xhtml"));
+    output_path.push(PathBuf::from(page.source.clone()).with_extension("xhtml"));
     if let Some(p) = output_path.parent() {
         create_dir_all(p)?;
     }

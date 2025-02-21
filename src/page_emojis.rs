@@ -2,7 +2,7 @@ use serde_json::json;
 
 use crate::{markdown_page::MarkdownPage, responses::ContentProperty};
 
-static EMOJI_TITLE_PUBLISHED_PROP: &'static str = "emoji-title-published";
+static EMOJI_TITLE_PUBLISHED_PROP: &str = "emoji-title-published";
 
 pub(crate) fn get_property_updates(
     page: &MarkdownPage<'_>,

@@ -84,7 +84,9 @@ source.
 
 ```shell
 # assuming the documentation is in the subdirectory "TEAM"
-docker run --rm -ti --env-file .env -v $PWD/TEAM:/TEAM jamesallanlloyd/marked-space --space /TEAM
+docker run --rm -ti --env-file .env -v $PWD/TEAM:/TEAM \
+  jamesallanlloyd/marked-space \
+  --space /TEAM
 ```
 
 ## Using Prebuilt Binaries
