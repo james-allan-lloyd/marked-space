@@ -52,7 +52,7 @@ where
     }
 }
 
-impl<'a, T> Iterator for ConfluencePaginator<'a, T>
+impl<T> Iterator for ConfluencePaginator<'_, T>
 where
     T: serde::de::DeserializeOwned + Clone,
 {

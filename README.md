@@ -32,6 +32,14 @@ Additionally, Marked Space would not be possible without these fantastic librari
 - [assert_fs](https://docs.rs/assert_fs/latest/assert_fs/)
 - [tera](https://keats.github.io/tera/docs/)
 
+## Building and Testing
+
+```bash
+cargo install cargo-watch
+cargo run -- --space example/team
+cargo watch -x test
+```
+
 ## Getting Started
 
 Firstly, you'll need to create a space and take note of the space key
@@ -76,7 +84,9 @@ source.
 
 ```shell
 # assuming the documentation is in the subdirectory "TEAM"
-docker run --rm -ti --env-file .env -v $PWD/TEAM:/TEAM jamesallanlloyd/marked-space --space /TEAM
+docker run --rm -ti --env-file .env -v $PWD/TEAM:/TEAM \
+  jamesallanlloyd/marked-space \
+  --space /TEAM
 ```
 
 ## Using Prebuilt Binaries

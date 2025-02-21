@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::Context;
+use anyhow::{Context, Ok};
 use serde_json::json;
 
 use crate::{
@@ -15,8 +15,9 @@ use crate::{
     confluence_space::ConfluenceSpace,
     error::ConfluenceError,
     link_generator::LinkGenerator,
-    markdown_page::RenderedPage,
+    markdown_page::{MarkdownPage, RenderedPage},
     markdown_space::MarkdownSpace,
+    page_emojis::get_property_updates,
     responses::{self, Attachment, MultiEntityResult},
     sync_operation::{SyncOperation, SyncOperationResult},
     Result,
@@ -89,6 +90,50 @@ fn sync_page_attachments(
     Ok(())
 }
 
+fn sync_page_properties(
+    confluence_client: &ConfluenceClient,
+    page: &MarkdownPage,
+    page_id: &str,
+) -> Result<()> {
+    let prop_json = confluence_client
+        .get_properties(page_id)?
+        .error_for_status()?
+        .json::<MultiEntityResult<responses::ContentProperty>>()?;
+
+    let property_updates = get_property_updates(page, &prop_json.results);
+
+    for property_update in property_updates.iter() {
+        let update_response = if property_update.value.is_null() {
+            println!("Delete property {}", &property_update.key);
+            confluence_client.delete_property(page_id, &property_update.id)
+        } else if property_update.id.is_empty() {
+            println!("Create property {}", &property_update.key);
+            confluence_client.create_property(
+                page_id,
+                json!({"key": property_update.key, "value": property_update.value}),
+            )
+        } else {
+            println!("Update property {}", &property_update.key);
+            confluence_client.set_property(
+                page_id,
+                &property_update.id,
+                json!({
+                    "key": property_update.key,
+                    "value": property_update.value,
+                    "version": {
+                        "message": property_update.version.message,
+                        "number": property_update.version.number,
+                    }
+                }),
+            )
+        };
+
+        update_response?.error_for_status()?;
+    }
+
+    Ok(())
+}
+
 // Returns the ID of the page that the content was synced to.
 fn sync_page_content(
     confluence_client: &ConfluenceClient,
@@ -129,7 +174,7 @@ fn sync_page_content(
         "version": {
             "message": version_message,
             "number": existing_page.version.number + 1
-        }
+        },
     });
 
     let resp = confluence_client.update_page(&id, update_payload)?;
@@ -198,6 +243,7 @@ pub fn sync_space<'a>(
         if let Some(front_matter) = &markdown_page.front_matter {
             sync_page_labels(&confluence_client, &existing_page.id, &front_matter.labels)?;
         }
+        sync_page_properties(&confluence_client, markdown_page, &existing_page.id)?;
     }
 
     Ok(())
@@ -217,10 +263,17 @@ fn sync_page_labels(
         })
         .collect::<Vec<serde_json::Value>>();
 
-    let result = confluence_client
-        .set_page_labels(page_id, body)?
-        .error_for_status()?
-        .json::<MultiEntityResult<responses::Label>>()?;
+    let result = if !labels.is_empty() {
+        confluence_client
+            .set_page_labels(page_id, body)?
+            .error_for_status()?
+            .json::<MultiEntityResult<responses::Label>>()?
+    } else {
+        confluence_client
+            .get_page_labels(page_id)?
+            .error_for_status()?
+            .json::<MultiEntityResult<responses::Label>>()?
+    };
 
     let labels_removed = result
         .results
@@ -249,7 +302,7 @@ fn sync_page_labels(
 
 fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
     let mut output_path = PathBuf::from(d);
-    output_path.push(&PathBuf::from(page.source.clone()).with_extension("xhtml"));
+    output_path.push(PathBuf::from(page.source.clone()).with_extension("xhtml"));
     if let Some(p) = output_path.parent() {
         create_dir_all(p)?;
     }

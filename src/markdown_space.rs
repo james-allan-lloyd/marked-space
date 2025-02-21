@@ -80,7 +80,10 @@ impl<'a> MarkdownSpace<'a> {
             .replace('\\', "/"))
     }
 
-    pub(crate) fn parse(&'a self, link_generator: &mut LinkGenerator) -> Result<Vec<MarkdownPage>> {
+    pub(crate) fn parse(
+        &'a self,
+        link_generator: &mut LinkGenerator,
+    ) -> Result<Vec<MarkdownPage<'a>>> {
         let mut parse_errors = Vec::<anyhow::Error>::default();
         let mut template_renderer = TemplateRenderer::new(self)?;
         let markdown_pages: Vec<MarkdownPage> = self

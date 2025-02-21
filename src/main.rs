@@ -21,6 +21,7 @@ mod local_link;
 mod markdown_page;
 mod markdown_space;
 mod moves;
+mod page_emojis;
 mod parent;
 mod responses;
 mod sync;

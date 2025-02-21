@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Version {
     pub message: String,
@@ -9,12 +9,14 @@ pub struct Version {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct BodyType {
     pub representation: String,
     pub value: String,
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub enum BodyBulk {
     #[serde(rename = "storage")]
     Storage(BodyType),
@@ -36,6 +38,7 @@ pub struct PageBulkWithoutBody {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct PageBulk {
     pub id: String,
     pub parent_id: String,
@@ -45,6 +48,7 @@ pub struct PageBulk {
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub enum BodySingle {
     #[serde(rename = "storage")]
     Storage(BodyType),
@@ -56,6 +60,7 @@ pub enum BodySingle {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct PageSingleWithoutBody {
     pub id: String,
     pub title: String,
@@ -64,6 +69,7 @@ pub struct PageSingleWithoutBody {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct PageSingleWithBody {
     pub id: String,
     pub title: String,
@@ -87,6 +93,7 @@ pub struct MultiEntityResult<T> {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct Space {
     pub id: String,
     pub key: String,
@@ -96,6 +103,7 @@ pub struct Space {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct Attachment {
     pub id: String,
     pub title: String,
@@ -105,11 +113,21 @@ pub struct Attachment {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct Label {
     pub prefix: String,
     pub name: String,
     pub id: String,
     pub label: String,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ContentProperty {
+    pub id: String,
+    pub key: String,
+    pub value: serde_json::Value,
+    pub version: Version,
 }
 
 #[cfg(test)]

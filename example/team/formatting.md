@@ -27,7 +27,8 @@ This is ~strikethrough~.
 
 ## Soft Breaks
 
-By default, soft breaks are ignored; this means that paragraphs like the following will be combined to remove the line break:
+By default, soft breaks are ignored; this means that paragraphs like the
+following will be combined to remove the line break:
 
 All of these words
 should appear on the same line.
@@ -54,7 +55,8 @@ Task Lists:
   - [ ] sub task
 - [x] task
 
-Some things to note: task lists can be interacted with on confluence, but they will be overwritten when the markdown is synced again.
+Some things to note: task lists can be interacted with on confluence, but they
+will be overwritten when the markdown is synced again.
 
 ## Shortcodes
 
@@ -72,7 +74,7 @@ Entering `---` should result in a horizontal rule in Confluence like this:
 
 Check out the home page here: [Home Page](index.md)
 
-And a link to a section in this page: [Code](#Code)
+And a link to a section in this page: [Code](#code)
 
 And a link to a section in another page: [Sub page section](subpages/subpage1.md#Sub-Page-Section)
 
@@ -95,6 +97,6 @@ print("Hello world!")
 ```yaml
 test: value
 some-map:
-    foo: bar
-    baz: 0
+  foo: bar
+  baz: 0
 ```
