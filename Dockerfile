@@ -1,4 +1,4 @@
-FROM rust:1.73-bullseye as builder
+FROM rust:1.84-bullseye as builder
 WORKDIR /usr/src/marked-space
 COPY . .
 RUN cargo install --path .
