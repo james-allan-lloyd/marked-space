@@ -11,18 +11,9 @@ use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options,
 };
-use serde::Deserialize;
 
 use crate::{error::ConfluenceError, Result};
-
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct FrontMatter {
-    #[serde(default)]
-    pub labels: Vec<String>,
-
-    #[serde(default)]
-    pub emoji: Option<String>,
-}
+use saphyr::Yaml;
 
 pub struct MarkdownPage<'a> {
     pub title: String,
@@ -30,7 +21,7 @@ pub struct MarkdownPage<'a> {
     root: &'a AstNode<'a>,
     pub attachments: Vec<PathBuf>,
     pub local_links: Vec<LocalLink>,
-    pub front_matter: Option<FrontMatter>,
+    pub front_matter: Yaml,
 }
 
 impl<'a> MarkdownPage<'a> {
@@ -95,7 +86,7 @@ impl<'a> MarkdownPage<'a> {
         let mut attachments = Vec::<PathBuf>::default();
         let mut local_links = Vec::<LocalLink>::default();
         let mut first_heading: Option<&AstNode> = None;
-        let mut front_matter: Option<FrontMatter> = None;
+        let mut front_matter = Yaml::from_str("{}");
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
             NodeValue::FrontMatter(front_matter_str) => {
                 let front_matter_str = front_matter_str
@@ -104,12 +95,13 @@ impl<'a> MarkdownPage<'a> {
                     .unwrap()
                     .strip_suffix("---")
                     .unwrap();
-                match serde_yaml::from_str(front_matter_str) {
-                    Ok(front_matter_yaml) => {
-                        front_matter = Some(front_matter_yaml);
+                let yaml = &Yaml::load_from_str(front_matter_str).unwrap()[0];
+                match yaml {
+                    Yaml::Hash(_front_matter_hash) => {
+                        front_matter = yaml.clone();
                     }
-                    Err(err) => {
-                        errors.push(format!("Couldn't parse front matter: {}", err));
+                    _ => {
+                        errors.push(format!("Couldn't parse front matter: not a hash {yaml:?}"));
                     }
                 }
             }
@@ -266,7 +258,7 @@ mod tests {
     use crate::confluence_page::ConfluencePage;
     use crate::error::TestResult;
     use crate::link_generator::LinkGenerator;
-    use crate::markdown_page::{FrontMatter, LocalLink};
+    use crate::markdown_page::LocalLink;
     use crate::responses::Version;
 
     #[test]
@@ -539,12 +531,32 @@ labels:
 
         let page = page_from_str("page.md", markdown_content, &arena)?;
 
+        let expected_labels = vec![Yaml::from_str("foo"), Yaml::from_str("bar")];
+
+        assert_eq!(page.front_matter["labels"].as_vec(), Some(&expected_labels));
+
+        Ok(())
+    }
+
+    // TODO: it warns about unknown keys
+    // TODO: if fails if the front matter isn't valid yaml
+
+    #[test]
+    fn it_allows_metadata() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = r##"---
+metadata:
+    some:
+        arbitrary: "value"
+---
+# compulsory title
+"##;
+
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+
         assert_eq!(
-            page.front_matter,
-            Some(FrontMatter {
-                labels: vec!["foo".to_string(), "bar".to_string()],
-                emoji: None
-            })
+            page.front_matter["metadata"]["some"]["arbitrary"].as_str(),
+            Some("value")
         );
 
         Ok(())
