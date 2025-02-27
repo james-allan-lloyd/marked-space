@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     checksum::sha256_digest, confluence_page::ConfluencePage,
@@ -22,6 +25,8 @@ pub struct MarkdownPage<'a> {
     pub attachments: Vec<PathBuf>,
     pub local_links: Vec<LocalLink>,
     pub front_matter: Yaml,
+
+    pub warnings: Vec<String>,
 }
 
 impl<'a> MarkdownPage<'a> {
@@ -83,6 +88,7 @@ impl<'a> MarkdownPage<'a> {
         }
 
         let mut errors = Vec::<String>::default();
+        let mut warnings = Vec::<String>::default();
         let mut attachments = Vec::<PathBuf>::default();
         let mut local_links = Vec::<LocalLink>::default();
         let mut first_heading: Option<&AstNode> = None;
@@ -95,13 +101,43 @@ impl<'a> MarkdownPage<'a> {
                     .unwrap()
                     .strip_suffix("---")
                     .unwrap();
-                let yaml = &Yaml::load_from_str(front_matter_str).unwrap()[0];
-                match yaml {
-                    Yaml::Hash(_front_matter_hash) => {
-                        front_matter = yaml.clone();
+
+                match Yaml::load_from_str(front_matter_str) {
+                    Ok(docs) => {
+                        let yaml = &docs[0];
+                        match yaml {
+                            Yaml::Hash(front_matter_hash) => {
+                                static VALID_TOP_LEVEL_KEYS: [&str; 3] =
+                                    ["emoji", "labels", "metadata"];
+                                let string_keys: HashSet<&str> = front_matter_hash
+                                    .iter()
+                                    .map(|(key, _value)| key.as_str().unwrap())
+                                    .collect();
+
+                                let mut unknown_keys: Vec<&str> = string_keys
+                                    .difference(&HashSet::from(VALID_TOP_LEVEL_KEYS))
+                                    .copied()
+                                    .collect();
+
+                                unknown_keys.sort();
+
+                                if !unknown_keys.is_empty() {
+                                    warnings.push(format!(
+                                        "Unknown top level front matter keys: {}",
+                                        unknown_keys.join(", "),
+                                    ));
+                                }
+                                front_matter = yaml.clone();
+                            }
+                            _ => {
+                                errors.push(format!(
+                                    "Couldn't parse front matter: not a hash {yaml:?}"
+                                ));
+                            }
+                        }
                     }
-                    _ => {
-                        errors.push(format!("Couldn't parse front matter: not a hash {yaml:?}"));
+                    Err(err) => {
+                        errors.push(format!("Failed to parse front matter as yaml: {}", err));
                     }
                 }
             }
@@ -167,6 +203,7 @@ impl<'a> MarkdownPage<'a> {
                 attachments,
                 local_links,
                 front_matter,
+                warnings,
             })
         } else {
             Err(ConfluenceError::parsing_errors(source, errors))
@@ -538,8 +575,48 @@ labels:
         Ok(())
     }
 
-    // TODO: it warns about unknown keys
-    // TODO: if fails if the front matter isn't valid yaml
+    #[test]
+    fn it_warns_about_unknown_keys() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = r##"---
+unknown_top_level_key: "foo"
+page_emoji: "and typos"
+---
+# compulsory title
+"##;
+
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+
+        assert_eq!(
+            page.warnings,
+            vec!["Unknown top level front matter keys: page_emoji, unknown_top_level_key"]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_fails_if_front_matter_is_invalid_yaml() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = r##"---
+[some section]
+foo=bar
+---
+# compulsory title
+"##;
+
+        let result = page_from_str("page.md", markdown_content, &arena);
+
+        assert!(result.is_err());
+
+        if let Err(err) = result {
+            assert!(err
+                .to_string()
+                .contains("Failed to parse front matter as yaml"));
+        }
+
+        Ok(())
+    }
 
     #[test]
     fn it_allows_metadata() -> TestResult {
