@@ -28,8 +28,8 @@ enum ParseState {
     InFrontMatter,
 }
 
-impl FrontMatter {
-    pub fn default() -> FrontMatter {
+impl Default for FrontMatter {
+    fn default() -> Self {
         FrontMatter {
             labels: Vec::default(),
             emoji: String::default(),
@@ -37,7 +37,9 @@ impl FrontMatter {
             unknown_keys: Vec::default(),
         }
     }
+}
 
+impl FrontMatter {
     #[cfg(test)]
     pub fn from_str(s: &str) -> Result<FrontMatter> {
         use std::io::Cursor;

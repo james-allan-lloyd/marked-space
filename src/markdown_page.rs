@@ -40,7 +40,7 @@ impl<'a> MarkdownPage<'a> {
         let fm = FrontMatter::from_reader(&file)?;
 
         let content = template_renderer
-            .render_template(&source)
+            .render_template(&source, &fm)
             .context(format!("Loading markdown from file {}", source))?;
         Self::parse_markdown(arena, source, markdown_page, &content, fm)
     }
@@ -55,7 +55,7 @@ impl<'a> MarkdownPage<'a> {
     ) -> Result<MarkdownPage<'a>> {
         let fm = FrontMatter::from_str(content)?;
         let content = template_renderer
-            .expand_html_str(source.as_str(), content, &fm)
+            .render_template_str(source.as_str(), content, &fm)
             .context(format!("Failed to render markdown from file {}", source))?;
         Self::parse_markdown(arena, source, markdown_page, &content, fm)
     }
