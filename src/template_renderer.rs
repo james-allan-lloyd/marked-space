@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::thread::current;
 
 use saphyr::Yaml;
 use tera::{self, Tera, Value};

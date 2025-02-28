@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     fs::File,
     path::{Path, PathBuf},
 };

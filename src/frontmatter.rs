@@ -1,13 +1,13 @@
-use std::io::Read;
-
 use saphyr::Yaml;
 
 use crate::Result;
+use std::{
+    collections::HashSet,
+    io::{self, BufRead},
+};
 use thiserror::Error;
 
-// fn read_frontmatter_as_yaml(filename: &str) -> Yaml {
-//     Yaml::from_str("foo")
-// }
+use anyhow::Context;
 
 #[derive(Error, Debug)]
 pub enum FrontMatterError {
@@ -38,23 +38,16 @@ impl FrontMatter {
         }
     }
 
-    pub fn from_reader(reader: &impl Read) -> Result<FrontMatter> {
-        Ok(FrontMatter::default())
-    }
-
     #[cfg(test)]
     pub fn from_str(s: &str) -> Result<FrontMatter> {
-        use std::{
-            collections::HashSet,
-            io::{self, BufRead, Cursor},
-        };
+        use std::io::Cursor;
+        Self::from_reader(Cursor::new(s))
+    }
 
-        use anyhow::Context;
-
+    pub fn from_reader(reader: impl std::io::Read) -> Result<FrontMatter> {
         let mut front_matter_str = String::new();
         let mut state = ParseState::BeforeFrontMatter;
-        let cursor = Cursor::new(s);
-        let lines = io::BufReader::new(cursor).lines();
+        let lines = io::BufReader::new(reader).lines();
         for line in lines.map_while(io::Result::ok) {
             match state {
                 ParseState::BeforeFrontMatter => {
@@ -107,16 +100,7 @@ impl FrontMatter {
             .collect();
 
         unknown_keys.sort();
-        //
-        //                 if !unknown_keys.is_empty() {
-        //                     warnings.push(format!(
-        //                         "Unknown top level front matter keys: {}",
-        //                         unknown_keys.join(", "),
-        //                     ));
-        //                 }
-        //                 front_matter = yaml.clone();
 
-        println!("Yaml fm {:?}", yaml_fm);
         let mut labels: Vec<String> = Vec::default();
 
         if let Some(parsed_labels) = yaml_fm["labels"].as_vec().map(|v| {
