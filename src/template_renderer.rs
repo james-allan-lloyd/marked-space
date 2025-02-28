@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::thread::current;
 
-use tera::{self, Tera};
+use saphyr::Yaml;
+use tera::{self, Tera, Value};
 
 use crate::error::Result;
+use crate::frontmatter::FrontMatter;
 use crate::markdown_space::MarkdownSpace;
 
 pub struct TemplateRenderer {
@@ -77,6 +80,26 @@ format!(r#"<ac:structured-macro ac:name="contentbylabel" ac:schema-version="4" d
     )
 }
 
+fn make_metadata_lookup(metadata: Yaml) -> impl tera::Function {
+    Box::new(
+        move |args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
+            let mut current_yml = &metadata;
+            if let Some(path) = args.get("path") {
+                for arg in path.as_str().unwrap().split(".") {
+                    current_yml = &current_yml[arg];
+                }
+                if let Some(yaml_str) = current_yml.as_str() {
+                    Ok(Value::from(yaml_str))
+                } else {
+                    Ok(Value::Null)
+                }
+            } else {
+                Err("Missing parameter 'path'".into())
+            }
+        },
+    )
+}
+
 impl TemplateRenderer {
     pub fn new(space: &MarkdownSpace) -> Result<TemplateRenderer> {
         let mut tera = Tera::new(space.dir.join("**/*.md").into_os_string().to_str().unwrap())?;
@@ -112,9 +135,16 @@ impl TemplateRenderer {
     }
 
     #[cfg(test)]
-    pub fn expand_html_str(&mut self, source: &str, content: &str) -> Result<String> {
+    pub fn expand_html_str(
+        &mut self,
+        source: &str,
+        content: &str,
+        fm: &FrontMatter,
+    ) -> Result<String> {
         let mut context = tera::Context::new();
         context.insert("filename", &source);
+        self.tera
+            .register_function("metadata", make_metadata_lookup(fm.metadata.clone()));
 
         let result = self.tera.render_str(content, &context);
 
@@ -126,14 +156,18 @@ impl TemplateRenderer {
 mod test {
     use std::collections::HashMap;
 
-    use crate::error::TestResult;
+    use crate::{error::TestResult, frontmatter::FrontMatter};
 
     use super::{labellist, TemplateRenderer};
 
     #[test]
     fn it_puts_original_filename_in_message() -> TestResult {
         let mut template_renderer = TemplateRenderer::default()?;
-        let result = template_renderer.expand_html_str("test.md", "{{ func_does_not_exist() }}");
+        let result = template_renderer.expand_html_str(
+            "test.md",
+            "{{ func_does_not_exist() }}",
+            &FrontMatter::default(),
+        );
         assert!(result.is_err());
         assert_eq!(
             format!("{:#}", result.unwrap_err()),

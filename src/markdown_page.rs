@@ -1,13 +1,14 @@
 use std::{
     collections::HashSet,
+    fs::File,
     path::{Path, PathBuf},
 };
 
 use crate::{
     checksum::sha256_digest, confluence_page::ConfluencePage,
-    confluence_storage_renderer::render_confluence_storage, helpers::collect_text,
-    link_generator::LinkGenerator, local_link::LocalLink, markdown_space::MarkdownSpace,
-    parent::get_parent_file, template_renderer::TemplateRenderer,
+    confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
+    helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
+    markdown_space::MarkdownSpace, parent::get_parent_file, template_renderer::TemplateRenderer,
 };
 use anyhow::Context;
 use comrak::{
@@ -16,7 +17,6 @@ use comrak::{
 };
 
 use crate::{error::ConfluenceError, Result};
-use saphyr::Yaml;
 
 pub struct MarkdownPage<'a> {
     pub title: String,
@@ -24,7 +24,7 @@ pub struct MarkdownPage<'a> {
     root: &'a AstNode<'a>,
     pub attachments: Vec<PathBuf>,
     pub local_links: Vec<LocalLink>,
-    pub front_matter: Yaml,
+    pub front_matter: FrontMatter,
 
     pub warnings: Vec<String>,
 }
@@ -37,10 +37,13 @@ impl<'a> MarkdownPage<'a> {
         template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
         let source = markdown_space.space_relative_path_string(markdown_page)?;
+        let file = File::open(markdown_page)?;
+        let fm = FrontMatter::from_reader(&file)?;
+
         let content = template_renderer
             .render_template(&source)
             .context(format!("Loading markdown from file {}", source))?;
-        Self::parse_markdown(arena, source, markdown_page, &content)
+        Self::parse_markdown(arena, source, markdown_page, &content, fm)
     }
 
     #[cfg(test)]
@@ -51,8 +54,11 @@ impl<'a> MarkdownPage<'a> {
         source: String,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
-        let content = template_renderer.expand_html_str(source.as_str(), content)?;
-        Self::parse_markdown(arena, source, markdown_page, &content)
+        let fm = FrontMatter::from_str(content)?;
+        let content = template_renderer
+            .expand_html_str(source.as_str(), content, &fm)
+            .context(format!("Failed to render markdown from file {}", source))?;
+        Self::parse_markdown(arena, source, markdown_page, &content, fm)
     }
 
     fn options() -> Options {
@@ -73,6 +79,7 @@ impl<'a> MarkdownPage<'a> {
         source: String,
         markdown_page: &Path,
         content: &str,
+        fm: FrontMatter,
     ) -> Result<MarkdownPage<'a>> {
         let parent = markdown_page.parent().unwrap();
         let root: &AstNode<'_> = parse_document(arena, content, &Self::options());
@@ -89,58 +96,17 @@ impl<'a> MarkdownPage<'a> {
 
         let mut errors = Vec::<String>::default();
         let mut warnings = Vec::<String>::default();
+        if !fm.unknown_keys.is_empty() {
+            warnings.push(format!(
+                "Unknown top level front matter keys: {}",
+                fm.unknown_keys.join(", "),
+            ));
+        }
+
         let mut attachments = Vec::<PathBuf>::default();
         let mut local_links = Vec::<LocalLink>::default();
         let mut first_heading: Option<&AstNode> = None;
-        let mut front_matter = Yaml::from_str("{}");
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
-            NodeValue::FrontMatter(front_matter_str) => {
-                let front_matter_str = front_matter_str
-                    .trim()
-                    .strip_prefix("---")
-                    .unwrap()
-                    .strip_suffix("---")
-                    .unwrap();
-
-                match Yaml::load_from_str(front_matter_str) {
-                    Ok(docs) => {
-                        let yaml = &docs[0];
-                        match yaml {
-                            Yaml::Hash(front_matter_hash) => {
-                                static VALID_TOP_LEVEL_KEYS: [&str; 3] =
-                                    ["emoji", "labels", "metadata"];
-                                let string_keys: HashSet<&str> = front_matter_hash
-                                    .iter()
-                                    .map(|(key, _value)| key.as_str().unwrap())
-                                    .collect();
-
-                                let mut unknown_keys: Vec<&str> = string_keys
-                                    .difference(&HashSet::from(VALID_TOP_LEVEL_KEYS))
-                                    .copied()
-                                    .collect();
-
-                                unknown_keys.sort();
-
-                                if !unknown_keys.is_empty() {
-                                    warnings.push(format!(
-                                        "Unknown top level front matter keys: {}",
-                                        unknown_keys.join(", "),
-                                    ));
-                                }
-                                front_matter = yaml.clone();
-                            }
-                            _ => {
-                                errors.push(format!(
-                                    "Couldn't parse front matter: not a hash {yaml:?}"
-                                ));
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        errors.push(format!("Failed to parse front matter as yaml: {}", err));
-                    }
-                }
-            }
             NodeValue::Heading(_heading) => {
                 if first_heading.is_none() {
                     first_heading = Some(node);
@@ -202,8 +168,8 @@ impl<'a> MarkdownPage<'a> {
                 root,
                 attachments,
                 local_links,
-                front_matter,
                 warnings,
+                front_matter: fm,
             })
         } else {
             Err(ConfluenceError::parsing_errors(source, errors))
@@ -568,9 +534,9 @@ labels:
 
         let page = page_from_str("page.md", markdown_content, &arena)?;
 
-        let expected_labels = vec![Yaml::from_str("foo"), Yaml::from_str("bar")];
+        let expected_labels = vec!["foo", "bar"];
 
-        assert_eq!(page.front_matter["labels"].as_vec(), Some(&expected_labels));
+        assert_eq!(page.front_matter.labels, expected_labels);
 
         Ok(())
     }
@@ -610,9 +576,11 @@ foo=bar
         assert!(result.is_err());
 
         if let Err(err) = result {
-            assert!(err
-                .to_string()
-                .contains("Failed to parse front matter as yaml"));
+            assert!(
+                format!("{:?}", err).contains("Failed to parse front matter as YAML"),
+                "Error did not contain expected error message, actual mesage: {:?}",
+                err
+            );
         }
 
         Ok(())
@@ -632,9 +600,29 @@ metadata:
         let page = page_from_str("page.md", markdown_content, &arena)?;
 
         assert_eq!(
-            page.front_matter["metadata"]["some"]["arbitrary"].as_str(),
+            page.front_matter.metadata["some"]["arbitrary"].as_str(),
             Some("value")
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_has_metadata_as_variables() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = r##"---
+metadata:
+    some:
+        arbitrary: "value"
+---
+# compulsory title
+{{ metadata(path="some.arbitrary") }}
+"##;
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+
+        let rendered_page = page.render(&LinkGenerator::default())?;
+
+        assert_eq!(rendered_page.content.trim(), "<p>value</p>");
 
         Ok(())
     }

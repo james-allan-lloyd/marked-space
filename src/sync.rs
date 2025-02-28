@@ -240,13 +240,11 @@ pub fn sync_space<'a>(
             &existing_page.id,
             &markdown_page.attachments,
         )?;
-        if let Some(labels) = &markdown_page.front_matter["labels"].as_vec().map(|v| {
-            v.iter()
-                .map(|l| String::from(l.as_str().unwrap()))
-                .collect::<Vec<String>>()
-        }) {
-            sync_page_labels(&confluence_client, &existing_page.id, labels)?;
-        }
+        sync_page_labels(
+            &confluence_client,
+            &existing_page.id,
+            &markdown_page.front_matter.labels,
+        )?;
         sync_page_properties(&confluence_client, markdown_page, &existing_page.id)?;
     }
 
