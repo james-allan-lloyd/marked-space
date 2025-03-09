@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
+use anyhow::bail;
 use saphyr::Yaml;
 use tera::{self, Tera, Value};
 
 use crate::error::Result;
 use crate::frontmatter::FrontMatter;
+use crate::imports::generate_import_lines;
 use crate::markdown_space::MarkdownSpace;
 
 pub struct TemplateRenderer {
@@ -124,16 +126,6 @@ impl TemplateRenderer {
         Ok(TemplateRenderer { tera })
     }
 
-    pub fn render_template(&mut self, source: &str, fm: &FrontMatter) -> Result<String> {
-        let mut context = tera::Context::new();
-        context.insert("filename", &source);
-        self.tera
-            .register_function("metadata", make_metadata_lookup(fm.metadata.clone()));
-
-        Ok(self.tera.render(&source.replace('\\', "/"), &context)?)
-    }
-
-    #[cfg(test)]
     pub fn render_template_str(
         &mut self,
         source: &str,
@@ -145,16 +137,39 @@ impl TemplateRenderer {
         self.tera
             .register_function("metadata", make_metadata_lookup(fm.metadata.clone()));
 
-        Ok(self.tera.render_str(content, &context)?)
+        for import in fm.imports.iter() {
+            if !self
+                .tera
+                .get_template_names()
+                .any(|x| *x == String::from("_tera/") + import)
+            {
+                bail!(
+                    "Import '{}' does not exist under the _tera directory",
+                    import
+                );
+            }
+        }
+
+        let import_text = generate_import_lines(fm) + content;
+
+        Ok(self.tera.render_str(&import_text, &context)?)
+    }
+
+    #[cfg(test)]
+    pub fn add_raw_template(
+        &mut self,
+        template_name: &str,
+        macro_str: &str,
+    ) -> std::result::Result<(), tera::Error> {
+        self.tera.add_raw_template(template_name, macro_str)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, default};
+    use std::collections::HashMap;
 
     use saphyr::Yaml;
-    use tera::Test;
 
     use crate::{error::TestResult, frontmatter::FrontMatter};
 

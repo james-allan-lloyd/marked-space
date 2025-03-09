@@ -17,6 +17,7 @@ mod confluence_storage_renderer;
 mod error;
 mod frontmatter;
 mod helpers;
+mod imports;
 mod link_generator;
 mod local_link;
 mod markdown_page;

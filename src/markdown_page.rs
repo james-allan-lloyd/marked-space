@@ -1,5 +1,6 @@
 use std::{
     fs::File,
+    io::{self},
     path::{Path, PathBuf},
 };
 
@@ -37,10 +38,11 @@ impl<'a> MarkdownPage<'a> {
     ) -> Result<MarkdownPage<'a>> {
         let source = markdown_space.space_relative_path_string(markdown_page)?;
         let file = File::open(markdown_page)?;
-        let fm = FrontMatter::from_reader(&file)?;
+        let mut reader = io::BufReader::new(file);
+        let (fm, original_content) = FrontMatter::from_reader(&mut reader)?;
 
         let content = template_renderer
-            .render_template(&source, &fm)
+            .render_template_str(&source, &original_content, &fm)
             .context(format!("Loading markdown from file {}", source))?;
         Self::parse_markdown(arena, source, markdown_page, &content, fm)
     }
@@ -53,9 +55,9 @@ impl<'a> MarkdownPage<'a> {
         source: String,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
-        let fm = FrontMatter::from_str(content)?;
+        let (fm, original_content) = FrontMatter::from_str(content)?;
         let content = template_renderer
-            .render_template_str(source.as_str(), content, &fm)
+            .render_template_str(source.as_str(), &original_content, &fm)
             .context(format!("Failed to render markdown from file {}", source))?;
         Self::parse_markdown(arena, source, markdown_page, &content, fm)
     }

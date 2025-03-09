@@ -21,11 +21,13 @@ pub struct FrontMatter {
     pub emoji: String,
     pub metadata: Yaml,
     pub unknown_keys: Vec<String>,
+    pub imports: Vec<String>,
 }
 
-enum ParseState {
-    BeforeFrontMatter,
-    InFrontMatter,
+enum FrontMatterParseState {
+    Before,
+    Inside,
+    After,
 }
 
 impl Default for FrontMatter {
@@ -35,47 +37,55 @@ impl Default for FrontMatter {
             emoji: String::default(),
             metadata: Yaml::Null,
             unknown_keys: Vec::default(),
+            imports: Vec::default(),
         }
     }
 }
 
 impl FrontMatter {
     #[cfg(test)]
-    pub fn from_str(s: &str) -> Result<FrontMatter> {
+    pub fn from_str(s: &str) -> Result<(FrontMatter, String)> {
         use std::io::Cursor;
-        Self::from_reader(Cursor::new(s))
+        Self::from_reader(&mut Cursor::new(s))
     }
 
-    pub fn from_reader(reader: impl std::io::Read) -> Result<FrontMatter> {
+    pub fn from_reader(reader: &mut dyn std::io::BufRead) -> Result<(FrontMatter, String)> {
         let mut front_matter_str = String::new();
-        let mut state = ParseState::BeforeFrontMatter;
-        let lines = io::BufReader::new(reader).lines();
+        let mut content_str = String::new();
+        let mut state = FrontMatterParseState::Before;
+        let lines = reader.lines();
         for line in lines.map_while(io::Result::ok) {
             match state {
-                ParseState::BeforeFrontMatter => {
+                FrontMatterParseState::Before => {
                     let trimmed_line = line.trim();
                     if trimmed_line == "---" {
-                        state = ParseState::InFrontMatter;
+                        state = FrontMatterParseState::Inside;
                     } else if !trimmed_line.is_empty() {
                         // found non frontmatter marker, assuming no front matter
-                        break;
+                        state = FrontMatterParseState::After;
+                        content_str.push_str(&line);
+                        content_str += "\n";
                     } else {
                         // whitespace before front matter
                     }
                 }
-                ParseState::InFrontMatter => {
+                FrontMatterParseState::Inside => {
                     if line.starts_with("---") {
-                        break; // end of front matter
+                        state = FrontMatterParseState::After;
                     } else {
                         front_matter_str.push_str(&line);
                         front_matter_str += "\n";
                     }
                 }
+                FrontMatterParseState::After => {
+                    content_str.push_str(&line);
+                    content_str += "\n";
+                }
             }
         }
 
         if front_matter_str.is_empty() {
-            return Ok(FrontMatter::default());
+            return Ok((FrontMatter::default(), content_str));
         }
 
         let yaml_fm_docs = Yaml::load_from_str(&front_matter_str)
@@ -88,7 +98,7 @@ impl FrontMatter {
             .into());
         }
 
-        static VALID_TOP_LEVEL_KEYS: [&str; 3] = ["emoji", "labels", "metadata"];
+        static VALID_TOP_LEVEL_KEYS: [&str; 4] = ["emoji", "labels", "metadata", "imports"];
         let string_keys: HashSet<&str> = yaml_fm
             .as_hash()
             .unwrap()
@@ -103,23 +113,35 @@ impl FrontMatter {
 
         unknown_keys.sort();
 
-        let mut labels: Vec<String> = Vec::default();
+        let labels = yaml_fm["labels"]
+            .as_vec()
+            .map(|v| {
+                v.iter()
+                    .map(|l| String::from(l.as_str().unwrap()))
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default();
 
-        if let Some(parsed_labels) = yaml_fm["labels"].as_vec().map(|v| {
-            v.iter()
-                .map(|l| String::from(l.as_str().unwrap()))
-                .collect::<Vec<String>>()
-        }) {
-            labels = parsed_labels;
-        }
+        let imports = yaml_fm["imports"]
+            .as_vec()
+            .map(|v| {
+                v.iter()
+                    .map(|l| String::from(l.as_str().unwrap()))
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default();
 
         let emoji = String::from(yaml_fm["emoji"].as_str().unwrap_or_default());
-        Ok(FrontMatter {
-            labels,
-            emoji,
-            metadata: yaml_fm["metadata"].clone(),
-            unknown_keys,
-        })
+        Ok((
+            FrontMatter {
+                labels,
+                emoji,
+                metadata: yaml_fm["metadata"].clone(),
+                unknown_keys,
+                imports,
+            },
+            content_str,
+        ))
     }
 }
 
@@ -154,18 +176,23 @@ gah = bar
 
     #[test]
     fn it_reads_frontmatter() -> TestResult {
-        let fm = FrontMatter::from_str(FRONT_MATTER_MD)?;
+        let (fm, _content) = FrontMatter::from_str(FRONT_MATTER_MD)?;
 
         assert_eq!(fm.labels, vec!["foo", "bar"]);
         assert_eq!(fm.emoji, "heart_eyes");
         assert_eq!(fm.metadata["some"]["arbitrary"].as_str(), Some("value"));
+
+        assert_eq!(
+            _content,
+            "# compulsory title\n{{ metadata.some.arbitrary }}\n"
+        );
 
         Ok(())
     }
 
     #[test]
     fn it_returns_empty_frontmatter_if_not_present() -> TestResult {
-        let fm = FrontMatter::from_str(EMPTY_MD)?;
+        let (fm, _content) = FrontMatter::from_str(EMPTY_MD)?;
         assert_eq!(fm.labels, Vec::<String>::default());
         assert_eq!(fm.emoji, String::default());
         assert!(fm.metadata.is_null());
@@ -174,7 +201,7 @@ gah = bar
 
     #[test]
     fn it_ignores_spaces_before_frontmatter() -> TestResult {
-        let fm = FrontMatter::from_str(&(String::from("\n   \n") + FRONT_MATTER_MD))?;
+        let (fm, _content) = FrontMatter::from_str(&(String::from("\n   \n") + FRONT_MATTER_MD))?;
         assert_eq!(fm.labels, vec!["foo", "bar"]);
         assert_eq!(fm.emoji, "heart_eyes");
         assert_eq!(fm.metadata["some"]["arbitrary"].as_str(), Some("value"));
