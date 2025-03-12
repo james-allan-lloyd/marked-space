@@ -4,3 +4,4 @@ example/
 .git/
 Dockerfile
 .env
+docker-build.sh
