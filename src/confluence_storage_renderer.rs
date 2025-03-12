@@ -79,7 +79,7 @@ impl Write for WriteWithLast<'_> {
 
 pub struct ConfluenceStorageRenderer<'o> {
     pub output: &'o mut WriteWithLast<'o>,
-    options: &'o Options,
+    options: &'o Options<'o>,
     footnote_ix: u32,
     written_footnote_ix: u32,
     link_generator: &'o LinkGenerator,
@@ -666,7 +666,7 @@ impl<'o> ConfluenceStorageRenderer<'o> {
             }
             NodeValue::ShortCode(ref nsc) => {
                 if entering {
-                    self.output.write_all(nsc.emoji().as_bytes())?;
+                    self.output.write_all(nsc.emoji.as_bytes())?;
                 }
             }
             NodeValue::Table(..) => {
@@ -818,6 +818,16 @@ impl<'o> ConfluenceStorageRenderer<'o> {
                     self.output.write_all(b"</ac:task-body></ac:task>\n")?;
                 }
             }
+            NodeValue::Raw(_) => (),
+            NodeValue::Math(ref _node_math) => (),
+            NodeValue::MultilineBlockQuote(_node_multiline_block_quote) => (),
+            NodeValue::Escaped => (),
+            NodeValue::WikiLink(ref _node_wiki_link) => (),
+            NodeValue::Underline => (),
+            NodeValue::Subscript => (),
+            NodeValue::SpoileredText => (),
+            NodeValue::EscapedTag(_) => (),
+            NodeValue::Alert(ref _node_alert) => (),
         }
         Ok(false)
     }

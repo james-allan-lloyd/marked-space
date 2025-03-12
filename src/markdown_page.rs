@@ -62,7 +62,7 @@ impl<'a> MarkdownPage<'a> {
         Self::parse_markdown(arena, source, markdown_page, &content, fm)
     }
 
-    fn options() -> Options {
+    fn options() -> Options<'a> {
         let mut options = Options::default();
         options.render.unsafe_ = true;
         // options.extension.autolink = true;
