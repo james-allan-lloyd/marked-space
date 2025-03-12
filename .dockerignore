@@ -2,6 +2,7 @@ target/
 output/
 example/
 .git/
+.github/
 Dockerfile
 .env
 docker-build.sh
