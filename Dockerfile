@@ -1,7 +1,23 @@
-FROM rust:1.84-bullseye as builder
+FROM --platform=$BUILDPLATFORM rust:1.84-bullseye AS builder
 WORKDIR /usr/src/marked-space
+
+# Install any required system dependencies for cross-compilation
+RUN apt-get update && apt-get install -y \
+  gcc-aarch64-linux-gnu \
+  gcc-arm-linux-gnueabihf libc6-armhf-cross libc6-dev-armhf-cross \
+  pkg-config
+
+# Copy the Rust files
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo 'fn main() {}' > src/main.rs  # Dummy file to force dependency resolution
+RUN cargo fetch
+
 COPY . .
-RUN cargo install --path .
+
+# Compile the Rust application based on the architecture
+# Architecture is determined by the --platform flag passed to docker buildx
+ARG TARGETARCH
+RUN bash ./rustup-target-add.sh
 
 FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
