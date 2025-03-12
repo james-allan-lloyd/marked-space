@@ -97,6 +97,10 @@ impl<'a> MarkdownSpace<'a> {
                     &mut template_renderer,
                 )?;
 
+                for warning in markdown_page.warnings.iter() {
+                    println!("Warning: {}", warning);
+                }
+
                 link_generator.register_markdown_page(&markdown_page)?;
 
                 let missing_files: Vec<String> = markdown_page

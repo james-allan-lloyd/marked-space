@@ -1,8 +1,12 @@
 use std::collections::HashMap;
 
-use tera::{self, Tera};
+use anyhow::bail;
+use saphyr::Yaml;
+use tera::{self, Tera, Value};
 
 use crate::error::Result;
+use crate::frontmatter::FrontMatter;
+use crate::imports::generate_import_lines;
 use crate::markdown_space::MarkdownSpace;
 
 pub struct TemplateRenderer {
@@ -77,6 +81,26 @@ format!(r#"<ac:structured-macro ac:name="contentbylabel" ac:schema-version="4" d
     )
 }
 
+fn make_metadata_lookup(metadata: Yaml) -> impl tera::Function {
+    Box::new(
+        move |args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
+            let mut current_yml = &metadata;
+            if let Some(path) = args.get("path") {
+                for arg in path.as_str().unwrap().split(".") {
+                    current_yml = &current_yml[arg];
+                }
+                if let Some(yaml_str) = current_yml.as_str() {
+                    Ok(Value::from(yaml_str))
+                } else {
+                    Ok(Value::Null)
+                }
+            } else {
+                Err("Missing parameter 'path'".into())
+            }
+        },
+    )
+}
+
 impl TemplateRenderer {
     pub fn new(space: &MarkdownSpace) -> Result<TemplateRenderer> {
         let mut tera = Tera::new(space.dir.join("**/*.md").into_os_string().to_str().unwrap())?;
@@ -102,23 +126,42 @@ impl TemplateRenderer {
         Ok(TemplateRenderer { tera })
     }
 
-    pub fn render_template(&mut self, source: &str) -> Result<String> {
+    pub fn render_template_str(
+        &mut self,
+        source: &str,
+        content: &str,
+        fm: &FrontMatter,
+    ) -> Result<String> {
         let mut context = tera::Context::new();
         context.insert("filename", &source);
+        self.tera
+            .register_function("metadata", make_metadata_lookup(fm.metadata.clone()));
 
-        let result = self.tera.render(&source.replace('\\', "/"), &context);
+        for import in fm.imports.iter() {
+            if !self
+                .tera
+                .get_template_names()
+                .any(|x| *x == String::from("_tera/") + import)
+            {
+                bail!(
+                    "Import '{}' does not exist under the _tera directory",
+                    import
+                );
+            }
+        }
 
-        Ok(result?)
+        let import_text = generate_import_lines(fm) + content;
+
+        Ok(self.tera.render_str(&import_text, &context)?)
     }
 
     #[cfg(test)]
-    pub fn expand_html_str(&mut self, source: &str, content: &str) -> Result<String> {
-        let mut context = tera::Context::new();
-        context.insert("filename", &source);
-
-        let result = self.tera.render_str(content, &context);
-
-        Ok(result?)
+    pub fn add_raw_template(
+        &mut self,
+        template_name: &str,
+        macro_str: &str,
+    ) -> std::result::Result<(), tera::Error> {
+        self.tera.add_raw_template(template_name, macro_str)
     }
 }
 
@@ -126,14 +169,20 @@ impl TemplateRenderer {
 mod test {
     use std::collections::HashMap;
 
-    use crate::error::TestResult;
+    use saphyr::Yaml;
+
+    use crate::{error::TestResult, frontmatter::FrontMatter};
 
     use super::{labellist, TemplateRenderer};
 
     #[test]
     fn it_puts_original_filename_in_message() -> TestResult {
         let mut template_renderer = TemplateRenderer::default()?;
-        let result = template_renderer.expand_html_str("test.md", "{{ func_does_not_exist() }}");
+        let result = template_renderer.render_template_str(
+            "test.md",
+            "{{ func_does_not_exist() }}",
+            &FrontMatter::default(),
+        );
         assert!(result.is_err());
         assert_eq!(
             format!("{:#}", result.unwrap_err()),
@@ -159,6 +208,38 @@ mod test {
         let s = result.unwrap();
         println!("s: {:#}", s);
         assert!(s.to_string().contains(r#"label in (\"foo\",\"bar\")"#));
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_handles_different_metadata_across_files() -> TestResult {
+        let fm1 = FrontMatter {
+            metadata: Yaml::load_from_str("key: value").unwrap()[0].clone(),
+            ..Default::default()
+        };
+
+        let mut template_renderer = TemplateRenderer::default()?;
+        let result = template_renderer.render_template_str(
+            "test.md",
+            "{{ metadata(path=\"key\") }}",
+            &fm1,
+        )?;
+
+        assert_eq!(result, "value");
+
+        let fm2 = FrontMatter {
+            metadata: Yaml::load_from_str("other_key: other_value").unwrap()[0].clone(),
+            ..Default::default()
+        };
+
+        let result2 = template_renderer.render_template_str(
+            "test2.md",
+            "{{ metadata(path=\"other_key\") }}",
+            &fm2,
+        )?;
+
+        assert_eq!(result2, "other_value");
 
         Ok(())
     }

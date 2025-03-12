@@ -41,20 +41,18 @@ pub(crate) fn get_property_updates(
 }
 
 pub(crate) fn parse_emoji(page: &MarkdownPage) -> Option<String> {
-    page.front_matter
-        .as_ref()
-        .and_then(|fm| fm.emoji.as_ref())
-        .and_then(|emoji_string| {
-            if let Some(emoji) = emojis::get_by_shortcode(emoji_string) {
-                Some(format!(
-                    "{:x}",
-                    emoji.as_str().chars().next().unwrap() as u32
-                ))
-            } else {
-                println!("Unknown short code '{}'", &emoji_string);
-                None
-            }
-        })
+    let emoji_string = &page.front_matter.emoji;
+    if emoji_string.is_empty() {
+        None
+    } else if let Some(emoji) = emojis::get_by_shortcode(emoji_string) {
+        Some(format!(
+            "{:x}",
+            emoji.as_str().chars().next().unwrap() as u32
+        ))
+    } else {
+        println!("Unknown short code '{}'", &emoji_string);
+        None
+    }
 }
 
 #[cfg(test)]

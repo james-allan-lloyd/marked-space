@@ -1,28 +1,22 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs::File,
+    io::{self},
+    path::{Path, PathBuf},
+};
 
 use crate::{
     checksum::sha256_digest, confluence_page::ConfluencePage,
-    confluence_storage_renderer::render_confluence_storage, helpers::collect_text,
-    link_generator::LinkGenerator, local_link::LocalLink, markdown_space::MarkdownSpace,
-    parent::get_parent_file, template_renderer::TemplateRenderer,
+    confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
+    helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
+    markdown_space::MarkdownSpace, parent::get_parent_file, template_renderer::TemplateRenderer,
 };
 use anyhow::Context;
 use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options,
 };
-use serde::Deserialize;
 
 use crate::{error::ConfluenceError, Result};
-
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct FrontMatter {
-    #[serde(default)]
-    pub labels: Vec<String>,
-
-    #[serde(default)]
-    pub emoji: Option<String>,
-}
 
 pub struct MarkdownPage<'a> {
     pub title: String,
@@ -30,7 +24,9 @@ pub struct MarkdownPage<'a> {
     root: &'a AstNode<'a>,
     pub attachments: Vec<PathBuf>,
     pub local_links: Vec<LocalLink>,
-    pub front_matter: Option<FrontMatter>,
+    pub front_matter: FrontMatter,
+
+    pub warnings: Vec<String>,
 }
 
 impl<'a> MarkdownPage<'a> {
@@ -41,10 +37,14 @@ impl<'a> MarkdownPage<'a> {
         template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
         let source = markdown_space.space_relative_path_string(markdown_page)?;
+        let file = File::open(markdown_page)?;
+        let mut reader = io::BufReader::new(file);
+        let (fm, original_content) = FrontMatter::from_reader(&mut reader)?;
+
         let content = template_renderer
-            .render_template(&source)
+            .render_template_str(&source, &original_content, &fm)
             .context(format!("Loading markdown from file {}", source))?;
-        Self::parse_markdown(arena, source, markdown_page, &content)
+        Self::parse_markdown(arena, source, markdown_page, &content, fm)
     }
 
     #[cfg(test)]
@@ -55,8 +55,11 @@ impl<'a> MarkdownPage<'a> {
         source: String,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
-        let content = template_renderer.expand_html_str(source.as_str(), content)?;
-        Self::parse_markdown(arena, source, markdown_page, &content)
+        let (fm, original_content) = FrontMatter::from_str(content)?;
+        let content = template_renderer
+            .render_template_str(source.as_str(), &original_content, &fm)
+            .context(format!("Failed to render markdown from file {}", source))?;
+        Self::parse_markdown(arena, source, markdown_page, &content, fm)
     }
 
     fn options() -> Options {
@@ -77,6 +80,7 @@ impl<'a> MarkdownPage<'a> {
         source: String,
         markdown_page: &Path,
         content: &str,
+        fm: FrontMatter,
     ) -> Result<MarkdownPage<'a>> {
         let parent = markdown_page.parent().unwrap();
         let root: &AstNode<'_> = parse_document(arena, content, &Self::options());
@@ -92,27 +96,18 @@ impl<'a> MarkdownPage<'a> {
         }
 
         let mut errors = Vec::<String>::default();
+        let mut warnings = Vec::<String>::default();
+        if !fm.unknown_keys.is_empty() {
+            warnings.push(format!(
+                "Unknown top level front matter keys: {}",
+                fm.unknown_keys.join(", "),
+            ));
+        }
+
         let mut attachments = Vec::<PathBuf>::default();
         let mut local_links = Vec::<LocalLink>::default();
         let mut first_heading: Option<&AstNode> = None;
-        let mut front_matter: Option<FrontMatter> = None;
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
-            NodeValue::FrontMatter(front_matter_str) => {
-                let front_matter_str = front_matter_str
-                    .trim()
-                    .strip_prefix("---")
-                    .unwrap()
-                    .strip_suffix("---")
-                    .unwrap();
-                match serde_yaml::from_str(front_matter_str) {
-                    Ok(front_matter_yaml) => {
-                        front_matter = Some(front_matter_yaml);
-                    }
-                    Err(err) => {
-                        errors.push(format!("Couldn't parse front matter: {}", err));
-                    }
-                }
-            }
             NodeValue::Heading(_heading) => {
                 if first_heading.is_none() {
                     first_heading = Some(node);
@@ -174,7 +169,8 @@ impl<'a> MarkdownPage<'a> {
                 root,
                 attachments,
                 local_links,
-                front_matter,
+                warnings,
+                front_matter: fm,
             })
         } else {
             Err(ConfluenceError::parsing_errors(source, errors))
@@ -266,7 +262,7 @@ mod tests {
     use crate::confluence_page::ConfluencePage;
     use crate::error::TestResult;
     use crate::link_generator::LinkGenerator;
-    use crate::markdown_page::{FrontMatter, LocalLink};
+    use crate::markdown_page::LocalLink;
     use crate::responses::Version;
 
     #[test]
@@ -539,13 +535,95 @@ labels:
 
         let page = page_from_str("page.md", markdown_content, &arena)?;
 
+        let expected_labels = vec!["foo", "bar"];
+
+        assert_eq!(page.front_matter.labels, expected_labels);
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_warns_about_unknown_keys() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = r##"---
+unknown_top_level_key: "foo"
+page_emoji: "and typos"
+---
+# compulsory title
+"##;
+
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+
         assert_eq!(
-            page.front_matter,
-            Some(FrontMatter {
-                labels: vec!["foo".to_string(), "bar".to_string()],
-                emoji: None
-            })
+            page.warnings,
+            vec!["Unknown top level front matter keys: page_emoji, unknown_top_level_key"]
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_fails_if_front_matter_is_invalid_yaml() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = r##"---
+[some section]
+foo=bar
+---
+# compulsory title
+"##;
+
+        let result = page_from_str("page.md", markdown_content, &arena);
+
+        assert!(result.is_err());
+
+        if let Err(err) = result {
+            assert!(
+                format!("{:?}", err).contains("Failed to parse front matter as YAML"),
+                "Error did not contain expected error message, actual mesage: {:?}",
+                err
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_allows_metadata() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = r##"---
+metadata:
+    some:
+        arbitrary: "value"
+---
+# compulsory title
+"##;
+
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+
+        assert_eq!(
+            page.front_matter.metadata["some"]["arbitrary"].as_str(),
+            Some("value")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_has_metadata_as_variables() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = r##"---
+metadata:
+    some:
+        arbitrary: "value"
+---
+# compulsory title
+{{ metadata(path="some.arbitrary") }}
+"##;
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+
+        let rendered_page = page.render(&LinkGenerator::default())?;
+
+        assert_eq!(rendered_page.content.trim(), "<p>value</p>");
 
         Ok(())
     }

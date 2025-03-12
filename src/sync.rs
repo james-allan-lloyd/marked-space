@@ -240,9 +240,11 @@ pub fn sync_space<'a>(
             &existing_page.id,
             &markdown_page.attachments,
         )?;
-        if let Some(front_matter) = &markdown_page.front_matter {
-            sync_page_labels(&confluence_client, &existing_page.id, &front_matter.labels)?;
-        }
+        sync_page_labels(
+            &confluence_client,
+            &existing_page.id,
+            &markdown_page.front_matter.labels,
+        )?;
         sync_page_properties(&confluence_client, markdown_page, &existing_page.id)?;
     }
 
