@@ -48,6 +48,54 @@ fn children(
     )
 }
 
+fn properties_report(
+    args: &HashMap<String, serde_json::Value>,
+) -> std::result::Result<serde_json::Value, tera::Error> {
+    // We already know the space
+    let space = args
+        .get(&"space".to_string())
+        .ok_or("Missing required argument 'space'")?;
+
+    let label = args
+        .get(&"label".to_string())
+        .ok_or("Missing required argument 'label'")?;
+
+    Ok(
+        serde_json::to_value(
+            format!(r#"<ac:structured-macro ac:name="detailssummary" ac:schema-version="2">
+		<ac:parameter ac:name="firstcolumn">Title</ac:parameter>
+		<ac:parameter ac:name="sortBy">Title</ac:parameter>
+		<ac:parameter ac:name="cql">space = {} and label = {}</ac:parameter>
+    </ac:structured-macro>"#, space, label)
+        ).unwrap()
+    )
+}
+
+fn properties(
+    _args: &HashMap<String, serde_json::Value>,
+) -> std::result::Result<serde_json::Value, tera::Error> {
+    // TODO: Read these from the properties section from frontmatter
+    let status = "New";
+    let owner = "John Doe";
+
+    let structure = format!("\\<ac:structured-macro ac:name=\"details\" ac:schema-version=\"1\"\\>\
+        \\<ac:rich-text-body\\>\
+            <table>\
+                <tbody>\
+                    <tr><th><strong>Status</strong></th><td>{}</td></tr>\
+                    <tr><th><strong>Owner</strong></th><td>{}</td></tr>\
+                </tbody>\
+            </table>\
+        \\</ac:rich-text-body\\>\
+    \\</ac:structured-macro\\>", status, owner);
+
+    Ok(
+        serde_json::to_value(structure).unwrap()
+    )
+}
+
+
+
 fn labellist(
     args: &HashMap<String, serde_json::Value>,
 ) -> std::result::Result<serde_json::Value, tera::Error> {
@@ -115,6 +163,8 @@ impl TemplateRenderer {
         tera.register_function("toc", toc);
         tera.register_function("children", children);
         tera.register_function("labellist", labellist);
+        tera.register_function("properties_report", properties_report);
+        tera.register_function("properties", properties);
         Ok(())
     }
 
