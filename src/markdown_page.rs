@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    checksum::sha256_digest, confluence_page::ConfluencePage,
+    attachment::attachment_from, checksum::sha256_digest, confluence_page::ConfluencePage,
     confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
     helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
     markdown_space::MarkdownSpace, parent::get_parent_file, template_renderer::TemplateRenderer,
@@ -120,9 +120,10 @@ impl<'a> MarkdownPage<'a> {
             }
             NodeValue::Image(image) => {
                 if !image.url.starts_with("http") {
-                    let mut attachment_path = PathBuf::from(parent);
-                    attachment_path.push(image.url.clone());
-                    attachments.push(attachment_path);
+                    // let mut attachment_path = PathBuf::from(parent);
+                    // attachment_path.push(image.url.clone());
+                    println!("XXX {} {}", &image.url, &source);
+                    attachments.push(attachment_from(&image.url, parent));
                 }
             }
             NodeValue::Link(node_link) => {

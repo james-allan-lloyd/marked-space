@@ -171,7 +171,7 @@ mod tests {
 
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
-    use crate::link_generator::LinkGenerator;
+    use crate::{error::TestResult, link_generator::LinkGenerator};
 
     use super::MarkdownSpace;
 
@@ -319,5 +319,36 @@ mod tests {
         assert!(acutal_error.contains(
             "Missing file for attachment link in [subpage/image.md] to [subpage/image_does_not_exist.png]"
         ));
+    }
+
+    #[test]
+    fn it_links_attachments_in_subdirs_without_index_md() -> TestResult {
+        let temp = assert_fs::TempDir::new()?;
+        temp.child("test/index.md").write_str("# Space Index")?;
+        temp.child("test/champion-program/index.md")
+            .write_str("# Page 1\nLink to image: ![Data Model](assets/datamodel.drawio.png)\n")?;
+        temp.child("test/champion-program/assets/datamodel.drawio.png") // doesn't actually check the content, of course.
+            .touch()?;
+
+        let result = MarkdownSpace::from_directory(temp.child("test").path());
+
+        assert!(result.is_ok());
+
+        let space = result.unwrap();
+
+        let result = space.parse(&mut LinkGenerator::default())?;
+
+        let page = &result[0];
+
+        assert_eq!(page.warnings, Vec::<String>::default());
+
+        assert_eq!(
+            page.attachments,
+            vec![temp
+                .child("test/champion-program/assets/datamodel.drawio.png")
+                .path()]
+        );
+
+        Ok(())
     }
 }

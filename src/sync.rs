@@ -2,13 +2,14 @@ use std::{
     collections::{HashMap, HashSet},
     fs::{create_dir_all, File},
     io::{BufReader, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Ok};
 use serde_json::json;
 
 use crate::{
+    attachment::attachment_name,
     checksum::sha256_digest,
     confluence_client::ConfluenceClient,
     confluence_page::ConfluencePage,
@@ -27,6 +28,7 @@ fn sync_page_attachments(
     confluence_client: &ConfluenceClient,
     page_id: &str,
     attachments: &[PathBuf],
+    page_path: &Path,
 ) -> Result<()> {
     let existing_attachments: MultiEntityResult<Attachment> = confluence_client
         .get_attachments(page_id)?
@@ -53,7 +55,8 @@ fn sync_page_attachments(
     }
 
     for attachment in attachments.iter() {
-        let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
+        // let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
+        let filename = attachment_name(attachment, page_path.parent().unwrap())?;
 
         remove_titles_to_id.remove(&filename);
 
@@ -239,6 +242,7 @@ pub fn sync_space<'a>(
             &confluence_client,
             &existing_page.id,
             &markdown_page.attachments,
+            &PathBuf::from(markdown_page.source.clone()),
         )?;
         sync_page_labels(
             &confluence_client,

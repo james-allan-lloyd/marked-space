@@ -8,6 +8,7 @@ use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
 use markdown_space::MarkdownSpace;
 
+mod attachment;
 mod checksum;
 mod confluence_client;
 mod confluence_page;
