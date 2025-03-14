@@ -2,14 +2,15 @@ use std::{
     collections::{HashMap, HashSet},
     fs::{create_dir_all, File},
     io::{BufReader, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use anyhow::{Context, Ok};
+use reqwest::blocking::multipart::Part;
 use serde_json::json;
 
 use crate::{
-    attachment::attachment_name,
+    attachment::ImageAttachment,
     checksum::sha256_digest,
     confluence_client::ConfluenceClient,
     confluence_page::ConfluencePage,
@@ -27,8 +28,7 @@ use crate::{
 fn sync_page_attachments(
     confluence_client: &ConfluenceClient,
     page_id: &str,
-    attachments: &[PathBuf],
-    page_path: &Path,
+    attachments: &[ImageAttachment],
 ) -> Result<()> {
     let existing_attachments: MultiEntityResult<Attachment> = confluence_client
         .get_attachments(page_id)?
@@ -56,23 +56,34 @@ fn sync_page_attachments(
 
     for attachment in attachments.iter() {
         // let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
-        let filename = attachment_name(attachment, page_path.parent().unwrap())?;
+        let attachment_name = attachment.name.clone();
 
-        remove_titles_to_id.remove(&filename);
+        remove_titles_to_id.remove(&attachment_name);
 
-        let op = SyncOperation::start(format!("[{}] attachment", filename), true);
-        let input = File::open(attachment)
-            .with_context(|| format!("Opening attachment for {}", filename))?;
+        let op = SyncOperation::start(format!("[{}] attachment", attachment.path.display()), true);
+        let input = File::open(&attachment.path)
+            .with_context(|| format!("Opening attachment for {}", attachment_name))?;
         let reader = BufReader::new(input);
         let hashstring = sha256_digest(reader)?;
-        if hashes.contains_key(&filename) && hashstring == *hashes.get(&filename).unwrap() {
+        if hashes.contains_key(&attachment_name)
+            && hashstring == *hashes.get(&attachment_name).unwrap()
+        {
             op.end(SyncOperationResult::Skipped);
             return Ok(());
         }
 
-        let _resp = confluence_client
-            .create_or_update_attachment(page_id, attachment, &hashstring)?
-            .error_for_status()?;
+        let file_part = Part::file(&attachment.path)?.file_name(attachment.name.clone());
+
+        let response =
+            confluence_client.create_or_update_attachment(page_id, file_part, &hashstring)?;
+
+        if !response.status().is_success() {
+            // Handle non-2xx responses (e.g., 400 Bad Request)
+            let status = response.status();
+            let error_body = response.text()?;
+            println!("Error! Status: {}, Body: {}", status, error_body);
+        }
+
         op.end(SyncOperationResult::Updated);
     }
 
@@ -242,7 +253,6 @@ pub fn sync_space<'a>(
             &confluence_client,
             &existing_page.id,
             &markdown_page.attachments,
-            &PathBuf::from(markdown_page.source.clone()),
         )?;
         sync_page_labels(
             &confluence_client,

@@ -1,6 +1,6 @@
-use reqwest::blocking::multipart::Form;
+use reqwest::blocking::multipart::{Form, Part};
 use serde_json::Value;
-use std::{env, path::Path};
+use std::env;
 
 pub struct ConfluenceClient {
     client: reqwest::blocking::Client,
@@ -9,7 +9,7 @@ pub struct ConfluenceClient {
     pub hostname: String,
 }
 
-pub type Result = std::result::Result<reqwest::blocking::Response, reqwest::Error>;
+pub type Result = anyhow::Result<reqwest::blocking::Response, reqwest::Error>;
 
 impl ConfluenceClient {
     pub fn new(hostname: &str) -> ConfluenceClient {
@@ -75,7 +75,7 @@ impl ConfluenceClient {
     pub fn create_or_update_attachment(
         &self,
         content_id: &str,
-        filename: &Path,
+        file_part: Part,
         hash: &String,
     ) -> Result {
         let url = format!(
@@ -85,8 +85,7 @@ impl ConfluenceClient {
         let form = Form::new()
             .text("minorEdit", "true")
             .text("comment", format!("hash:{}", hash))
-            .file("file", filename)
-            .unwrap();
+            .part("file", file_part);
 
         self.client
             .put(url)

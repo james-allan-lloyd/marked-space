@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    attachment::attachment_from, checksum::sha256_digest, confluence_page::ConfluencePage,
+    attachment::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePage,
     confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
     helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
     markdown_space::MarkdownSpace, parent::get_parent_file, template_renderer::TemplateRenderer,
@@ -22,7 +22,7 @@ pub struct MarkdownPage<'a> {
     pub title: String,
     pub source: String,
     root: &'a AstNode<'a>,
-    pub attachments: Vec<PathBuf>,
+    pub attachments: Vec<ImageAttachment>,
     pub local_links: Vec<LocalLink>,
     pub front_matter: FrontMatter,
 
@@ -104,7 +104,7 @@ impl<'a> MarkdownPage<'a> {
             ));
         }
 
-        let mut attachments = Vec::<PathBuf>::default();
+        let mut attachments = Vec::<ImageAttachment>::default();
         let mut local_links = Vec::<LocalLink>::default();
         let mut first_heading: Option<&AstNode> = None;
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
@@ -120,10 +120,7 @@ impl<'a> MarkdownPage<'a> {
             }
             NodeValue::Image(image) => {
                 if !image.url.starts_with("http") {
-                    // let mut attachment_path = PathBuf::from(parent);
-                    // attachment_path.push(image.url.clone());
-                    println!("XXX {} {}", &image.url, &source);
-                    attachments.push(attachment_from(&image.url, parent));
+                    attachments.push(ImageAttachment::new(&image.url, parent));
                 }
             }
             NodeValue::Link(node_link) => {

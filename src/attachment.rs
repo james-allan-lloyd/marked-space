@@ -1,43 +1,34 @@
 use std::{io::{self, Write}, path::{Path, PathBuf}};
 
 use comrak::nodes::NodeLink;
-use anyhow::anyhow;
+use regex::Regex;
 
 use crate::confluence_storage_renderer::{escape_href, WriteWithLast};
 
 
+#[derive(Debug, PartialEq)]
 pub struct ImageAttachment {
     pub url: String,  // how this was specified in the markdown
-    pub path: PathBuf,
+    pub path: PathBuf, // the full path to the file
+    pub name: String, // a simple name
 }
 
 impl ImageAttachment {
-    
-    fn new(url: &str, page_path: &Path) -> Self {
+    pub fn new(url: &str, page_path: &Path) -> Self {
         let mut path = PathBuf::from(page_path);
         path.push(url);
 
         ImageAttachment {
             path,
-            url: String::from(url)
+            url: String::from(url),
+            name: link_to_name(url)
         }
     }
 }
 
-pub fn attachment_from(image_url: &str, page_path: &Path) -> PathBuf {
-    let mut attachment_path = PathBuf::from(page_path);
-    attachment_path.push(image_url);
-    attachment_path
-}
-
-pub fn attachment_name(image_path: &Path, page_path: &Path) -> anyhow::Result<String> {
-    // if let Ok(relative_path) = image_path.strip_prefix(page_path) {
-    //     Ok(relative_path.to_str().unwrap().into())
-    // }
-    // else {
-    //     Err(anyhow!("Missing prefix {} from {}", page_path.display(), image_path.display()))
-    // }
-    Ok(image_path.to_str().unwrap().into())
+fn link_to_name(url: &str) -> String {
+    let re = Regex::new(r"[/\\]").unwrap();
+    re.replace_all(url, "_").into()
 }
 
 pub fn render_link_enter(nl: &NodeLink, output: &mut WriteWithLast) -> io::Result<()> {
@@ -48,12 +39,13 @@ pub fn render_link_enter(nl: &NodeLink, output: &mut WriteWithLast) -> io::Resul
     output.write_all(b">")?;
     if nl.url.contains("://") {
         output.write_all(b"<ri:url ri:value=\"")?;
+        escape_href(output, nl.url.as_bytes())?;
     } else {
         output.write_all(b"<ri:attachment ri:filename=\"")?;
+        let url = link_to_name(&nl.url);
+        output.write_all(url.as_bytes())?;
     }
 
-    let url = nl.url.as_bytes();
-    escape_href(output, url)?;
     output.write_all(b"\"/>")?;
 
     Ok(())
@@ -106,30 +98,29 @@ mod test {
         render_link_leave(&nl, &mut output)?;
 
         assert_eq!(String::from_utf8(cursor.into_inner()).unwrap(), 
-            "<ac:image ac:align=\"center\" ac:title=\"some title\"><ri:attachment ri:filename=\"assets/image.png\"/></ac:image>"
+            "<ac:image ac:align=\"center\" ac:title=\"some title\"><ri:attachment ri:filename=\"assets_image.png\"/></ac:image>"
         );
 
         Ok(())
     }
 
     #[test]
-    fn it_names_attachments_with_slashes() -> TestResult {
-        let image_path = PathBuf::from("/tmp/foo/bar/assets/image.png");
-        let page_path = PathBuf::from("/tmp/foo/bar");
-        let image_name = attachment_name(&image_path, &page_path)?;
+    fn it_renders_image_link_in_subdirectories() {
+        // Cannot upload files with names that contain slashes... confluence will strip the
+        // directories and you'll end up with a broken link in the confluence page. Instead we
+        // replace slashes with underscore.
+        let image_name = link_to_name("./assets/image.png");
 
-        assert_eq!(image_name, "assets/image.png");
-
-        Ok(())
+        assert_eq!(image_name, "._assets_image.png");
     }
 
     #[test]
     fn it_makes_absolute_path() -> TestResult {
         let image_url = String::from("./assets/image.png");
         let page_path = PathBuf::from("/tmp/foo/bar");
-        let attachment = attachment_from(&image_url, &page_path);
+        let attachment = ImageAttachment::new(&image_url, &page_path);
 
-        assert_eq!(attachment, PathBuf::from("/tmp/foo/bar/assets/image.png"));
+        assert_eq!(attachment.path, PathBuf::from("/tmp/foo/bar/assets/image.png"));
 
         Ok(())
     }
