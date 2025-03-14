@@ -127,8 +127,8 @@ impl<'a> MarkdownSpace<'a> {
                     .attachments
                     .iter()
                     .filter_map(|attachment| {
-                        if !attachment.exists() {
-                            Some(self.space_relative_path_string(attachment).unwrap())
+                        if !attachment.path.exists() {
+                            Some(self.space_relative_path_string(&attachment.path).unwrap())
                         } else {
                             None
                         }
@@ -167,11 +167,12 @@ impl<'a> MarkdownSpace<'a> {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::anyhow;
     use std::path::{Path, PathBuf};
 
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
-    use crate::link_generator::LinkGenerator;
+    use crate::{attachment::ImageAttachment, error::TestResult, link_generator::LinkGenerator};
 
     use super::MarkdownSpace;
 
@@ -319,5 +320,40 @@ mod tests {
         assert!(acutal_error.contains(
             "Missing file for attachment link in [subpage/image.md] to [subpage/image_does_not_exist.png]"
         ));
+    }
+
+    #[test]
+    fn it_links_attachments_in_subdirs_without_index_md() -> TestResult {
+        let temp = assert_fs::TempDir::new()?;
+        temp.child("test/index.md").write_str("# Space Index")?;
+        let temp_markdown = temp.child("test/subdir/index.md");
+        temp_markdown.write_str("# Page 1\nLink to image: ![Data Model](assets/image.png)\n")?;
+        let temp_image = temp.child("test/subdir/assets/image.png"); // doesn't actually check the content, of course.
+        temp_image.touch()?;
+
+        let result = MarkdownSpace::from_directory(temp.child("test").path());
+
+        assert!(result.is_ok());
+
+        let space = result.unwrap();
+
+        let result = space.parse(&mut LinkGenerator::default())?;
+
+        let page = &result
+            .iter()
+            .find(|x| x.title == "Page 1")
+            .ok_or(anyhow!("No page"))?;
+
+        assert_eq!(page.warnings, Vec::<String>::default());
+
+        assert_eq!(
+            page.attachments,
+            vec![ImageAttachment::new(
+                "assets/image.png",
+                temp_markdown.path().parent().unwrap()
+            )]
+        );
+
+        Ok(())
     }
 }

@@ -11,6 +11,7 @@ use std::str;
 
 use once_cell::sync::Lazy;
 
+use crate::attachment::{render_link_enter, render_link_leave};
 use crate::link_generator::LinkGenerator;
 
 #[rustfmt::skip]
@@ -46,10 +47,7 @@ pub fn render_confluence_storage<'a>(
     link_generator: &LinkGenerator,
     source: &Path,
 ) -> io::Result<()> {
-    let mut writer = WriteWithLast {
-        output,
-        last_was_lf: Cell::new(true),
-    };
+    let mut writer = WriteWithLast::from_write(output);
     let mut f = ConfluenceStorageRenderer::new(options, &mut writer, link_generator, source);
     f.format(root, false)?;
     if f.footnote_ix > 0 {
@@ -61,6 +59,15 @@ pub fn render_confluence_storage<'a>(
 pub struct WriteWithLast<'w> {
     output: &'w mut dyn Write,
     last_was_lf: Cell<bool>,
+}
+
+impl<'w> WriteWithLast<'w> {
+    pub fn from_write(output: &'w mut dyn Write) -> Self {
+        Self {
+            output,
+            last_was_lf: Cell::new(true),
+        }
+    }
 }
 
 impl Write for WriteWithLast<'_> {
@@ -644,24 +651,10 @@ impl<'o> ConfluenceStorageRenderer<'o> {
             }
             NodeValue::Image(ref nl) => {
                 if entering {
-                    self.output.write_all(br#"<ac:image ac:align="center""#)?;
-                    if !nl.title.is_empty() {
-                        self.output
-                            .write_all(format!(" ac:title=\"{}\"", nl.title).as_bytes())?;
-                    }
-                    self.output.write_all(b">")?;
-                    if nl.url.contains("://") {
-                        self.output.write_all(b"<ri:url ri:value=\"")?;
-                    } else {
-                        self.output.write_all(b"<ri:attachment ri:filename=\"")?;
-                    }
-
-                    let url = nl.url.as_bytes();
-                    self.escape_href(url)?;
-                    self.output.write_all(b"\"/>")?;
+                    render_link_enter(nl, self.output)?;
                     return Ok(true);
                 } else {
-                    self.output.write_all(b"</ac:image>")?;
+                    render_link_leave(nl, self.output)?;
                 }
             }
             NodeValue::ShortCode(ref nsc) => {
