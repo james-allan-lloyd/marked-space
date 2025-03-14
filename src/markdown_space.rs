@@ -167,6 +167,7 @@ impl<'a> MarkdownSpace<'a> {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::anyhow;
     use std::path::{Path, PathBuf};
 
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
@@ -338,7 +339,10 @@ mod tests {
 
         let result = space.parse(&mut LinkGenerator::default())?;
 
-        let page = &result[0];
+        let page = &result
+            .iter()
+            .find(|x| x.title == "Page 1")
+            .ok_or(anyhow!("No page"))?;
 
         assert_eq!(page.warnings, Vec::<String>::default());
 
