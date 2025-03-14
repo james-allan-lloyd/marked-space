@@ -325,10 +325,9 @@ mod tests {
     fn it_links_attachments_in_subdirs_without_index_md() -> TestResult {
         let temp = assert_fs::TempDir::new()?;
         temp.child("test/index.md").write_str("# Space Index")?;
-        let temp_markdown = temp.child("test/champion-program/index.md");
-        temp_markdown
-            .write_str("# Page 1\nLink to image: ![Data Model](assets/datamodel.drawio.png)\n")?;
-        let temp_image = temp.child("test/champion-program/assets/datamodel.drawio.png"); // doesn't actually check the content, of course.
+        let temp_markdown = temp.child("test/subdir/index.md");
+        temp_markdown.write_str("# Page 1\nLink to image: ![Data Model](assets/image.png)\n")?;
+        let temp_image = temp.child("test/subdir/assets/image.png"); // doesn't actually check the content, of course.
         temp_image.touch()?;
 
         let result = MarkdownSpace::from_directory(temp.child("test").path());
@@ -346,7 +345,7 @@ mod tests {
         assert_eq!(
             page.attachments,
             vec![ImageAttachment::new(
-                "assets/datamodel.drawio.png",
+                "assets/image.png",
                 temp_markdown.path().parent().unwrap()
             )]
         );
