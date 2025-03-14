@@ -1,16 +1,18 @@
-use std::{io::{self, Write}, path::{Path, PathBuf}};
+use std::{
+    io::{self, Write},
+    path::{Path, PathBuf},
+};
 
 use comrak::nodes::NodeLink;
 use regex::Regex;
 
 use crate::confluence_storage_renderer::{escape_href, WriteWithLast};
 
-
 #[derive(Debug, PartialEq)]
 pub struct ImageAttachment {
-    pub url: String,  // how this was specified in the markdown
+    pub url: String,   // how this was specified in the markdown
     pub path: PathBuf, // the full path to the file
-    pub name: String, // a simple name
+    pub name: String,  // a simple name
 }
 
 impl ImageAttachment {
@@ -21,7 +23,7 @@ impl ImageAttachment {
         ImageAttachment {
             path,
             url: String::from(url),
-            name: link_to_name(url)
+            name: link_to_name(url),
         }
     }
 }
@@ -78,7 +80,7 @@ mod test {
         render_link_enter(&nl, &mut output)?;
         render_link_leave(&nl, &mut output)?;
 
-        assert_eq!(String::from_utf8(cursor.into_inner()).unwrap(), 
+        assert_eq!(String::from_utf8(cursor.into_inner()).unwrap(),
             "<ac:image ac:align=\"center\" ac:title=\"some title\"><ri:attachment ri:filename=\"image.png\"/></ac:image>"
         );
 
@@ -97,7 +99,7 @@ mod test {
         render_link_enter(&nl, &mut output)?;
         render_link_leave(&nl, &mut output)?;
 
-        assert_eq!(String::from_utf8(cursor.into_inner()).unwrap(), 
+        assert_eq!(String::from_utf8(cursor.into_inner()).unwrap(),
             "<ac:image ac:align=\"center\" ac:title=\"some title\"><ri:attachment ri:filename=\"assets_image.png\"/></ac:image>"
         );
 
@@ -120,10 +122,11 @@ mod test {
         let page_path = PathBuf::from("/tmp/foo/bar");
         let attachment = ImageAttachment::new(&image_url, &page_path);
 
-        assert_eq!(attachment.path, PathBuf::from("/tmp/foo/bar/assets/image.png"));
+        assert_eq!(
+            attachment.path,
+            PathBuf::from("/tmp/foo/bar/assets/image.png")
+        );
 
         Ok(())
     }
-
-
 }
