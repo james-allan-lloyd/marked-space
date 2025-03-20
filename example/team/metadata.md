@@ -1,7 +1,7 @@
 ---
 metadata:
   author: Olivia
-  status: Approved
+  status: on track
 emoji: heart_eyes
 imports:
   - adr.md
