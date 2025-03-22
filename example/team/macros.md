@@ -27,7 +27,8 @@ Which should give:
 {{macros::example_macro(name='Your Name')}}
 ```
 
-Note that you _must_ use the keyword arguments or Tera will complain "expected an identifier".
+Note that you _must_ use the keyword arguments or Tera will complain "expected
+an identifier".
 
 You can also [include templates](https://keats.github.io/tera/docs/#include)
 from the `_tera` directory, and even [extend
@@ -64,4 +65,3 @@ whitespace" marker - ie, a `-` next to the opening and closing tera tag, ala
 
 Using the 'View Storage Format' is also a good way to debug when the template
 generation doesn't seem to be working.
-

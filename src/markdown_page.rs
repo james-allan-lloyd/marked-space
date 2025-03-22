@@ -391,9 +391,43 @@ mod tests {
         let link_url = String::from("https://my.atlassian.net/wiki/spaces/TEAM/pages/47");
         let arena = Arena::<AstNode>::new();
         let markdown_content = &format!(
-            "# My Page Title\n\nMy page content: [{}]({})",
+            "# My Page Title\n\nMy page content: [{}](./hello-world.md)",
             link_text,
-            link_filename.display()
+            // link_filename.display()
+        );
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+        let linked_page = page_from_str(
+            link_filename.as_os_str().to_str().unwrap(),
+            "# A Linked Page\n",
+            &arena,
+        )?;
+
+        let mut link_generator = LinkGenerator::new("my.atlassian.net", "TEAM");
+
+        link_generator.register_markdown_page(&page)?;
+        link_generator.register_markdown_page(&linked_page)?;
+        link_generator.register_confluence_page(&dummy_confluence_page("A Linked Page", "47"));
+
+        let content = page.to_html_string(&link_generator)?;
+        println!("actual {:#?}", content);
+        let expected = format!("<a href=\"{}\">{}</a>", link_url, link_text);
+        println!("expect {:#?}", expected);
+        assert!(content.contains(expected.as_str()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_translates_relative_file_links() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+
+        let link_filename = PathBuf::from("hello-world.md");
+        let link_text = String::from("Link text");
+        let link_url = String::from("https://my.atlassian.net/wiki/spaces/TEAM/pages/47");
+        let markdown_content = &format!(
+            "# My Page Title\n\nMy page content: [{}](./hello-world.md)", // should handle
+            // relative paths
+            link_text,
         );
         let page = page_from_str("page.md", markdown_content, &arena)?;
         let linked_page = page_from_str(

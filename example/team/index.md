@@ -43,20 +43,20 @@ point Confluence supported markdown themselves, but apparently outgrew that).
 
 ## Advanced Usage
 
-[Labels](labels.md) allow you to group content together by specifying a list in
+[Labels](./labels.md) allow you to group content together by specifying a list in
 the markdown _frontmatter_.
 
-[Macros](macros.md) allow you to make your own functions for generating
+[Macros](./macros.md) allow you to make your own functions for generating
 content, somewhat like Confluence's own templates. It is also a convenient way
 to expose whatever Confluence macros you'd like... a nice mapping of the status
 macro seems like a common need.
 
-[Metadata](metadata.md) allows you to specify extra fields for your markdown,
+[Metadata](./metadata.md) allows you to specify extra fields for your markdown,
 which can then be used to do fancy things with macros.
 
-[Page Emojis](emoji-page.md) can be added to give a bit of flair. These use
+[Page Emojis](./emoji-page.md) can be added to give a bit of flair. These use
 the github shortcodes to find the unicode codepoints, so don't try to use the
 Confluence specific ones.
 
-[Task Lists](task-list.md) are also supported, but you should probably only
+[Task Lists](./task-list.md) are also supported, but you should probably only
 use them in a read only display way, as they will be overwritten.
