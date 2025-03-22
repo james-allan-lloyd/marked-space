@@ -1,3 +1,4 @@
+use path_clean::PathClean;
 use std::{
     collections::HashMap,
     io::{self, Write},
@@ -77,7 +78,7 @@ impl LinkGenerator {
     }
 
     fn path_to_string(p: &Path) -> Result<String> {
-        if let Some(s) = p.to_str() {
+        if let Some(s) = p.clean().to_str() {
             Ok(s.to_string().replace('\\', "/"))
         } else {
             Err(ConfluenceError::generic_error(
