@@ -9,6 +9,7 @@ use comrak::nodes::NodeLink;
 use crate::{
     confluence_page::ConfluencePage,
     confluence_storage_renderer::ConfluenceStorageRenderer,
+    console::print_warning,
     error::{ConfluenceError, Result},
     local_link::LocalLink,
     markdown_page::MarkdownPage,
@@ -67,10 +68,10 @@ impl LinkGenerator {
                 // this is the move logic: use the path from the version string if there isn't already a mapping to the id through title.
                 self.filename_to_id.entry(p).or_insert(id);
             } else {
-                println!(
-                    "Warning: failed to convert {} to string",
+                print_warning(&format!(
+                    "failed to convert {} to string",
                     version_path.display()
-                );
+                ));
             }
         }
     }
@@ -151,8 +152,11 @@ impl LinkGenerator {
         }
 
         if link_empty {
-            println!("{:#?}", self);
-            println!("Warning: link wasn't resolved at generation time");
+            print_warning(&format!(
+                "file link {} in {} couldn't be resolved",
+                &local_link.path.display(),
+                &confluence_formatter.source.display(),
+            ));
         }
 
         confluence_formatter.output.write_all(b"\">")?;

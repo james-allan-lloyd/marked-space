@@ -15,6 +15,7 @@ mod confluence_page;
 mod confluence_paginator;
 mod confluence_space;
 mod confluence_storage_renderer;
+mod console;
 mod error;
 mod frontmatter;
 mod helpers;

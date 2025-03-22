@@ -15,13 +15,14 @@ use crate::{
     confluence_client::ConfluenceClient,
     confluence_page::ConfluencePage,
     confluence_space::ConfluenceSpace,
+    console::{print_error, print_info, print_status, Status},
     error::ConfluenceError,
     link_generator::LinkGenerator,
     markdown_page::{MarkdownPage, RenderedPage},
     markdown_space::MarkdownSpace,
     page_emojis::get_property_updates,
     responses::{self, Attachment, MultiEntityResult},
-    sync_operation::{SyncOperation, SyncOperationResult},
+    sync_operation::SyncOperation,
     Result,
 };
 
@@ -68,7 +69,7 @@ fn sync_page_attachments(
         if hashes.contains_key(&attachment_name)
             && hashstring == *hashes.get(&attachment_name).unwrap()
         {
-            op.end(SyncOperationResult::Skipped);
+            op.end(Status::Skipped);
             return Ok(());
         }
 
@@ -81,10 +82,13 @@ fn sync_page_attachments(
             // Handle non-2xx responses (e.g., 400 Bad Request)
             let status = response.status();
             let error_body = response.text()?;
-            println!("Error! Status: {}, Body: {}", status, error_body);
+            print_error(&format!(
+                "error updating attachment: Status: {}, Body: {}",
+                status, error_body
+            ));
         }
 
-        op.end(SyncOperationResult::Updated);
+        op.end(Status::Updated);
     }
 
     let _remove_results: Vec<crate::confluence_client::Result> = remove_titles_to_id
@@ -93,9 +97,9 @@ fn sync_page_attachments(
             let op = SyncOperation::start(format!("[{}] attachment", title), false);
             let result = confluence_client.remove_attachment(id);
             if result.is_ok() {
-                op.end(SyncOperationResult::Deleted);
+                op.end(Status::Deleted);
             } else {
-                op.end(SyncOperationResult::Error);
+                op.end(Status::Error);
             }
             result
         })
@@ -118,16 +122,25 @@ fn sync_page_properties(
 
     for property_update in property_updates.iter() {
         let update_response = if property_update.value.is_null() {
-            println!("Delete property {}", &property_update.key);
+            print_status(
+                Status::Deleted,
+                &format!("property {}", &property_update.key),
+            );
             confluence_client.delete_property(page_id, &property_update.id)
         } else if property_update.id.is_empty() {
-            println!("Create property {}", &property_update.key);
+            print_status(
+                Status::Created,
+                &format!("property {}", &property_update.key),
+            );
             confluence_client.create_property(
                 page_id,
                 json!({"key": property_update.key, "value": property_update.value}),
             )
         } else {
-            println!("Update property {}", &property_update.key);
+            print_status(
+                Status::Updated,
+                &format!("property {}", &property_update.key),
+            );
             confluence_client.set_property(
                 page_id,
                 &property_update.id,
@@ -171,7 +184,7 @@ fn sync_page_content(
     let id = existing_page.id.clone();
     let version_message = rendered_page.version_message();
     if page_up_to_date(existing_page, &rendered_page, &parent_id, &version_message) {
-        op.end(SyncOperationResult::Skipped);
+        op.end(Status::Skipped);
         return Ok(());
     }
 
@@ -193,10 +206,10 @@ fn sync_page_content(
 
     let resp = confluence_client.update_page(&id, update_payload)?;
     if !resp.status().is_success() {
-        op.end(SyncOperationResult::Error);
+        op.end(Status::Error);
         Err(ConfluenceError::failed_request(resp))
     } else {
-        op.end(SyncOperationResult::Updated);
+        op.end(Status::Updated);
         Ok(())
     }
 }
@@ -218,19 +231,14 @@ pub fn sync_space<'a>(
     output_dir: Option<String>,
 ) -> Result<()> {
     let space_key = markdown_space.key.clone();
-    println!(
-        "Parsing space {} from {} ...",
-        space_key,
-        markdown_space.dir.display()
-    );
     let mut link_generator = LinkGenerator::new(&confluence_client.hostname, &markdown_space.key);
 
     let markdown_pages = markdown_space.parse(&mut link_generator)?;
 
-    println!(
+    print_info(&format!(
         "Synchronizing space {} on {}...",
         space_key, confluence_client.hostname
-    );
+    ));
 
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     space.read_all_pages(&confluence_client)?;
@@ -304,13 +312,16 @@ fn sync_page_labels(
         })
         .filter_map(|result| {
             result
-                .map_err(|err: anyhow::Error| println!("{:#?}", err))
+                .map_err(|err: anyhow::Error| print_error(&format!("{:#?}", err)))
                 .ok()
         })
         .collect::<Vec<String>>();
 
     if !labels_removed.is_empty() {
-        println!("Removed labels: {}", labels_removed.join(","));
+        print_status(
+            Status::Deleted,
+            &format!("labels: {}", labels_removed.join(",")),
+        );
     }
 
     Ok(())
@@ -322,7 +333,7 @@ fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
     if let Some(p) = output_path.parent() {
         create_dir_all(p)?;
     }
-    println!("Writing to {}", output_path.display());
+    print_info(&format!("Writing to {}", output_path.display()));
     File::create(output_path)?.write_all(page.content.as_bytes())?;
     Ok(())
 }

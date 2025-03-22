@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::{markdown_page::MarkdownPage, responses::ContentProperty};
+use crate::{console::print_warning, markdown_page::MarkdownPage, responses::ContentProperty};
 
 static EMOJI_TITLE_PUBLISHED_PROP: &str = "emoji-title-published";
 
@@ -50,7 +50,7 @@ pub(crate) fn parse_emoji(page: &MarkdownPage) -> Option<String> {
             emoji.as_str().chars().next().unwrap() as u32
         ))
     } else {
-        println!("Unknown short code '{}'", &emoji_string);
+        print_warning(&format!("Unknown short code '{}'", &emoji_string));
         None
     }
 }

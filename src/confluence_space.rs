@@ -4,11 +4,12 @@ use serde_json::json;
 
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
+use crate::console::{print_warning, Status};
 use crate::error::{ConfluenceError, Result};
 use crate::link_generator::LinkGenerator;
 
 use crate::responses::{self, PageSingleWithoutBody, Version};
-use crate::sync_operation::{SyncOperation, SyncOperationResult};
+use crate::sync_operation::SyncOperation;
 
 #[derive(Debug)]
 pub struct ConfluenceSpace {
@@ -73,16 +74,16 @@ impl ConfluenceSpace {
         orphaned_pages.iter().for_each(|p| {
             if let Some(path) = &p.path {
                 if !space_dir.join(path).exists() {
-                    println!(
+                    print_warning(&format!(
                         "Orphaned page detected \"{}\" (probably deleted), version comment: {}",
                         p.title, p.version.message
-                    );
+                    ));
                 }
             } else {
-                println!(
+                print_warning(&format!(
                     "Orphaned page detected \"{}\" (probably created outside of markedspace), version comment: {}",
                     p.title, p.version.message
-                );
+                ));
             }
         });
     }
@@ -113,7 +114,7 @@ impl ConfluenceSpace {
                 "parentId": self.homepage_id.clone(),
             }))?;
             if !resp.status().is_success() {
-                op.end(SyncOperationResult::Error);
+                op.end(Status::Error);
                 return Err(ConfluenceError::failed_request(resp));
             }
 
@@ -130,7 +131,7 @@ impl ConfluenceSpace {
             };
             link_generator.register_confluence_page(&existing_page);
             self.add_page(existing_page);
-            op.end(SyncOperationResult::Created);
+            op.end(Status::Created);
         }
         Ok(())
     }

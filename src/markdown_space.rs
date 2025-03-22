@@ -4,6 +4,7 @@ use regex::Regex;
 use walkdir::WalkDir;
 
 use crate::{
+    console::{print_info, print_warning},
     error::{ConfluenceError, Result},
     link_generator::LinkGenerator,
     markdown_page::MarkdownPage,
@@ -31,6 +32,11 @@ impl<'a> MarkdownSpace<'a> {
                 space_key
             )));
         }
+        print_info(&format!(
+            "Parsing space {} from {} ...",
+            space_key,
+            dir.display()
+        ));
         let mut markdown_pages = Vec::<PathBuf>::default();
         for entry in WalkDir::new(dir) {
             let entry = entry?;
@@ -39,10 +45,10 @@ impl<'a> MarkdownSpace<'a> {
             }
             if entry.path().is_dir() {
                 if !entry.path().join("index.md").exists() {
-                    println!(
-                        "Warning: directory {} is missing index.md",
+                    print_warning(&format!(
+                        "directory {} is missing index.md",
                         entry.path().display()
-                    )
+                    ));
                 }
             } else if entry.path().extension() == Some(&OsStr::from("md")) {
                 markdown_pages.push(entry.into_path());
@@ -98,7 +104,7 @@ impl<'a> MarkdownSpace<'a> {
                 )?;
 
                 for warning in markdown_page.warnings.iter() {
-                    println!("Warning: {}", warning);
+                    print_warning(warning);
                 }
 
                 link_generator.register_markdown_page(&markdown_page)?;
