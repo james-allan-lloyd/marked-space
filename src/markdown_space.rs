@@ -89,9 +89,9 @@ impl<'a> MarkdownSpace<'a> {
     pub(crate) fn parse(
         &'a self,
         link_generator: &mut LinkGenerator,
+        template_renderer: &mut TemplateRenderer,
     ) -> Result<Vec<MarkdownPage<'a>>> {
         let mut parse_errors = Vec::<anyhow::Error>::default();
-        let mut template_renderer = TemplateRenderer::new(self)?;
         let markdown_pages: Vec<MarkdownPage> = self
             .markdown_pages
             .iter()
@@ -100,7 +100,7 @@ impl<'a> MarkdownSpace<'a> {
                     self,
                     markdown_page_path,
                     &self.arena,
-                    &mut template_renderer,
+                    template_renderer,
                 )?;
 
                 for warning in markdown_page.warnings.iter() {
@@ -173,12 +173,15 @@ impl<'a> MarkdownSpace<'a> {
 
 #[cfg(test)]
 mod tests {
-    use anyhow::anyhow;
+    use anyhow::{anyhow, Ok};
     use std::path::{Path, PathBuf};
 
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
-    use crate::{attachment::ImageAttachment, error::TestResult, link_generator::LinkGenerator};
+    use crate::{
+        attachment::ImageAttachment, error::TestResult, link_generator::LinkGenerator,
+        markdown_page::MarkdownPage, template_renderer::TemplateRenderer,
+    };
 
     use super::MarkdownSpace;
 
@@ -264,7 +267,7 @@ mod tests {
         assert!(result.is_ok());
 
         let space = result.unwrap();
-        let result = space.parse(&mut LinkGenerator::default());
+        let result = parse_default(&space);
 
         assert!(result.is_err());
         let error = result.err().unwrap();
@@ -273,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn it_checks_page_links_exist() {
+    fn it_checks_page_links_exist() -> TestResult {
         let temp = assert_fs::TempDir::new().unwrap();
         temp.child("test/index.md")
             .write_str("# Page 1\nLink to page 2: [link](subpage/markdown2.md)\n")
@@ -291,18 +294,29 @@ mod tests {
 
         let space = result.unwrap();
 
-        let result = space.parse(&mut LinkGenerator::default());
+        let result = parse_default(&space);
         assert!(result.is_err());
         let acutal_error = format!("{:#}", result.err().unwrap());
 
         assert_eq!(
             acutal_error,
             "1 Error(s) parsing space:\n  Missing file for link in [subpage/markdown2.md] to [subpage/does_not_exist.md]",
+        );
+
+        Ok(())
+    }
+
+    fn parse_default<'a>(
+        space: &'a MarkdownSpace<'a>,
+    ) -> anyhow::Result<Vec<MarkdownPage<'a>>, anyhow::Error> {
+        space.parse(
+            &mut LinkGenerator::default(),
+            &mut TemplateRenderer::default()?,
         )
     }
 
     #[test]
-    fn it_checks_attachments_exist() {
+    fn it_checks_attachments_exist() -> TestResult {
         let temp = assert_fs::TempDir::new().unwrap();
         temp.child("test/index.md")
             .write_str("# Page 1\nLink to image: ![link](test-image.png)\n")
@@ -320,12 +334,13 @@ mod tests {
 
         let space = result.unwrap();
 
-        let result = space.parse(&mut LinkGenerator::default());
+        let result = parse_default(&space);
         let acutal_error = format!("{:#}", result.err().unwrap());
         println!("Actual error: {:#}", acutal_error);
         assert!(acutal_error.contains(
             "Missing file for attachment link in [subpage/image.md] to [subpage/image_does_not_exist.png]"
         ));
+        Ok(())
     }
 
     #[test]
@@ -343,7 +358,7 @@ mod tests {
 
         let space = result.unwrap();
 
-        let result = space.parse(&mut LinkGenerator::default())?;
+        let result = parse_default(&space)?;
 
         let page = &result
             .iter()

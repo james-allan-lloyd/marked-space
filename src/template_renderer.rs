@@ -4,10 +4,12 @@ use anyhow::bail;
 use saphyr::Yaml;
 use tera::{self, Tera, Value};
 
+use crate::confluence_client::ConfluenceClient;
 use crate::error::Result;
 use crate::frontmatter::FrontMatter;
 use crate::imports::generate_import_lines;
 use crate::markdown_space::MarkdownSpace;
+use crate::mentions::make_mention;
 
 pub struct TemplateRenderer {
     tera: Tera,
@@ -102,10 +104,11 @@ fn make_metadata_lookup(metadata: Yaml) -> impl tera::Function {
 }
 
 impl TemplateRenderer {
-    pub fn new(space: &MarkdownSpace) -> Result<TemplateRenderer> {
+    pub fn new(space: &MarkdownSpace, client: &ConfluenceClient) -> Result<TemplateRenderer> {
         let mut tera = Tera::new(space.dir.join("**/*.md").into_os_string().to_str().unwrap())?;
 
         Self::add_builtins(&mut tera)?;
+        tera.register_function("mention", make_mention(client.clone()));
 
         Ok(TemplateRenderer { tera })
     }
@@ -122,6 +125,16 @@ impl TemplateRenderer {
     pub fn default() -> Result<TemplateRenderer> {
         let mut tera = Tera::default();
         Self::add_builtins(&mut tera)?;
+
+        Ok(TemplateRenderer { tera })
+    }
+
+    #[cfg(test)]
+    pub fn default_with_client(client: &ConfluenceClient) -> Result<TemplateRenderer> {
+        let mut tera = Tera::default();
+        Self::add_builtins(&mut tera)?;
+
+        tera.register_function("mention", make_mention(client.clone()));
 
         Ok(TemplateRenderer { tera })
     }

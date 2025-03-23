@@ -2,11 +2,13 @@ use reqwest::blocking::multipart::{Form, Part};
 use serde_json::Value;
 use std::env;
 
+#[derive(Clone)]
 pub struct ConfluenceClient {
     client: reqwest::blocking::Client,
     api_user: String,
     api_token: String,
     pub hostname: String,
+    insecure: bool,
 }
 
 pub type Result = anyhow::Result<reqwest::blocking::Response, reqwest::Error>;
@@ -18,6 +20,18 @@ impl ConfluenceClient {
             api_token: env::var("API_TOKEN").unwrap_or_default(),
             client: reqwest::blocking::Client::new(),
             hostname: String::from(hostname),
+            insecure: false,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_insecure(hostname: &str) -> ConfluenceClient {
+        ConfluenceClient {
+            api_user: env::var("API_USER").unwrap_or_default(),
+            api_token: env::var("API_TOKEN").unwrap_or_default(),
+            client: reqwest::blocking::Client::new(),
+            hostname: String::from(hostname),
+            insecure: true,
         }
     }
 
@@ -215,6 +229,26 @@ impl ConfluenceClient {
 
         self.client
             .delete(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
+    fn rest_api(&self, p: &str) -> String {
+        format!(
+            "{}://{}/wiki/rest/api/{}",
+            if self.insecure { "http" } else { "https" },
+            self.hostname,
+            p
+        )
+    }
+
+    pub(crate) fn search_users(&self, public_name: &str) -> Result {
+        let url = self.rest_api("search/user");
+        self.client
+            .get(url)
+            .query(&[("cql", format!("user.fullname~\"{}\"", public_name))])
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
             .header("Accept", "application/json")
             .header("X-Atlassian-Token", "no-check")
