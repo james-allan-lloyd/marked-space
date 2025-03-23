@@ -23,6 +23,7 @@ use crate::{
     page_emojis::get_property_updates,
     responses::{self, Attachment, MultiEntityResult},
     sync_operation::SyncOperation,
+    template_renderer::TemplateRenderer,
     Result,
 };
 
@@ -233,7 +234,8 @@ pub fn sync_space<'a>(
     let space_key = markdown_space.key.clone();
     let mut link_generator = LinkGenerator::new(&confluence_client.hostname, &markdown_space.key);
 
-    let markdown_pages = markdown_space.parse(&mut link_generator)?;
+    let mut template_renderer = TemplateRenderer::new(markdown_space, &confluence_client)?;
+    let markdown_pages = markdown_space.parse(&mut link_generator, &mut template_renderer)?;
 
     print_info(&format!(
         "Synchronizing space {} on {}...",
@@ -360,7 +362,7 @@ mod tests {
         link_generator: &mut LinkGenerator,
     ) -> Result<RenderedPage> {
         // The returned nodes are created in the supplied Arena, and are bound by its lifetime.
-        let mut template_renderer = TemplateRenderer::new(markdown_space)?;
+        let mut template_renderer = TemplateRenderer::default()?;
         let arena = Arena::<AstNode>::new();
         let markdown_page = MarkdownPage::from_file(
             markdown_space,

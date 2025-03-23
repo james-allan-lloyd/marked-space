@@ -130,6 +130,23 @@ pub struct ContentProperty {
     pub version: Version,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResult {
+    pub user: User,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct User {
+    #[serde(rename = "type")]
+    pub _type: String,
+    pub account_id: String,
+    // pub email: String,
+    // pub public_name: String,
+    // pub display_name: String,
+}
+
 #[cfg(test)]
 mod test {
     use serde_json::json;
