@@ -124,7 +124,9 @@ impl<'a> MarkdownPage<'a> {
                 }
             }
             NodeValue::Link(node_link) => {
-                if !(node_link.url.starts_with("http://") || node_link.url.starts_with("https://"))
+                if !(node_link.url.starts_with("http://")
+                    || node_link.url.starts_with("https://")
+                    || node_link.url.starts_with("ac:"))
                 {
                     if let Ok(local_link) = LocalLink::from_str(
                         &node_link.url,

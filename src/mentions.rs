@@ -32,8 +32,8 @@ pub(crate) fn mention_macro(
 
     match get_user(client, public_name_str) {
         Ok(Some(user)) => Ok(serde_json::to_value(format!(
-            // use escaped html to avoid having <ac:link> parsed as a html link
-            "&lt;ac:link><ri:user ri:account-id=\"{}\"/></ac:link>",
+            // trailing space prevents the tag being recognized as a markdown link
+            "<ac:link ><ri:user ri:account-id=\"{}\"/></ac:link>",
             user.account_id
         ))
         .unwrap()),
@@ -153,7 +153,8 @@ mod tests {
 
         assert_eq!(
             result,
-            "&lt;ac:link><ri:user ri:account-id=\"some-atlassian-uuid\"/></ac:link>"
+            // trailing space on the ac:link stops it from being seen as a markdown link
+            "<ac:link ><ri:user ri:account-id=\"some-atlassian-uuid\"/></ac:link>"
         );
 
         Ok(())
