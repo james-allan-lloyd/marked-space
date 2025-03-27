@@ -209,7 +209,10 @@ mod test {
     use comrak::{nodes::AstNode, Arena};
 
     use crate::{
-        confluence_page::ConfluencePage, error::TestResult, markdown_page::MarkdownPage, responses,
+        confluence_page::ConfluencePage,
+        error::TestResult,
+        markdown_page::MarkdownPage,
+        responses::{self, ContentStatus},
         template_renderer::TemplateRenderer,
     };
 
@@ -265,6 +268,7 @@ mod test {
                 number: 2,
             },
             path: Some(PathBuf::from(&source)),
+            status: ContentStatus::Current,
         });
 
         assert!(link_generator.get_pages_to_create().is_empty());
@@ -298,6 +302,7 @@ mod test {
                 number: 2,
             },
             path: Some(PathBuf::from(&old_source)),
+            status: ContentStatus::Current,
         });
 
         assert!(link_generator.get_pages_to_create().is_empty());
@@ -334,6 +339,7 @@ mod test {
                 number: 2,
             },
             path: Some(PathBuf::from(&old_source)),
+            status: ContentStatus::Current,
         });
 
         let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));

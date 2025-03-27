@@ -244,7 +244,8 @@ pub fn sync_space<'a>(
 
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     space.read_all_pages(&confluence_client)?;
-    space.link_pages(&mut link_generator, &markdown_space.dir);
+    space.link_pages(&mut link_generator);
+    space.archive_orphans(&link_generator, &markdown_space.dir, &confluence_client)?;
     space.create_initial_pages(&mut link_generator, &confluence_client)?;
 
     for markdown_page in markdown_pages.iter() {
@@ -352,6 +353,7 @@ mod tests {
 
     use assert_fs::fixture::{FileWriteStr, PathChild};
     use comrak::{nodes::AstNode, Arena};
+    use responses::ContentStatus;
 
     type TestResult = std::result::Result<(), anyhow::Error>;
 
@@ -380,6 +382,7 @@ mod tests {
                 number: 1,
             },
             path: None, // "foo.md".to_string(),
+            status: ContentStatus::Current,
         });
         markdown_page.render(link_generator)
     }
@@ -513,6 +516,7 @@ mod tests {
                 number: 1,
             },
             path: None,
+            status: ContentStatus::Current,
         };
         let rendered_page = RenderedPage {
             title: String::from("New title"),

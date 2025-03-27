@@ -1,14 +1,15 @@
 use std::path::Path;
 
+use anyhow::Result;
 use serde_json::json;
 
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
 use crate::console::{print_warning, Status};
-use crate::error::{ConfluenceError, Result};
+use crate::error::{self, ConfluenceError};
 use crate::link_generator::LinkGenerator;
 
-use crate::responses::{self, PageSingleWithoutBody, Version};
+use crate::responses::{self, ContentStatus, PageSingleWithoutBody, Version};
 use crate::sync_operation::SyncOperation;
 
 #[derive(Debug)]
@@ -48,15 +49,16 @@ impl ConfluenceSpace {
         Ok(())
     }
 
-    pub fn link_pages(&mut self, link_generator: &mut LinkGenerator, space_dir: &Path) {
+    pub fn link_pages(&mut self, link_generator: &mut LinkGenerator) {
         link_generator.homepage_id = Some(self.homepage_id.clone());
         self.pages.iter().for_each(|confluence_page| {
             link_generator.register_confluence_page(confluence_page);
         });
+    }
 
+    fn get_orphans(&self, link_generator: &LinkGenerator) -> Vec<ConfluencePage> {
         // TODO: would like to move the orphan calculation into LinkGenerator, similar to the pages to create
-        let orphaned_pages: Vec<ConfluencePage> = self
-            .pages
+        self.pages
             .iter()
             .filter_map(|confluence_page| {
                 if confluence_page
@@ -70,8 +72,18 @@ impl ConfluenceSpace {
                     None
                 }
             })
-            .collect();
-        orphaned_pages.iter().for_each(|p| {
+            .collect()
+    }
+
+    pub(crate) fn archive_orphans(
+        &self,
+        link_generator: &LinkGenerator,
+        space_dir: &Path,
+        confluence_client: &ConfluenceClient,
+    ) -> error::Result<()> {
+        let orphaned_pages = self.get_orphans(link_generator);
+        let errors = orphaned_pages.iter().filter_map(|p| {
+            if !matches!(&p.status, ContentStatus::Archived) {
             if let Some(path) = &p.path {
                 if !space_dir.join(path).exists() {
                     print_warning(&format!(
@@ -85,7 +97,15 @@ impl ConfluenceSpace {
                     p.title, p.version.message
                 ));
             }
-        });
+            
+            p.archive(confluence_client).err()
+            }
+            else {
+                None
+            }
+        }).collect::<Vec<anyhow::Error>>();
+
+        Ok(())
     }
 
     pub fn get_existing_page(&self, page_id: &str) -> Option<ConfluencePage> {
@@ -128,6 +148,7 @@ impl ConfluenceSpace {
                     message: String::default(),
                 },
                 path: None,
+                status: ContentStatus::Current,
             };
             link_generator.register_confluence_page(&existing_page);
             self.add_page(existing_page);

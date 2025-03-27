@@ -26,6 +26,18 @@ pub enum BodyBulk {
     Empty,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum ContentStatus {
+    Current,
+    Draft,
+    Archived,
+    Historical,
+    Trashed,
+    Deleted,
+    Any,
+}
+
 // TODO: might be a better way to express this...
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +45,7 @@ pub struct PageBulkWithoutBody {
     pub id: String,
     pub parent_id: Option<String>,
     pub title: String,
+    pub status: ContentStatus,
     pub version: Version,
 }
 
