@@ -301,4 +301,25 @@ impl ConfluenceClient {
             }))
             .send()
     }
+
+    pub(crate) fn set_restrictions(&self, id: &str, body: Value) -> Result {
+        let url = self.rest_api(&format!("content/{}/restriction", id));
+        self.client
+            .put(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .json(&body)
+            .send()
+    }
+
+    pub(crate) fn current_user(&self) -> Result {
+        let url = self.rest_api("user/current");
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
 }

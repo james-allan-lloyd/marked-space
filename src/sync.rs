@@ -22,6 +22,7 @@ use crate::{
     markdown_space::MarkdownSpace,
     page_emojis::get_property_updates,
     responses::{self, Attachment, MultiEntityResult},
+    restrictions::sync_restrictions,
     sync_operation::SyncOperation,
     template_renderer::TemplateRenderer,
     Result,
@@ -242,6 +243,11 @@ pub fn sync_space<'a>(
         space_key, confluence_client.hostname
     ));
 
+    let current_user: serde_json::Value = confluence_client
+        .current_user()?
+        .error_for_status()?
+        .json()?;
+
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     space.read_all_pages(&confluence_client)?;
     space.link_pages(&mut link_generator);
@@ -272,6 +278,7 @@ pub fn sync_space<'a>(
             &markdown_page.front_matter.labels,
         )?;
         sync_page_properties(&confluence_client, markdown_page, &existing_page.id)?;
+        sync_restrictions(&confluence_client, &existing_page, &current_user)?;
     }
 
     Ok(())
