@@ -219,26 +219,11 @@ mod test {
     use crate::{
         confluence_page::ConfluencePage,
         error::TestResult,
-        markdown_page::MarkdownPage,
         responses::{self, ContentStatus, Version},
-        template_renderer::TemplateRenderer,
+        test_helpers::markdown_page_from_str,
     };
 
     use super::LinkGenerator;
-
-    fn markdown_page_from_str<'a>(
-        filename: &str,
-        content: &str,
-        arena: &'a Arena<AstNode<'a>>,
-    ) -> crate::error::Result<MarkdownPage<'a>> {
-        MarkdownPage::from_str(
-            &PathBuf::from(filename),
-            content,
-            arena,
-            filename.to_string(),
-            &mut TemplateRenderer::default()?,
-        )
-    }
 
     #[test]
     fn it_returns_homepage_link_for_root_index_md() -> TestResult {

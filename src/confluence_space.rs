@@ -3,9 +3,10 @@ use std::path::Path;
 use anyhow::Result;
 use serde_json::json;
 
+use crate::archive::{archive, should_archive, should_unarchive, unarchive};
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
-use crate::console::{print_status, Status};
+use crate::console::Status;
 use crate::error::{self, ConfluenceError};
 use crate::link_generator::LinkGenerator;
 
@@ -56,20 +57,6 @@ impl ConfluenceSpace {
         });
     }
 
-    fn get_orphans(&self, link_generator: &LinkGenerator) -> Vec<ConfluencePage> {
-        // TODO: would like to move the orphan calculation into LinkGenerator, similar to the pages to create
-        self.pages
-            .iter()
-            .filter_map(|confluence_page| {
-                if link_generator.is_orphaned(confluence_page) {
-                    Some(confluence_page.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
     pub(crate) fn restore_archived_pages(
         &self,
         link_generator: &LinkGenerator,
@@ -78,22 +65,8 @@ impl ConfluenceSpace {
         let _errors = self
             .pages
             .iter()
-            .filter_map(|p| {
-                if matches!(&p.status, ContentStatus::Archived) && !link_generator.is_orphaned(p) {
-                    let path = p.path.clone();
-                    print_status(
-                        Status::Unarchived,
-                        &format!(
-                            "restored \"{}\" from {}",
-                            p.title,
-                            path.unwrap_or_default().display()
-                        ),
-                    );
-                    p.unarchive(confluence_client).err()
-                } else {
-                    None
-                }
-            })
+            .filter(|p| should_unarchive(p, link_generator))
+            .filter_map(|p| unarchive(p, confluence_client).err())
             .collect::<Vec<anyhow::Error>>();
 
         Ok(())
@@ -105,37 +78,12 @@ impl ConfluenceSpace {
         space_dir: &Path,
         confluence_client: &ConfluenceClient,
     ) -> error::Result<()> {
-        let orphaned_pages = self.get_orphans(link_generator);
-        let _errors = orphaned_pages
+        // let orphaned_pages = self.get_orphans(link_generator);
+        let _errors = self
+            .pages
             .iter()
-            .filter_map(|p| {
-                if !matches!(&p.status, ContentStatus::Archived) {
-                    if let Some(path) = &p.path {
-                        if !space_dir.join(path).exists() {
-                            print_status(
-                                Status::Archived,
-                                &format!(
-                                    "orphaned \"{}\" from {} (deleted)",
-                                    p.title,
-                                    space_dir.join(path).display()
-                                ),
-                            );
-                        }
-                    } else {
-                        print_status(
-                            Status::Archived,
-                            &format!(
-                                "orphaned page \"{}\" (probably created outside of markedspace)",
-                                p.title
-                            ),
-                        );
-                    }
-
-                    p.archive(confluence_client).err()
-                } else {
-                    None
-                }
-            })
+            .filter(|p| should_archive(p, link_generator))
+            .filter_map(|p| archive(p, space_dir, confluence_client).err())
             .collect::<Vec<anyhow::Error>>();
 
         Ok(())
