@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
-use crate::console::{print_warning, Status};
+use crate::console::{print_status, Status};
 use crate::error::{self, ConfluenceError};
 use crate::link_generator::LinkGenerator;
 
@@ -61,18 +61,42 @@ impl ConfluenceSpace {
         self.pages
             .iter()
             .filter_map(|confluence_page| {
-                if confluence_page
-                    .version
-                    .message
-                    .starts_with(ConfluencePage::version_message_prefix())
-                    && !link_generator.has_title(confluence_page.title.as_str())
-                {
+                if is_orphaned(confluence_page, link_generator) {
                     Some(confluence_page.clone())
                 } else {
                     None
                 }
             })
             .collect()
+    }
+
+    pub(crate) fn restore_archived_pages(
+        &self,
+        link_generator: &LinkGenerator,
+        confluence_client: &ConfluenceClient,
+    ) -> anyhow::Result<()> {
+        let _errors = self
+            .pages
+            .iter()
+            .filter_map(|p| {
+                if matches!(&p.status, ContentStatus::Archived) && !is_orphaned(p, link_generator) {
+                    let path = p.path.clone();
+                    print_status(
+                        Status::Unarchived,
+                        &format!(
+                            "restored \"{}\" from {}",
+                            p.title,
+                            path.unwrap_or_default().display()
+                        ),
+                    );
+                    p.unarchive(confluence_client).err()
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<anyhow::Error>>();
+
+        Ok(())
     }
 
     pub(crate) fn archive_orphans(
@@ -82,28 +106,37 @@ impl ConfluenceSpace {
         confluence_client: &ConfluenceClient,
     ) -> error::Result<()> {
         let orphaned_pages = self.get_orphans(link_generator);
-        let errors = orphaned_pages.iter().filter_map(|p| {
-            if !matches!(&p.status, ContentStatus::Archived) {
-            if let Some(path) = &p.path {
-                if !space_dir.join(path).exists() {
-                    print_warning(&format!(
-                        "Orphaned page detected \"{}\" (probably deleted), version comment: {}",
-                        p.title, p.version.message
-                    ));
+        let _errors = orphaned_pages
+            .iter()
+            .filter_map(|p| {
+                if !matches!(&p.status, ContentStatus::Archived) {
+                    if let Some(path) = &p.path {
+                        if !space_dir.join(path).exists() {
+                            print_status(
+                                Status::Archived,
+                                &format!(
+                                    "orphaned \"{}\" from {} (deleted)",
+                                    p.title,
+                                    space_dir.join(path).display()
+                                ),
+                            );
+                        }
+                    } else {
+                        print_status(
+                            Status::Archived,
+                            &format!(
+                                "orphaned page \"{}\" (probably created outside of markedspace)",
+                                p.title
+                            ),
+                        );
+                    }
+
+                    p.archive(confluence_client).err()
+                } else {
+                    None
                 }
-            } else {
-                print_warning(&format!(
-                    "Orphaned page detected \"{}\" (probably created outside of markedspace), version comment: {}",
-                    p.title, p.version.message
-                ));
-            }
-            
-            p.archive(confluence_client).err()
-            }
-            else {
-                None
-            }
-        }).collect::<Vec<anyhow::Error>>();
+            })
+            .collect::<Vec<anyhow::Error>>();
 
         Ok(())
     }
@@ -156,4 +189,12 @@ impl ConfluenceSpace {
         }
         Ok(())
     }
+}
+
+fn is_orphaned(confluence_page: &ConfluencePage, link_generator: &LinkGenerator) -> bool {
+    confluence_page
+        .version
+        .message
+        .starts_with(ConfluencePage::version_message_prefix())
+        && !link_generator.has_title(confluence_page.title.as_str())
 }

@@ -246,6 +246,7 @@ pub fn sync_space<'a>(
     space.read_all_pages(&confluence_client)?;
     space.link_pages(&mut link_generator);
     space.archive_orphans(&link_generator, &markdown_space.dir, &confluence_client)?;
+    space.restore_archived_pages(&link_generator, &confluence_client)?;
     space.create_initial_pages(&mut link_generator, &confluence_client)?;
 
     for markdown_page in markdown_pages.iter() {

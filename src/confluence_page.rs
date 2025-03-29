@@ -72,8 +72,16 @@ impl ConfluencePage {
             .archive_page(&self.id, "Orphaned")?
             .error_for_status()?;
 
-        let body: serde_json::Value = response.json()?;
-        println!("{:?}", body);
+        let _body: serde_json::Value = response.json()?;
+        Ok(())
+    }
+
+    pub(crate) fn unarchive(&self, confluence_client: &ConfluenceClient) -> anyhow::Result<()> {
+        let response = confluence_client
+            .unarchive_page(&self.id)?
+            .error_for_status()?;
+
+        let _body: serde_json::Value = response.json()?;
         Ok(())
     }
 }

@@ -282,4 +282,23 @@ impl ConfluenceClient {
             }))
             .send()
     }
+
+    pub(crate) fn unarchive_page(&self, id: &str) -> Result {
+        let url = self.graphql_api();
+        self.client
+            .post(url)
+            .query(&[("q", "ArchivePagesMutation")])
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .json(&json!({
+                "operationName": "UnarchivePagesMutation",
+                "variables": {
+                    "pageIDs": [ id ],
+                    "includeChildren": false
+                },
+                "query": "mutation UnarchivePagesMutation($pageIDs: [Long!]!, $includeChildren: [Boolean!]!, $parentPageId: Long) {\n  bulkUnarchivePages(\n    pageIDs: $pageIDs\n    includeChildren: $includeChildren\n    parentPageId: $parentPageId\n  ) {\n    taskId\n    status\n    __typename\n  }\n}\n"
+            }))
+            .send()
+    }
 }
