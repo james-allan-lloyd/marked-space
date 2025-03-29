@@ -8,6 +8,8 @@ pub enum Status {
     Created,
     Error,
     Deleted,
+    Archived,
+    Unarchived,
 }
 
 pub fn print_warning(warning_str: &str) {
@@ -37,6 +39,8 @@ pub fn print_status(status: Status, status_str: &str) {
         Status::Created => ("created", Style::new().green()),
         Status::Error => ("  error", Style::new().red()),
         Status::Deleted => ("deleted", Style::new()),
+        Status::Archived => ("archived", Style::new().blue()),
+        Status::Unarchived => ("unarchived", Style::new().blue()),
     };
     println!(
         "{}: {}",

@@ -14,6 +14,7 @@ pub struct ConfluencePage {
     pub parent_id: Option<String>,
     pub version: responses::Version,
     pub path: Option<PathBuf>,
+    pub status: responses::ContentStatus,
 }
 
 impl ConfluencePage {
@@ -27,6 +28,7 @@ impl ConfluencePage {
             version: bulk_page.version.clone(),
             parent_id: bulk_page.parent_id.clone(),
             title: bulk_page.title.clone(),
+            status: bulk_page.status.clone(),
             path: Self::extract_path(&bulk_page.version),
         }
     }
@@ -63,6 +65,24 @@ impl ConfluencePage {
                 .collect();
 
         Ok(results)
+    }
+
+    pub(crate) fn archive(&self, confluence_client: &ConfluenceClient) -> anyhow::Result<()> {
+        let response = confluence_client
+            .archive_page(&self.id, "Orphaned")?
+            .error_for_status()?;
+
+        let _body: serde_json::Value = response.json()?;
+        Ok(())
+    }
+
+    pub(crate) fn unarchive(&self, confluence_client: &ConfluenceClient) -> anyhow::Result<()> {
+        let response = confluence_client
+            .unarchive_page(&self.id)?
+            .error_for_status()?;
+
+        let _body: serde_json::Value = response.json()?;
+        Ok(())
     }
 }
 

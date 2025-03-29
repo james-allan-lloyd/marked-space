@@ -8,6 +8,7 @@ use confluence_client::ConfluenceClient;
 use dotenvy::dotenv;
 use markdown_space::MarkdownSpace;
 
+mod archive;
 mod attachment;
 mod checksum;
 mod confluence_client;
@@ -25,13 +26,14 @@ mod local_link;
 mod markdown_page;
 mod markdown_space;
 mod mentions;
-mod moves;
 mod page_emojis;
 mod parent;
 mod responses;
 mod sync;
 mod sync_operation;
 mod template_renderer;
+#[cfg(test)]
+mod test_helpers;
 
 use crate::error::{ConfluenceError, Result};
 use crate::sync::sync_space;

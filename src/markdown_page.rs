@@ -263,7 +263,7 @@ mod tests {
     use crate::error::TestResult;
     use crate::link_generator::LinkGenerator;
     use crate::markdown_page::LocalLink;
-    use crate::responses::Version;
+    use crate::responses::{ContentStatus, Version};
 
     #[test]
     fn it_get_first_heading_as_title() -> TestResult {
@@ -350,6 +350,7 @@ mod tests {
                 number: 1,
             },
             path: None, // "foo.md".to_string(),
+            status: ContentStatus::Current,
         }
     }
 

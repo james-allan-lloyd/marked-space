@@ -1,5 +1,5 @@
 use reqwest::blocking::multipart::{Form, Part};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::env;
 
 #[derive(Clone)]
@@ -244,6 +244,14 @@ impl ConfluenceClient {
         )
     }
 
+    fn graphql_api(&self) -> String {
+        format!(
+            "{}://{}/cgraphql",
+            if self.insecure { "http" } else { "https" },
+            self.hostname
+        )
+    }
+
     pub(crate) fn search_users(&self, public_name: &str) -> Result {
         let url = self.rest_api("search/user");
         self.client
@@ -252,6 +260,45 @@ impl ConfluenceClient {
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
             .header("Accept", "application/json")
             .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
+    pub(crate) fn archive_page(&self, id: &str, note: &str) -> Result {
+        let url = self.graphql_api();
+        self.client
+            .post(url)
+            .query(&[("q", "ArchivePagesMutation")])
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .json(&json!({
+                "operationName": "ArchivePagesMutation",
+                "variables": {
+                    "input": [
+                        { "pageID": id, "archiveNote": note, "descendantsNoteApplicationOption": "NONE", "areChildrenIncluded": false}
+                    ]
+                },
+                "query": "mutation ArchivePagesMutation($input: [BulkArchivePagesInput]!) {\narchivePages(input: $input) {\n    taskId\n    status\n    __typename\n  }\n}\n"
+            }))
+            .send()
+    }
+
+    pub(crate) fn unarchive_page(&self, id: &str) -> Result {
+        let url = self.graphql_api();
+        self.client
+            .post(url)
+            .query(&[("q", "ArchivePagesMutation")])
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .json(&json!({
+                "operationName": "UnarchivePagesMutation",
+                "variables": {
+                    "pageIDs": [ id ],
+                    "includeChildren": false
+                },
+                "query": "mutation UnarchivePagesMutation($pageIDs: [Long!]!, $includeChildren: [Boolean!]!, $parentPageId: Long) {\n  bulkUnarchivePages(\n    pageIDs: $pageIDs\n    includeChildren: $includeChildren\n    parentPageId: $parentPageId\n  ) {\n    taskId\n    status\n    __typename\n  }\n}\n"
+            }))
             .send()
     }
 }

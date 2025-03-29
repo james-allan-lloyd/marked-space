@@ -193,6 +193,14 @@ impl LinkGenerator {
             })
             .collect()
     }
+
+    pub fn is_orphaned(&self, confluence_page: &ConfluencePage) -> bool {
+        confluence_page
+            .version
+            .message
+            .starts_with(ConfluencePage::version_message_prefix())
+            && !self.has_title(confluence_page.title.as_str())
+    }
 }
 
 fn relative_local_link(
@@ -209,25 +217,13 @@ mod test {
     use comrak::{nodes::AstNode, Arena};
 
     use crate::{
-        confluence_page::ConfluencePage, error::TestResult, markdown_page::MarkdownPage, responses,
-        template_renderer::TemplateRenderer,
+        confluence_page::ConfluencePage,
+        error::TestResult,
+        responses::{self, ContentStatus, Version},
+        test_helpers::markdown_page_from_str,
     };
 
     use super::LinkGenerator;
-
-    fn markdown_page_from_str<'a>(
-        filename: &str,
-        content: &str,
-        arena: &'a Arena<AstNode<'a>>,
-    ) -> crate::error::Result<MarkdownPage<'a>> {
-        MarkdownPage::from_str(
-            &PathBuf::from(filename),
-            content,
-            arena,
-            filename.to_string(),
-            &mut TemplateRenderer::default()?,
-        )
-    }
 
     #[test]
     fn it_returns_homepage_link_for_root_index_md() -> TestResult {
@@ -265,6 +261,7 @@ mod test {
                 number: 2,
             },
             path: Some(PathBuf::from(&source)),
+            status: ContentStatus::Current,
         });
 
         assert!(link_generator.get_pages_to_create().is_empty());
@@ -298,6 +295,7 @@ mod test {
                 number: 2,
             },
             path: Some(PathBuf::from(&old_source)),
+            status: ContentStatus::Current,
         });
 
         assert!(link_generator.get_pages_to_create().is_empty());
@@ -334,6 +332,7 @@ mod test {
                 number: 2,
             },
             path: Some(PathBuf::from(&old_source)),
+            status: ContentStatus::Current,
         });
 
         let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
@@ -362,5 +361,23 @@ mod test {
         assert_eq!(pages_to_create, vec![new_title]);
 
         Ok(())
+    }
+
+    #[test]
+    fn it_identifies_orphans() {
+        let orphaned_confluence_page = ConfluencePage {
+            id: String::from("99"),
+            title: String::from("Orphaned Page"),
+            parent_id: None,
+            version: Version {
+                message: String::from(ConfluencePage::version_message_prefix()),
+                number: 1,
+            },
+            path: None, // "foo.md".to_string(),
+            status: ContentStatus::Current,
+        };
+
+        let link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+        assert!(link_generator.is_orphaned(&orphaned_confluence_page));
     }
 }

@@ -1,14 +1,16 @@
 use std::path::Path;
 
+use anyhow::Result;
 use serde_json::json;
 
+use crate::archive::{archive, should_archive, should_unarchive, unarchive};
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::ConfluencePage;
-use crate::console::{print_warning, Status};
-use crate::error::{ConfluenceError, Result};
+use crate::console::Status;
+use crate::error::{self, ConfluenceError};
 use crate::link_generator::LinkGenerator;
 
-use crate::responses::{self, PageSingleWithoutBody, Version};
+use crate::responses::{self, ContentStatus, PageSingleWithoutBody, Version};
 use crate::sync_operation::SyncOperation;
 
 #[derive(Debug)]
@@ -48,44 +50,43 @@ impl ConfluenceSpace {
         Ok(())
     }
 
-    pub fn link_pages(&mut self, link_generator: &mut LinkGenerator, space_dir: &Path) {
+    pub fn link_pages(&mut self, link_generator: &mut LinkGenerator) {
         link_generator.homepage_id = Some(self.homepage_id.clone());
         self.pages.iter().for_each(|confluence_page| {
             link_generator.register_confluence_page(confluence_page);
         });
+    }
 
-        // TODO: would like to move the orphan calculation into LinkGenerator, similar to the pages to create
-        let orphaned_pages: Vec<ConfluencePage> = self
+    pub(crate) fn restore_archived_pages(
+        &self,
+        link_generator: &LinkGenerator,
+        confluence_client: &ConfluenceClient,
+    ) -> anyhow::Result<()> {
+        let _errors = self
             .pages
             .iter()
-            .filter_map(|confluence_page| {
-                if confluence_page
-                    .version
-                    .message
-                    .starts_with(ConfluencePage::version_message_prefix())
-                    && !link_generator.has_title(confluence_page.title.as_str())
-                {
-                    Some(confluence_page.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-        orphaned_pages.iter().for_each(|p| {
-            if let Some(path) = &p.path {
-                if !space_dir.join(path).exists() {
-                    print_warning(&format!(
-                        "Orphaned page detected \"{}\" (probably deleted), version comment: {}",
-                        p.title, p.version.message
-                    ));
-                }
-            } else {
-                print_warning(&format!(
-                    "Orphaned page detected \"{}\" (probably created outside of markedspace), version comment: {}",
-                    p.title, p.version.message
-                ));
-            }
-        });
+            .filter(|p| should_unarchive(p, link_generator))
+            .filter_map(|p| unarchive(p, confluence_client).err())
+            .collect::<Vec<anyhow::Error>>();
+
+        Ok(())
+    }
+
+    pub(crate) fn archive_orphans(
+        &self,
+        link_generator: &LinkGenerator,
+        space_dir: &Path,
+        confluence_client: &ConfluenceClient,
+    ) -> error::Result<()> {
+        // let orphaned_pages = self.get_orphans(link_generator);
+        let _errors = self
+            .pages
+            .iter()
+            .filter(|p| should_archive(p, link_generator))
+            .filter_map(|p| archive(p, space_dir, confluence_client).err())
+            .collect::<Vec<anyhow::Error>>();
+
+        Ok(())
     }
 
     pub fn get_existing_page(&self, page_id: &str) -> Option<ConfluencePage> {
@@ -128,6 +129,7 @@ impl ConfluenceSpace {
                     message: String::default(),
                 },
                 path: None,
+                status: ContentStatus::Current,
             };
             link_generator.register_confluence_page(&existing_page);
             self.add_page(existing_page);
