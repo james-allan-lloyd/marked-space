@@ -193,6 +193,14 @@ impl LinkGenerator {
             })
             .collect()
     }
+
+    pub fn is_orphaned(&self, confluence_page: &ConfluencePage) -> bool {
+        confluence_page
+            .version
+            .message
+            .starts_with(ConfluencePage::version_message_prefix())
+            && !self.has_title(confluence_page.title.as_str())
+    }
 }
 
 fn relative_local_link(
@@ -212,7 +220,7 @@ mod test {
         confluence_page::ConfluencePage,
         error::TestResult,
         markdown_page::MarkdownPage,
-        responses::{self, ContentStatus},
+        responses::{self, ContentStatus, Version},
         template_renderer::TemplateRenderer,
     };
 
@@ -368,5 +376,23 @@ mod test {
         assert_eq!(pages_to_create, vec![new_title]);
 
         Ok(())
+    }
+
+    #[test]
+    fn it_identifies_orphans() {
+        let orphaned_confluence_page = ConfluencePage {
+            id: String::from("99"),
+            title: String::from("Orphaned Page"),
+            parent_id: None,
+            version: Version {
+                message: String::from(ConfluencePage::version_message_prefix()),
+                number: 1,
+            },
+            path: None, // "foo.md".to_string(),
+            status: ContentStatus::Current,
+        };
+
+        let link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+        assert!(link_generator.is_orphaned(&orphaned_confluence_page));
     }
 }

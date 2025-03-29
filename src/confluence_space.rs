@@ -61,7 +61,7 @@ impl ConfluenceSpace {
         self.pages
             .iter()
             .filter_map(|confluence_page| {
-                if is_orphaned(confluence_page, link_generator) {
+                if link_generator.is_orphaned(confluence_page) {
                     Some(confluence_page.clone())
                 } else {
                     None
@@ -79,7 +79,7 @@ impl ConfluenceSpace {
             .pages
             .iter()
             .filter_map(|p| {
-                if matches!(&p.status, ContentStatus::Archived) && !is_orphaned(p, link_generator) {
+                if matches!(&p.status, ContentStatus::Archived) && !link_generator.is_orphaned(p) {
                     let path = p.path.clone();
                     print_status(
                         Status::Unarchived,
@@ -189,12 +189,4 @@ impl ConfluenceSpace {
         }
         Ok(())
     }
-}
-
-fn is_orphaned(confluence_page: &ConfluencePage, link_generator: &LinkGenerator) -> bool {
-    confluence_page
-        .version
-        .message
-        .starts_with(ConfluencePage::version_message_prefix())
-        && !link_generator.has_title(confluence_page.title.as_str())
 }
