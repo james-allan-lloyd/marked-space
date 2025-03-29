@@ -22,9 +22,10 @@ use crate::{
     markdown_space::MarkdownSpace,
     page_emojis::get_property_updates,
     responses::{self, Attachment, MultiEntityResult},
+    restrictions::{sync_restrictions, RestrictionType},
     sync_operation::SyncOperation,
     template_renderer::TemplateRenderer,
-    Result,
+    Args, Result,
 };
 
 fn sync_page_attachments(
@@ -229,7 +230,7 @@ fn page_up_to_date(
 pub fn sync_space<'a>(
     confluence_client: ConfluenceClient,
     markdown_space: &'a MarkdownSpace<'a>,
-    output_dir: Option<String>,
+    args: Args,
 ) -> Result<()> {
     let space_key = markdown_space.key.clone();
     let mut link_generator = LinkGenerator::new(&confluence_client.hostname, &markdown_space.key);
@@ -242,6 +243,15 @@ pub fn sync_space<'a>(
         space_key, confluence_client.hostname
     ));
 
+    if args.single_editor {
+        print_info("Using single editor restrictions")
+    }
+
+    let current_user: serde_json::Value = confluence_client
+        .current_user()?
+        .error_for_status()?
+        .json()?;
+
     let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     space.read_all_pages(&confluence_client)?;
     space.link_pages(&mut link_generator);
@@ -251,7 +261,7 @@ pub fn sync_space<'a>(
 
     for markdown_page in markdown_pages.iter() {
         let rendered_page = markdown_page.render(&link_generator)?;
-        if let Some(ref d) = output_dir {
+        if let Some(ref d) = args.output {
             output_content(d, &rendered_page)?;
         }
         let page_id = link_generator
@@ -272,6 +282,13 @@ pub fn sync_space<'a>(
             &markdown_page.front_matter.labels,
         )?;
         sync_page_properties(&confluence_client, markdown_page, &existing_page.id)?;
+
+        let restrictions_type = if args.single_editor {
+            RestrictionType::SingleEditor(&current_user)
+        } else {
+            RestrictionType::OpenSpace
+        };
+        sync_restrictions(restrictions_type, &confluence_client, &existing_page)?;
     }
 
     Ok(())
@@ -489,7 +506,7 @@ mod tests {
 
         let confluence_client = ConfluenceClient::new("host.example.com");
         let space = MarkdownSpace::from_directory(temp.child("test").path())?;
-        let sync_result = sync_space(confluence_client, &space, None);
+        let sync_result = sync_space(confluence_client, &space, Args::default());
 
         assert!(sync_result.is_err());
 
