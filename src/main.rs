@@ -50,9 +50,9 @@ fn check_environment_vars() -> Result<()> {
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[command(author, version, about, long_about = None)]
-struct Args {
+pub struct Args {
     /// Path to the space to update
     #[arg(short, long)]
     space: String,
@@ -63,6 +63,9 @@ struct Args {
 
     #[arg(long)]
     host: Option<String>,
+
+    #[arg(long)]
+    single_editor: bool,
 }
 
 fn main() -> Result<ExitCode> {
@@ -75,7 +78,7 @@ fn main() -> Result<ExitCode> {
     let dir = PathBuf::from(args.space.clone());
     let markdown_space = MarkdownSpace::from_directory(&dir)?;
 
-    let host = match (args.host, env::var("CONFLUENCE_HOST").ok()) {
+    let host = match (args.host.clone(), env::var("CONFLUENCE_HOST").ok()) {
         (Some(host), _) => host,
         (_, Some(envvar)) => envvar,
         _ => {
@@ -85,7 +88,7 @@ fn main() -> Result<ExitCode> {
     };
     let confluence_client = ConfluenceClient::new(host.as_str());
 
-    match sync_space(confluence_client, &markdown_space, args.output) {
+    match sync_space(confluence_client, &markdown_space, args) {
         Ok(_) => Ok(ExitCode::SUCCESS),
         Err(err) => {
             eprintln!("Error: {:#}", err);
