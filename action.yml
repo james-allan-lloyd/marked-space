@@ -1,0 +1,16 @@
+# action.yml
+name: "marked-space"
+description: "Generate confluence pages from markdown"
+inputs:
+  space-directory:
+    description: "The directory to generate the space from"
+    required: true
+# outputs:
+#   time: # id of output
+#     description: "The time we greeted you"
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  args:
+    - --space
+    - ${{ inputs.space-directory }}
