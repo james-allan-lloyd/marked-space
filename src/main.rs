@@ -61,9 +61,12 @@ pub struct Args {
     #[arg(short, long)]
     output: Option<String>,
 
+    /// The host to connect to. Can also be specified in $CONFLUENCE_HOST
     #[arg(long)]
     host: Option<String>,
 
+    /// Set the user identified by the token to the sole editor of pages. Default is to make the
+    /// space editable to anyone who has access to the space.
     #[arg(long)]
     single_editor: bool,
 }
