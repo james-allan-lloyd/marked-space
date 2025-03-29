@@ -19,6 +19,8 @@ The actual name of non-`index.md` files can be whatever you wish them to be.
 The title for the page is taken from the first heading in the file (and is
 required for all marked-space files).
 
+## Moving Pages
+
 Moving pages either by moving the file or by retitling is possible **but do not
 do this in the same update** or otherwise the link to the original page will be
 lost. This is because marked-space identifies the page by the filename and a
@@ -40,6 +42,19 @@ Now that you know how to structure your pages, you probably want to first see
 how the formatting works: [Formatting](formatting.md). By and large,
 marked-space is able to directly translate to the Confluence markdown (at some
 point Confluence supported markdown themselves, but apparently outgrew that).
+
+## Restricting Edits
+
+`marked-space` make pages editable by space members by default. If you want to
+restrict this to only the user running the command, you can specify
+`--single-editor`.
+
+## Orphaned Pages
+
+When markdown pages are deleted on disk, we don't automatically remove them
+from the Confluence space. They are instead archived, and restoring the file on
+disk should restore the matching Confluence page from the space archive - with
+the same caveats for moving pages above.
 
 ## Advanced Usage
 
