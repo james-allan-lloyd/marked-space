@@ -31,6 +31,7 @@ jobs:
 
   update-version-tags:
     name: Update Version Tags
+    permissions: write-all
     needs: release
     runs-on: ubuntu-latest
     steps:
@@ -60,4 +61,3 @@ jobs:
         run: |
           git tag -f v${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }} ${{ github.ref }}
           git push -f origin v${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}
-
