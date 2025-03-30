@@ -2,7 +2,7 @@ name: Rust Pre Release
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
@@ -12,10 +12,11 @@ jobs:
     uses: ./.github/workflows/shared-build.yml
     with:
       os: ${{ matrix.os }}
-        
+
   prerelease:
     permissions: write-all
     needs: build
     uses: ./.github/workflows/shared-release.yml
     with:
       prerelease: true
+
