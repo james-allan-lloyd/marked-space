@@ -12,7 +12,6 @@ jobs:
         uses: james-allan-lloyd/marked-space@action
         with:
           space-directory: "example/team"
-        env:
-          CONFLUENCE_HOST: ${{ vars.CONFLUENCE_HOST }}
-          API_USER: ${{ secrets.API_USER }}
-          API_TOKEN: ${{ secrets.API_TOKEN }}
+          confluence-host: ${{ vars.CONFLUENCE_HOST }}
+          api-user: ${{ secrets.API_USER }}
+          api-token: ${{ secrets.API_TOKEN }}
