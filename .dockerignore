@@ -6,6 +6,6 @@ example/
 Dockerfile
 .env
 .gitignore
-docker-build.sh
 action.yml
 README.md
+scripts/
