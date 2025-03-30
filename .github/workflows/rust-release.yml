@@ -3,7 +3,7 @@ name: Rust Release
 on:
   push:
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
   build:
@@ -29,35 +29,35 @@ jobs:
             windows-latest/marked-space.exe
           draft: true
 
-  update-version-tags:
-    name: Update Version Tags
-    permissions: write-all
-    needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Get version components
-        id: get_version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          MAJOR=$(echo $VERSION | cut -d. -f1)
-          MINOR=$(echo $VERSION | cut -d. -f2)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "major=$MAJOR" >> $GITHUB_OUTPUT
-          echo "minor=$MINOR" >> $GITHUB_OUTPUT
-
-      - name: Update major version tag
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git tag -f v${{ steps.get_version.outputs.major }} ${{ github.ref }}
-          git push -f origin v${{ steps.get_version.outputs.major }}
-
-      - name: Update minor version tag
-        run: |
-          git tag -f v${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }} ${{ github.ref }}
-          git push -f origin v${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}
+  # update-version-tags:
+  #   name: Update Version Tags
+  #   permissions: write-all
+  #   needs: release
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v3
+  #       with:
+  #         fetch-depth: 0
+  #
+  #     - name: Get version components
+  #       id: get_version
+  #       run: |
+  #         VERSION=${GITHUB_REF#refs/tags/v}
+  #         MAJOR=$(echo $VERSION | cut -d. -f1)
+  #         MINOR=$(echo $VERSION | cut -d. -f2)
+  #         echo "version=$VERSION" >> $GITHUB_OUTPUT
+  #         echo "major=$MAJOR" >> $GITHUB_OUTPUT
+  #         echo "minor=$MINOR" >> $GITHUB_OUTPUT
+  #
+  #     - name: Update major version tag
+  #       run: |
+  #         git config --global user.name "GitHub Actions"
+  #         git config --global user.email "actions@github.com"
+  #         git tag -f v${{ steps.get_version.outputs.major }} ${{ github.ref }}
+  #         git push -f origin v${{ steps.get_version.outputs.major }}
+  #
+  #     - name: Update minor version tag
+  #       run: |
+  #         git tag -f v${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }} ${{ github.ref }}
+  #         git push -f origin v${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}
