@@ -16,7 +16,7 @@ inputs:
     required: true
 runs:
   using: "docker"
-  image: "Dockerfile"
+  image: "docker://jamesallanlloyd/marked-space:v1"
   env:
     CONFLUENCE_HOST: ${{ inputs.confluence-host }}
     API_USER: ${{ inputs.api-user }}
