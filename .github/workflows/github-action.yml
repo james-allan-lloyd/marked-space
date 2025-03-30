@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Marked Space Test
         id: marked-space-test
-        uses: james-allan-lloyd/marked-space@action
+        uses: james-allan-lloyd/marked-space@v1
         with:
           space-directory: "example/team"
           confluence-host: ${{ vars.CONFLUENCE_HOST }}
