@@ -46,6 +46,8 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=schedule
             type=ref,event=tag
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}
 
       - name: Build and push Docker image
         id: build-and-push
