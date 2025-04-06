@@ -32,17 +32,9 @@ Additionally, Marked Space would not be possible without these fantastic librari
 - [assert_fs](https://docs.rs/assert_fs/latest/assert_fs/)
 - [tera](https://keats.github.io/tera/docs/)
 
-## Building and Testing
-
-```bash
-cargo install cargo-watch
-cargo run -- --space example/team
-cargo watch -x test
-```
-
 ## Getting Started
 
-Firstly, you'll need to create a space and take note of the space key
+Firstly, you'll need to create a space and take note of the space key.
 `marked-space` will not create the space for you to avoid accidentally creating
 masses of spaces for random directories. If you don't know your space, you
 should see it in the URL for the space homepage, ie if your homepage is
@@ -61,11 +53,12 @@ Your content goes here
 EOF
 ```
 
-## Setting up Credentials
+### Setting up Credentials
 
-Go to your Atlassian profile and generate a new API token at
-<https://id.atlassian.com/manage-profile/security/api-tokens>. For covenience
-we'll use .env files, but you can also set this directly in the environment:
+Next, go to your Atlassian profile and generate a new API token at
+<https://id.atlassian.com/manage-profile/security/api-tokens>. Depending on how
+you intend to run `marked-space` you'll need to supply the following
+environment variables:
 
 ```pre
 API_USER=<your_atlassian_user_email>
@@ -73,12 +66,30 @@ API_TOKEN=<the_api_token_you_generated>
 CONFLUENCE_HOST=<the_hostname_of_your_confluence_instance>
 ```
 
-Ideally you'll be executing updates from a CI/CD pipeline, which will have its
-own means of securely storing and setting environment variables.
+## Using the Github Action
 
-With credentials setup, you can now either execute `marked-space` using the
-docker image, some of the prebuilt binaries or build it for yourself from
-source.
+The easiest way to use marked space is as a github action:
+
+```yaml
+name: "Generate Confluence space from Markdown"
+on: [push]
+
+jobs:
+  marked-space:
+    runs-on: ubuntu-latest
+    name: Generate example space using github action
+    steps:
+      - uses: actions/checkout@v4
+      - name: Markdown to Confluence
+        id: markedown-to-confluence
+        uses: james-allan-lloyd/marked-space@v1
+        with:
+          space-directory: "example/team"
+        env:
+          CONFLUENCE_HOST: ${{ vars.CONFLUENCE_HOST }}
+          API_USER: ${{ secrets.API_USER }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+```
 
 ## Using the Docker Image
 
@@ -104,6 +115,14 @@ It's all so easy with cargo 😁.
 ```shell
 cargo install --path .
 marked-space --space TEAM
+```
+
+## Local Development
+
+```bash
+cargo install cargo-watch
+cargo run -- --space example/team
+cargo watch -x test
 ```
 
 ## Further Reading

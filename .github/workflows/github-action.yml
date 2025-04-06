@@ -1,0 +1,17 @@
+name: "Github Action Example"
+on: [push]
+
+jobs:
+  test_github_action:
+    runs-on: ubuntu-latest
+    name: Generate example space using github action
+    steps:
+      - uses: actions/checkout@v4
+      - name: Marked Space Test
+        id: marked-space-test
+        uses: james-allan-lloyd/marked-space@action
+        with:
+          space-directory: "example/team"
+          confluence-host: ${{ vars.CONFLUENCE_HOST }}
+          api-user: ${{ secrets.API_USER }}
+          api-token: ${{ secrets.API_TOKEN }}

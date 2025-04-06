@@ -1,0 +1,26 @@
+# action.yml
+name: "marked-space"
+description: "Generate confluence pages from markdown"
+inputs:
+  space-directory:
+    description: "The directory to generate the space from"
+    required: true
+  api-user:
+    description: "The confluence user that will make the changes"
+    required: true
+  api-token:
+    description: "The token for the confluence user"
+    required: true
+  confluence-host:
+    description: "The confluence instance to make changes on"
+    required: true
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  env:
+    CONFLUENCE_HOST: ${{ inputs.confluence-host }}
+    API_USER: ${{ inputs.api-user }}
+    API_TOKEN: ${{ inputs.api-token }}
+  args:
+    - --space
+    - ${{ inputs.space-directory }}
