@@ -4,7 +4,11 @@ MAJOR=$(echo $VERSION | cut -d. -f1)
 MINOR=$(echo $VERSION | cut -d. -f2)
 PATCH=$(echo $VERSION | cut -d. -f3)
 
-# FORCE=-f
+FORCE=-f
+if [[ $(git branch --show-current) != main ]]; then
+  echo "Need to run on main branch"
+  exit 1
+fi
 
 echo $VERSION
 git tag $FORCE v$VERSION
