@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use reqwest::blocking::multipart::{Form, Part};
 use serde_json::{json, Value};
 use std::env;
@@ -315,6 +317,26 @@ impl ConfluenceClient {
 
     pub(crate) fn current_user(&self) -> Result {
         let url = self.rest_api("user/current");
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
+    pub(crate) fn delete_restrictions(&self, id: &str) -> Result {
+        let url = self.rest_api(&format!("content/{}/restriction", id));
+        self.client
+            .delete(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
+    pub(crate) fn get_restrictions_by_operation(&self, id: &str) -> Result {
+        let url = self.rest_api(&format!("content/{}/restriction/byOperation", id));
         self.client
             .get(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
