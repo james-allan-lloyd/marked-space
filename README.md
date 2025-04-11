@@ -91,6 +91,27 @@ jobs:
           API_TOKEN: ${{ secrets.API_TOKEN }}
 ```
 
+## Using the BitBucket Pipeline
+
+Or if you are using BitBucket, you can use the following pipeline configuration:
+
+```yaml
+versions:
+  marked-space: &marked_space_version jamesallanlloyd/marked-space:latest
+definitions:
+  steps:
+    - step: &sync-documentation
+        image: *marked_space_version
+        name: Sync Documentation
+        size: 2x
+        script:
+          - API_USER=.... API_TOKEN=... marked-space --single-editor --space example/team --host my-tenant.atlassian.net
+pipelines:
+  branches:
+    main:
+      - step: *sync-documentation
+```
+
 ## Using the Docker Image
 
 ```shell
