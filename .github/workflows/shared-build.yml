@@ -6,12 +6,15 @@ on:
       os:
         required: true
         type: string
+      release:
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  test:
     runs-on: ${{ inputs.os }}
     steps:
       - uses: actions/checkout@v3
@@ -29,15 +32,30 @@ jobs:
           restore-keys: ${{ inputs.os }}-cargo-
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
-      - name: Build
-        run: cargo build --release
       - name: Run tests
         run: cargo test
 
-      # - name: Get Version from Cargo
-      #   id: version
-      #   run: echo "version=$(cargo metadata --no-deps --format-version 1 | jq '.packages[0].version' -r)" >> $GITHUB_OUTPUT
-
+  release:
+    if: ${{ inputs.release }}
+    runs-on: ${{ inputs.os }}
+    needs:
+      - test
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ inputs.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ inputs.os }}-cargo-
+      - name: Build release
+        run: cargo build --release
       - name: "Upload Artifact"
         uses: actions/upload-artifact@v4
         with:
@@ -45,4 +63,3 @@ jobs:
           path: target/release/marked-space${{ inputs.os == 'windows-latest' && '.exe' || '' }}
           retention-days: 5
           if-no-files-found: error
-
