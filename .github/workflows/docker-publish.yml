@@ -106,6 +106,7 @@ jobs:
           tags: |
             # set latest tag for default branch
             # type=raw,value=latest,enable={{is_default_branch}}
+            # test
             type=raw,value=test
             type=schedule
             type=ref,event=tag
