@@ -105,7 +105,8 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             # set latest tag for default branch
-            type=raw,value=latest,enable={{is_default_branch}}
+            # type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=test
             type=schedule
             type=ref,event=tag
             type=semver,pattern=v{{major}}.{{minor}}
