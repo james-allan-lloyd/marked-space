@@ -5,6 +5,7 @@ on:
 
 jobs:
   test_github_action:
+    if: github.repository == 'james-allan-lloyd/marked-space'
     runs-on: ubuntu-latest
     name: Generate example space using github action
     steps:
