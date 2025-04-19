@@ -12,7 +12,7 @@ COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo 'fn main() {}' > src/main.rs  # Dummy file to force dependency resolution
 RUN cargo fetch
 
-COPY . .
+COPY src rustup-target-add.sh ./
 
 # Compile the Rust application based on the architecture
 # Architecture is determined by the --platform flag passed to docker buildx
