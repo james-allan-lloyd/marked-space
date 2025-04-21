@@ -1,6 +1,6 @@
 use path_clean::PathClean;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{self, Write},
     path::{Path, PathBuf},
 };
@@ -8,7 +8,7 @@ use std::{
 use comrak::nodes::NodeLink;
 
 use crate::{
-    confluence_page::ConfluencePage,
+    confluence_page::{ConfluenceNode, ConfluencePage},
     confluence_storage_renderer::ConfluenceStorageRenderer,
     console::print_warning,
     error::{ConfluenceError, Result},
@@ -25,6 +25,7 @@ pub struct LinkGenerator {
     filename_to_title: HashMap<String, String>,
     title_to_file: HashMap<String, String>,
     title_to_id: HashMap<String, String>,
+    folders: HashSet<String>,
 }
 
 impl LinkGenerator {
@@ -37,6 +38,7 @@ impl LinkGenerator {
             filename_to_title: HashMap::default(),
             title_to_file: HashMap::default(),
             title_to_id: HashMap::default(),
+            folders: HashSet::default(),
         }
     }
 
@@ -52,28 +54,38 @@ impl LinkGenerator {
         }
         self.title_to_file.insert(title.clone(), filename.clone());
 
+        if markdown_page.is_folder() {
+            self.folders.insert(title.clone());
+        }
+
         self.filename_to_title
             .insert(filename.clone(), title.clone());
+
         Ok(())
     }
 
-    pub fn register_confluence_page(&mut self, confluence_page: &ConfluencePage) {
-        let title = confluence_page.title.clone();
-        let id = confluence_page.id.clone();
-        if let Some(filename) = self.title_to_file.get(&title) {
-            self.filename_to_id.insert(filename.clone(), id.clone());
-        }
-        self.title_to_id.insert(title, id.clone());
-        if let Some(version_path) = &confluence_page.path {
-            if let Ok(p) = Self::path_to_string(version_path) {
-                // this is the move logic: use the path from the version string if there isn't already a mapping to the id through title.
-                self.filename_to_id.entry(p).or_insert(id);
-            } else {
-                print_warning(&format!(
-                    "failed to convert {} to string",
-                    version_path.display()
-                ));
+    pub fn register_confluence_node(&mut self, confluence_node: &ConfluenceNode) {
+        match confluence_node {
+            ConfluenceNode::Page(confluence_page) => {
+                let title = confluence_page.title.clone();
+                let id = confluence_page.id.clone();
+                if let Some(filename) = self.title_to_file.get(&title) {
+                    self.filename_to_id.insert(filename.clone(), id.clone());
+                }
+                self.title_to_id.insert(title, id.clone());
+                if let Some(version_path) = &confluence_page.path {
+                    if let Ok(p) = Self::path_to_string(version_path) {
+                        // this is the move logic: use the path from the version string if there isn't already a mapping to the id through title.
+                        self.filename_to_id.entry(p).or_insert(id);
+                    } else {
+                        print_warning(&format!(
+                            "failed to convert {} to string",
+                            version_path.display()
+                        ));
+                    }
+                }
             }
+            ConfluenceNode::Folder(_confluence_folder) => todo!(),
         }
     }
 
@@ -181,6 +193,10 @@ impl LinkGenerator {
         Ok(())
     }
 
+    pub fn is_folder(&self, title: &str) -> bool {
+        self.folders.contains(title)
+    }
+
     pub fn get_pages_to_create(&self) -> Vec<String> {
         self.title_to_file
             .iter()
@@ -217,7 +233,7 @@ mod test {
     use comrak::{nodes::AstNode, Arena};
 
     use crate::{
-        confluence_page::ConfluencePage,
+        confluence_page::{ConfluenceNode, ConfluencePage},
         error::TestResult,
         responses::{self, ContentStatus, Version},
         test_helpers::markdown_page_from_str,
@@ -252,7 +268,7 @@ mod test {
             &format!("# {} \n", new_title),
             &arena,
         )?)?;
-        link_generator.register_confluence_page(&ConfluencePage {
+        link_generator.register_confluence_node(&ConfluenceNode::Page(ConfluencePage {
             id: "1".to_string(),
             title: old_title,
             parent_id: None,
@@ -262,7 +278,7 @@ mod test {
             },
             path: Some(PathBuf::from(&source)),
             status: ContentStatus::Current,
-        });
+        }));
 
         assert!(link_generator.get_pages_to_create().is_empty());
 
@@ -286,7 +302,7 @@ mod test {
             &format!("# {} \n", title),
             &arena,
         )?)?;
-        link_generator.register_confluence_page(&ConfluencePage {
+        link_generator.register_confluence_node(&ConfluenceNode::Page(ConfluencePage {
             id: "9991".to_string(),
             title,
             parent_id: None,
@@ -296,7 +312,7 @@ mod test {
             },
             path: Some(PathBuf::from(&old_source)),
             status: ContentStatus::Current,
-        });
+        }));
 
         assert!(link_generator.get_pages_to_create().is_empty());
 
@@ -323,7 +339,7 @@ mod test {
             &format!("# {} \n", new_title),
             &arena,
         )?)?;
-        link_generator.register_confluence_page(&ConfluencePage {
+        link_generator.register_confluence_node(&ConfluenceNode::Page(ConfluencePage {
             id: "9991".to_string(),
             title: old_title,
             parent_id: None,
@@ -333,7 +349,7 @@ mod test {
             },
             path: Some(PathBuf::from(&old_source)),
             status: ContentStatus::Current,
-        });
+        }));
 
         let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
         assert_eq!(url_for_file, None);

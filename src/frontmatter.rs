@@ -22,6 +22,7 @@ pub struct FrontMatter {
     pub metadata: Yaml,
     pub unknown_keys: Vec<String>,
     pub imports: Vec<String>,
+    pub folder: bool,
 }
 
 enum FrontMatterParseState {
@@ -38,6 +39,7 @@ impl Default for FrontMatter {
             metadata: Yaml::Null,
             unknown_keys: Vec::default(),
             imports: Vec::default(),
+            folder: false,
         }
     }
 }
@@ -98,7 +100,8 @@ impl FrontMatter {
             .into());
         }
 
-        static VALID_TOP_LEVEL_KEYS: [&str; 4] = ["emoji", "labels", "metadata", "imports"];
+        static VALID_TOP_LEVEL_KEYS: [&str; 5] =
+            ["emoji", "labels", "metadata", "imports", "folder"];
         let string_keys: HashSet<&str> = yaml_fm
             .as_hash()
             .unwrap()
@@ -139,6 +142,7 @@ impl FrontMatter {
                 metadata: yaml_fm["metadata"].clone(),
                 unknown_keys,
                 imports,
+                folder: yaml_fm["folder"].as_bool().unwrap_or(false),
             },
             content_str,
         ))

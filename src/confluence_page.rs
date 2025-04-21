@@ -8,6 +8,31 @@ use crate::{confluence_client::ConfluenceClient, responses};
 use crate::error::Result;
 
 #[derive(Debug, Clone)]
+pub enum ConfluenceNode {
+    Page(ConfluencePage),
+    Folder(ConfluenceFolder),
+}
+
+impl ConfluenceNode {
+    pub fn get_all(confluence_client: &ConfluenceClient, space_id: &str) -> Result<Vec<Self>> {
+        let response = confluence_client
+            .get_all_pages_in_space(space_id)?
+            .error_for_status()?;
+
+        let results: Vec<ConfluenceNode> =
+            ConfluencePaginator::<responses::PageBulkWithoutBody>::new(confluence_client)
+                .start(response)?
+                .filter_map(|f| f.ok())
+                .map(|bulk_page| {
+                    ConfluenceNode::Page(ConfluencePage::new_from_page_bulk(&bulk_page))
+                })
+                .collect();
+
+        Ok(results)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ConfluencePage {
     pub id: String,
     pub title: String,
@@ -15,6 +40,13 @@ pub struct ConfluencePage {
     pub version: responses::Version,
     pub path: Option<PathBuf>,
     pub status: responses::ContentStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfluenceFolder {
+    pub id: String,
+    pub title: String,
+    pub parent_id: Option<String>,
 }
 
 impl ConfluencePage {
@@ -50,21 +82,6 @@ impl ConfluencePage {
         } else {
             None
         }
-    }
-
-    pub fn get_all(confluence_client: &ConfluenceClient, space_id: &str) -> Result<Vec<Self>> {
-        let response = confluence_client
-            .get_all_pages_in_space(space_id)?
-            .error_for_status()?;
-
-        let results: Vec<ConfluencePage> =
-            ConfluencePaginator::<responses::PageBulkWithoutBody>::new(confluence_client)
-                .start(response)?
-                .filter_map(|f| f.ok())
-                .map(|bulk_page| Self::new_from_page_bulk(&bulk_page))
-                .collect();
-
-        Ok(results)
     }
 
     pub(crate) fn archive(&self, confluence_client: &ConfluenceClient) -> anyhow::Result<()> {

@@ -259,17 +259,17 @@ pub fn sync_space<'a>(
     space.restore_archived_pages(&link_generator, &confluence_client)?;
     space.create_initial_pages(&mut link_generator, &confluence_client)?;
 
-    for markdown_page in markdown_pages.iter() {
+    for markdown_page in markdown_pages.iter().filter(|p| !p.is_folder()) {
         let rendered_page = markdown_page.render(&link_generator)?;
         if let Some(ref d) = args.output {
             output_content(d, &rendered_page)?;
         }
         let page_id = link_generator
             .get_file_id(&PathBuf::from(&rendered_page.source))
-            .expect("All pages should have been created already.");
+            .expect("error: All pages should have been created already.");
         let existing_page = space
             .get_existing_page(&page_id)
-            .expect("Page should have been created already.");
+            .expect("error: Page should have been created already.");
         sync_page_content(&confluence_client, &space, rendered_page, &existing_page)?;
         sync_page_attachments(
             &confluence_client,
@@ -363,7 +363,10 @@ fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
 mod tests {
     use std::path::Path;
 
-    use crate::{markdown_page::MarkdownPage, template_renderer::TemplateRenderer};
+    use crate::{
+        confluence_page::ConfluenceNode, markdown_page::MarkdownPage,
+        template_renderer::TemplateRenderer,
+    };
 
     use self::responses::Version;
 
@@ -391,7 +394,7 @@ mod tests {
             &mut template_renderer,
         )?;
         link_generator.register_markdown_page(&markdown_page)?;
-        link_generator.register_confluence_page(&ConfluencePage {
+        link_generator.register_confluence_node(&ConfluenceNode::Page(ConfluencePage {
             id: "29".to_string(),
             title: markdown_page.title.clone(),
             parent_id: None,
@@ -401,7 +404,7 @@ mod tests {
             },
             path: None, // "foo.md".to_string(),
             status: ContentStatus::Current,
-        });
+        }));
         markdown_page.render(link_generator)
     }
 
