@@ -46,8 +46,15 @@ jobs:
       - build
     runs-on: ubuntu-latest
     steps:
-      - name: Download all workflow run artifacts
+      - name: Download ubuntu
         uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-latest
+
+      - name: Download windows
+        uses: actions/download-artifact@v4
+        with:
+          name: window-latest
 
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
