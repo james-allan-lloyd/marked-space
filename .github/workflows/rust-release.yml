@@ -45,6 +45,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ubuntu-latest/marked-space
-            windows-latest/marked-space.exe
+            marked-space
+            marked-space.exe
           draft: true
