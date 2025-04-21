@@ -27,3 +27,14 @@ jobs:
     with:
       os: ${{ matrix.os }}
 
+  docker:
+    name: "Docker"
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    needs: build
+    uses: ./.github/workflows/shared-docker-publish.yml
+    secrets: inherit
+    with:
+      push: false

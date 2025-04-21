@@ -12,11 +12,37 @@ jobs:
     uses: ./.github/workflows/shared-build.yml
     with:
       os: ${{ matrix.os }}
+      release: true
+
+  docker:
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/shared-docker-publish.yml
+    secrets: inherit
+    with:
+      push: true
+
+  test_github_action:
+    needs: docker
+    runs-on: ubuntu-latest
+    name: Generate example space using github action
+    steps:
+      - uses: actions/checkout@v4
+      - name: Marked Space Test
+        id: marked-space-test
+        uses: james-allan-lloyd/marked-space@v1
+        with:
+          space-directory: "example/team"
+          confluence-host: ${{ vars.CONFLUENCE_HOST }}
+          api-user: ${{ secrets.API_USER }}
+          api-token: ${{ secrets.API_TOKEN }}
 
   prerelease:
+    needs: docker
     permissions: write-all
-    needs: build
     uses: ./.github/workflows/shared-release.yml
     with:
       prerelease: true
-
