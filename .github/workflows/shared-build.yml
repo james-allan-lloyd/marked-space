@@ -52,7 +52,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ inputs.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ inputs.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-release
           restore-keys: ${{ inputs.os }}-cargo-
       - name: Build release
         run: cargo build --release
