@@ -54,7 +54,7 @@ jobs:
       - name: Download windows
         uses: actions/download-artifact@v4
         with:
-          name: window-latest
+          name: windows-latest
 
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
