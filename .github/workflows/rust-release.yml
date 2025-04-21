@@ -31,8 +31,16 @@ jobs:
     permissions: write-all
     runs-on: ubuntu-latest
     steps:
-      - name: Download all workflow run artifacts
+      - name: Download ubuntu
         uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-latest
+
+      - name: Download windows
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-latest
+
       - name: Upload binaries to release
         uses: softprops/action-gh-release@v2
         with:
