@@ -13,7 +13,7 @@ use crate::{
     attachment::ImageAttachment,
     checksum::sha256_digest,
     confluence_client::ConfluenceClient,
-    confluence_page::ConfluencePage,
+    confluence_page::ConfluenceNode,
     confluence_space::ConfluenceSpace,
     console::{print_error, print_info, print_status, Status},
     error::ConfluenceError,
@@ -168,8 +168,9 @@ fn sync_page_content(
     confluence_client: &ConfluenceClient,
     space: &ConfluenceSpace,
     rendered_page: RenderedPage,
-    existing_page: &ConfluencePage,
+    existing_node: &ConfluenceNode,
 ) -> Result<()> {
+    let page_data = existing_node.page_data().unwrap();
     let op = SyncOperation::start(
         format!("[{}] \"{}\"", rendered_page.source, rendered_page.title),
         true,
@@ -183,9 +184,9 @@ fn sync_page_content(
         Some(space.homepage_id.clone())
     };
 
-    let id = existing_page.id.clone();
+    let id = existing_node.id.clone();
     let version_message = rendered_page.version_message();
-    if page_up_to_date(existing_page, &rendered_page, &parent_id, &version_message) {
+    if page_up_to_date(existing_node, &rendered_page, &parent_id, &version_message) {
         op.end(Status::Skipped);
         return Ok(());
     }
@@ -202,7 +203,7 @@ fn sync_page_content(
         },
         "version": {
             "message": version_message,
-            "number": existing_page.version.number + 1
+            "number": page_data.version.number + 1
         },
     });
 
@@ -217,14 +218,14 @@ fn sync_page_content(
 }
 
 fn page_up_to_date(
-    existing_page: &ConfluencePage,
+    existing_node: &ConfluenceNode,
     page: &RenderedPage,
     parent_id: &Option<String>,
     version_message: &String,
 ) -> bool {
-    parent_id == &existing_page.parent_id
-        && version_message == &existing_page.version.message
-        && existing_page.title == page.title
+    parent_id == &existing_node.parent_id
+        && existing_node.title == page.title
+        && version_message == &existing_node.page_data().unwrap().version.message
 }
 
 pub fn sync_space<'a>(
@@ -257,7 +258,7 @@ pub fn sync_space<'a>(
     space.link_pages(&mut link_generator);
     space.archive_orphans(&link_generator, &markdown_space.dir, &confluence_client)?;
     space.restore_archived_pages(&link_generator, &confluence_client)?;
-    space.create_initial_pages(&mut link_generator, &confluence_client)?;
+    space.create_initial_nodes(&mut link_generator, &confluence_client)?;
 
     for markdown_page in markdown_pages.iter().filter(|p| !p.is_folder()) {
         let rendered_page = markdown_page.render(&link_generator)?;
@@ -268,7 +269,7 @@ pub fn sync_space<'a>(
             .get_file_id(&PathBuf::from(&rendered_page.source))
             .expect("error: All pages should have been created already.");
         let existing_page = space
-            .get_existing_page(&page_id)
+            .get_existing_node(&page_id)
             .expect("error: Page should have been created already.");
         sync_page_content(&confluence_client, &space, rendered_page, &existing_page)?;
         sync_page_attachments(
@@ -364,7 +365,8 @@ mod tests {
     use std::path::Path;
 
     use crate::{
-        confluence_page::ConfluenceNode, markdown_page::MarkdownPage,
+        confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData},
+        markdown_page::MarkdownPage,
         template_renderer::TemplateRenderer,
     };
 
@@ -394,17 +396,19 @@ mod tests {
             &mut template_renderer,
         )?;
         link_generator.register_markdown_page(&markdown_page)?;
-        link_generator.register_confluence_node(&ConfluenceNode::Page(ConfluencePage {
+        link_generator.register_confluence_node(&ConfluenceNode {
             id: "29".to_string(),
             title: markdown_page.title.clone(),
             parent_id: None,
-            version: Version {
-                message: String::default(),
-                number: 1,
-            },
-            path: None, // "foo.md".to_string(),
-            status: ContentStatus::Current,
-        }));
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    message: String::default(),
+                    number: 1,
+                },
+                path: None, // "foo.md".to_string(),
+                status: ContentStatus::Current,
+            }),
+        });
         markdown_page.render(link_generator)
     }
 
@@ -528,16 +532,19 @@ mod tests {
 
     #[test]
     fn it_updates_title() -> TestResult {
-        let confluence_page = ConfluencePage {
+        let confluence_page = ConfluenceNode {
             id: String::from("1"),
             title: String::from("Old Title"),
             parent_id: None,
-            version: Version {
-                message: String::default(),
-                number: 1,
-            },
-            path: None,
-            status: ContentStatus::Current,
+
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    message: String::default(),
+                    number: 1,
+                },
+                path: None,
+                status: ContentStatus::Current,
+            }),
         };
         let rendered_page = RenderedPage {
             title: String::from("New title"),

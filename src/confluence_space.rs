@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::archive::{archive, should_archive, should_unarchive, unarchive};
 use crate::confluence_client::ConfluenceClient;
-use crate::confluence_page::{ConfluenceNode, ConfluencePage};
+use crate::confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData};
 use crate::console::Status;
 use crate::error::{self, ConfluenceError};
 use crate::link_generator::LinkGenerator;
@@ -65,10 +65,6 @@ impl ConfluenceSpace {
         let _errors = self
             .nodes
             .iter()
-            .filter_map(|p| match p {
-                ConfluenceNode::Page(confluence_page) => Some(confluence_page),
-                ConfluenceNode::Folder(_) => None,
-            })
             .filter(|p| should_unarchive(p, link_generator))
             .filter_map(|p| unarchive(p, confluence_client).err())
             .collect::<Vec<anyhow::Error>>();
@@ -86,10 +82,6 @@ impl ConfluenceSpace {
         let _errors = self
             .nodes
             .iter()
-            .filter_map(|p| match p {
-                ConfluenceNode::Page(confluence_page) => Some(confluence_page),
-                ConfluenceNode::Folder(_) => None,
-            })
             .filter(|p| should_archive(p, link_generator))
             .filter_map(|p| archive(p, space_dir, confluence_client).err())
             .collect::<Vec<anyhow::Error>>();
@@ -97,22 +89,15 @@ impl ConfluenceSpace {
         Ok(())
     }
 
-    pub fn get_existing_page(&self, page_id: &str) -> Option<ConfluencePage> {
-        self.nodes
-            .iter()
-            .filter_map(|p| match p {
-                ConfluenceNode::Page(confluence_page) => Some(confluence_page),
-                ConfluenceNode::Folder(_) => None,
-            })
-            .find(|page| page.id == page_id)
-            .cloned()
+    pub fn get_existing_node(&self, node_id: &str) -> Option<ConfluenceNode> {
+        self.nodes.iter().find(|node| node.id == node_id).cloned()
     }
 
-    pub fn add_page(&mut self, from: ConfluencePage) {
-        self.nodes.push(ConfluenceNode::Page(from));
+    pub fn add_node(&mut self, from: ConfluenceNode) {
+        self.nodes.push(from);
     }
 
-    pub fn create_initial_pages(
+    pub fn create_initial_nodes(
         &mut self,
         link_generator: &mut LinkGenerator,
         confluence_client: &ConfluenceClient,
@@ -146,19 +131,21 @@ impl ConfluenceSpace {
             return Err(ConfluenceError::failed_request(resp));
         }
         let page: PageSingleWithoutBody = resp.json()?;
-        let existing_page = ConfluencePage {
+        let existing_page = ConfluenceNode {
             id: page.id,
             title: title.clone(),
             parent_id: Some(self.homepage_id.clone()),
-            version: Version {
-                number: 1,
-                message: String::default(),
-            },
-            path: None,
-            status: ContentStatus::Current,
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    number: 1,
+                    message: String::default(),
+                },
+                path: None,
+                status: ContentStatus::Current,
+            }),
         };
-        link_generator.register_confluence_node(&ConfluenceNode::Page(existing_page.clone()));
-        self.add_page(existing_page);
+        link_generator.register_confluence_node(&existing_page);
+        self.add_node(existing_page);
         op.end(Status::Created);
         Ok(())
     }

@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    attachment::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePage,
+    attachment::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePageData,
     confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
     helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
     markdown_space::MarkdownSpace, parent::get_parent_file, template_renderer::TemplateRenderer,
@@ -232,7 +232,7 @@ impl RenderedPage {
     pub fn version_message(&self) -> String {
         format!(
             "{} source={}; checksum={}",
-            ConfluencePage::version_message_prefix(),
+            ConfluencePageData::version_message_prefix(),
             self.source.replace('\\', "/"), // needs to be platform independent
             self.checksum
         )
@@ -262,7 +262,7 @@ mod tests {
 
     use comrak::{nodes::AstNode, Arena};
 
-    use crate::confluence_page::{ConfluenceNode, ConfluencePage};
+    use crate::confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData};
     use crate::error::TestResult;
     use crate::link_generator::LinkGenerator;
     use crate::markdown_page::LocalLink;
@@ -344,17 +344,19 @@ mod tests {
     }
 
     fn dummy_confluence_page(title: &str, id: &str) -> ConfluenceNode {
-        ConfluenceNode::Page(ConfluencePage {
+        ConfluenceNode {
             id: id.to_string(),
             title: title.to_string(),
             parent_id: None,
-            version: Version {
-                message: String::default(),
-                number: 1,
-            },
-            path: None, // "foo.md".to_string(),
-            status: ContentStatus::Current,
-        })
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    message: String::default(),
+                    number: 1,
+                },
+                path: None, // "foo.md".to_string(),
+                status: ContentStatus::Current,
+            }),
+        }
     }
 
     #[test]

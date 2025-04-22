@@ -8,9 +8,17 @@ use crate::{confluence_client::ConfluenceClient, responses};
 use crate::error::Result;
 
 #[derive(Debug, Clone)]
-pub enum ConfluenceNode {
-    Page(ConfluencePage),
+pub enum ConfluenceNodeType {
+    Page(ConfluencePageData),
     Folder(ConfluenceFolder),
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfluenceNode {
+    pub id: String,
+    pub title: String,
+    pub parent_id: Option<String>,
+    pub data: ConfluenceNodeType,
 }
 
 impl ConfluenceNode {
@@ -23,64 +31,23 @@ impl ConfluenceNode {
             ConfluencePaginator::<responses::PageBulkWithoutBody>::new(confluence_client)
                 .start(response)?
                 .filter_map(|f| f.ok())
-                .map(|bulk_page| {
-                    ConfluenceNode::Page(ConfluencePage::new_from_page_bulk(&bulk_page))
-                })
+                .map(|bulk_page| Self::new_from_page_bulk(&bulk_page))
                 .collect();
 
         Ok(results)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct ConfluencePage {
-    pub id: String,
-    pub title: String,
-    pub parent_id: Option<String>,
-    pub version: responses::Version,
-    pub path: Option<PathBuf>,
-    pub status: responses::ContentStatus,
-}
-
-#[derive(Debug, Clone)]
-pub struct ConfluenceFolder {
-    pub id: String,
-    pub title: String,
-    pub parent_id: Option<String>,
-}
-
-impl ConfluencePage {
-    pub fn version_message_prefix() -> &'static str {
-        "updated by markedspace:"
-    }
 
     fn new_from_page_bulk(bulk_page: &responses::PageBulkWithoutBody) -> Self {
-        ConfluencePage {
+        Self {
             id: bulk_page.id.clone(),
-            version: bulk_page.version.clone(),
             parent_id: bulk_page.parent_id.clone(),
             title: bulk_page.title.clone(),
-            status: bulk_page.status.clone(),
-            path: Self::extract_path(&bulk_page.version),
-        }
-    }
 
-    pub fn extract_path(version: &responses::Version) -> Option<PathBuf> {
-        if let Some(data) = version.message.strip_prefix(Self::version_message_prefix()) {
-            let kvs: HashMap<&str, &str> = data
-                .split(';')
-                .map(|kv| {
-                    let (key, value) = kv.split_once('=').unwrap();
-                    (key.trim(), value.trim())
-                })
-                .collect();
-            if let Some(path) = kvs.get("source") {
-                PathBuf::from_str(path).ok()
-            } else {
-                None
-            }
-        } else {
-            None
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                status: bulk_page.status.clone(),
+                path: ConfluencePageData::extract_path(&bulk_page.version),
+                version: bulk_page.version.clone(),
+            }),
         }
     }
 
@@ -101,6 +68,55 @@ impl ConfluencePage {
         let _body: serde_json::Value = response.json()?;
         Ok(())
     }
+
+    pub(crate) fn page_data(&self) -> Option<&ConfluencePageData> {
+        match &self.data {
+            ConfluenceNodeType::Page(confluence_page_data) => Some(&confluence_page_data),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfluencePageData {
+    pub version: responses::Version,
+    pub path: Option<PathBuf>,
+    pub status: responses::ContentStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfluenceFolder {
+    pub id: String,
+    pub title: String,
+    pub parent_id: Option<String>,
+}
+
+impl ConfluencePageData {
+    pub fn version_message_prefix() -> &'static str {
+        "updated by markedspace:"
+    }
+
+    pub fn extract_path(version: &responses::Version) -> Option<PathBuf> {
+        if let Some(data) = version
+            .message
+            .strip_prefix(ConfluencePageData::version_message_prefix())
+        {
+            let kvs: HashMap<&str, &str> = data
+                .split(';')
+                .map(|kv| {
+                    let (key, value) = kv.split_once('=').unwrap();
+                    (key.trim(), value.trim())
+                })
+                .collect();
+            if let Some(path) = kvs.get("source") {
+                PathBuf::from_str(path).ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -109,15 +125,15 @@ mod test {
     use crate::responses;
 
     fn test_extract_path_from_string(s: &str) -> Option<PathBuf> {
-        ConfluencePage::extract_path(&responses::Version {
+        ConfluencePageData::extract_path(&responses::Version {
             message: String::from(s),
             number: 27,
         })
     }
 
     fn test_extract_path_from_string_with_prefix(s: &str) -> Option<PathBuf> {
-        ConfluencePage::extract_path(&responses::Version {
-            message: ConfluencePage::version_message_prefix().to_owned() + s,
+        ConfluencePageData::extract_path(&responses::Version {
+            message: ConfluencePageData::version_message_prefix().to_owned() + s,
             number: 27,
         })
     }

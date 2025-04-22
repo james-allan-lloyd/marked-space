@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use crate::{
-    confluence_client::ConfluenceClient, confluence_page::ConfluencePage, console::print_status,
+    confluence_client::ConfluenceClient, confluence_page::ConfluenceNode, console::print_status,
 };
 
 pub enum RestrictionType<'a> {
@@ -56,10 +56,10 @@ fn restriction_body(editor_list: &serde_json::Value) -> serde_json::Value {
 pub fn sync_restrictions(
     restriction_type: RestrictionType,
     confluence_client: &ConfluenceClient,
-    existing_page: &ConfluencePage,
+    existing_node: &ConfluenceNode,
 ) -> anyhow::Result<()> {
     let existing_restrictions = confluence_client
-        .get_restrictions_by_operation(&existing_page.id)?
+        .get_restrictions_by_operation(&existing_node.id)?
         .error_for_status()?
         .json::<serde_json::Value>()?;
 
@@ -70,7 +70,7 @@ pub fn sync_restrictions(
                 let users = json!([user]);
                 let body = restriction_body(&users);
                 print_status(crate::console::Status::Updated, "permissions");
-                Some(confluence_client.set_restrictions(&existing_page.id, body)?)
+                Some(confluence_client.set_restrictions(&existing_node.id, body)?)
             } else {
                 None
             }
