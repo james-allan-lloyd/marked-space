@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::confluence_paginator::ConfluencePaginator;
+use crate::confluence_space::ConfluenceSpace;
 use crate::{confluence_client::ConfluenceClient, responses};
 
 use crate::error::Result;
@@ -22,21 +23,37 @@ pub struct ConfluenceNode {
 }
 
 impl ConfluenceNode {
-    pub fn get_all(confluence_client: &ConfluenceClient, space_id: &str) -> Result<Vec<Self>> {
+    pub fn get_all(
+        confluence_client: &ConfluenceClient,
+        space: &ConfluenceSpace,
+    ) -> Result<Vec<Self>> {
         let response = confluence_client
-            .get_all_pages_in_space(space_id)?
+            .get_all_pages_in_space(&space.id)?
             .error_for_status()?;
 
-        let results: Vec<ConfluenceNode> =
-            ConfluencePaginator::<responses::PageBulkWithoutBody>::new(confluence_client)
-                .start(response)?
-                .filter_map(|f| f.ok())
-                .map(|bulk_page| Self::new_from_page_bulk(&bulk_page))
-                .collect();
+        let mut page_iter =
+            ConfluencePaginator::<responses::PageBulkWithoutBody>::new(confluence_client);
 
-        // TODO: read folders
+        let pages = page_iter
+            .start(response)?
+            .filter_map(|f| f.ok())
+            .map(|bulk_page| Self::new_from_page_bulk(&bulk_page));
 
-        Ok(results)
+        let folder_response = confluence_client
+            .get_all_pages_from_homepage(&space.homepage_id)?
+            .error_for_status()?;
+
+        let mut folder_iter = ConfluencePaginator::<responses::Descendant>::new(confluence_client);
+
+        let folders = folder_iter
+            .start(folder_response)?
+            .filter_map(|d| d.ok())
+            .filter(|d| d._type == "folder")
+            .map(|d| Self::folder_from_descendant(&d));
+
+        let result: Vec<Self> = pages.chain(folders).collect();
+
+        Ok(result)
     }
 
     fn new_from_page_bulk(bulk_page: &responses::PageBulkWithoutBody) -> Self {
@@ -75,6 +92,15 @@ impl ConfluenceNode {
         match &self.data {
             ConfluenceNodeType::Page(confluence_page_data) => Some(confluence_page_data),
             _ => None,
+        }
+    }
+
+    fn folder_from_descendant(d: &responses::Descendant) -> Self {
+        Self {
+            id: d.id.clone(),
+            parent_id: Some(d.parent_id.clone()),
+            title: d.title.clone(),
+            data: ConfluenceNodeType::Folder(ConfluenceFolder {}),
         }
     }
 }

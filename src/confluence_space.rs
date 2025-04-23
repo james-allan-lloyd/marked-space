@@ -6,7 +6,7 @@ use serde_json::json;
 use crate::archive::{archive, should_archive, should_unarchive, unarchive};
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData};
-use crate::console::Status;
+use crate::console::{print_status, Status};
 use crate::error::{self, ConfluenceError};
 use crate::link_generator::LinkGenerator;
 
@@ -46,7 +46,7 @@ impl ConfluenceSpace {
     }
 
     pub fn read_all_pages(&mut self, confluence_client: &ConfluenceClient) -> Result<()> {
-        self.nodes = ConfluenceNode::get_all(confluence_client, &self.id)?;
+        self.nodes = ConfluenceNode::get_all(confluence_client, self)?;
         Ok(())
     }
 
@@ -163,6 +163,7 @@ impl ConfluenceSpace {
             }))?
             .error_for_status()?;
 
+        print_status(Status::Created, &format!("folder \"{}\"", title));
         Ok(())
     }
 }

@@ -1,3 +1,60 @@
+use std::path::PathBuf;
+
+use crate::{
+    confluence_client::ConfluenceClient,
+    confluence_space::ConfluenceSpace,
+    console::{print_status, Status::Updated},
+    error::Result,
+    link_generator::LinkGenerator,
+    markdown_page::MarkdownPage,
+    parent::get_parent_file,
+    Args,
+};
+use anyhow::anyhow;
+
+pub fn sync_folder(
+    markdown_page: &MarkdownPage,
+    link_generator: &LinkGenerator,
+    args: &Args,
+    space: &ConfluenceSpace,
+    confluence_client: &ConfluenceClient,
+) -> Result<()> {
+    let page_id = link_generator
+        .get_file_id(&PathBuf::from(&markdown_page.source))
+        .expect("error: All pages should have been created already.");
+
+    let parent_file = get_parent_file(&PathBuf::from(&markdown_page.source));
+    println!(
+        "Parent file: {} for {}",
+        if parent_file.is_some() {
+            "some"
+        } else {
+            "none"
+        },
+        &markdown_page.source
+    );
+    let parent_id = parent_file
+        .and_then(|f| link_generator.get_file_id(&f))
+        .or(Some(space.homepage_id.clone()));
+
+    let existing_folder = space
+        .get_existing_node(&page_id)
+        .expect("error: Page should have been created already.");
+
+    if existing_folder.parent_id != parent_id {
+        confluence_client
+            .move_page(&page_id, &parent_id.unwrap())?
+            .error_for_status()?;
+
+        print_status(
+            Updated,
+            &format!("[{}] {}", markdown_page.source, markdown_page.title),
+        );
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use comrak::{nodes::AstNode, Arena};

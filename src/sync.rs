@@ -17,6 +17,7 @@ use crate::{
     confluence_space::ConfluenceSpace,
     console::{print_error, print_info, print_status, Status},
     error::ConfluenceError,
+    folders::sync_folder,
     link_generator::LinkGenerator,
     markdown_page::{MarkdownPage, RenderedPage},
     markdown_space::MarkdownSpace,
@@ -260,38 +261,66 @@ pub fn sync_space<'a>(
     space.restore_archived_pages(&link_generator, &confluence_client)?;
     space.create_initial_nodes(&mut link_generator, &confluence_client)?;
 
-    for markdown_page in markdown_pages.iter().filter(|p| !p.is_folder()) {
-        let rendered_page = markdown_page.render(&link_generator)?;
-        if let Some(ref d) = args.output {
-            output_content(d, &rendered_page)?;
-        }
-        let page_id = link_generator
-            .get_file_id(&PathBuf::from(&rendered_page.source))
-            .expect("error: All pages should have been created already.");
-        let existing_page = space
-            .get_existing_node(&page_id)
-            .expect("error: Page should have been created already.");
-        sync_page_content(&confluence_client, &space, rendered_page, &existing_page)?;
-        sync_page_attachments(
-            &confluence_client,
-            &existing_page.id,
-            &markdown_page.attachments,
-        )?;
-        sync_page_labels(
-            &confluence_client,
-            &existing_page.id,
-            &markdown_page.front_matter.labels,
-        )?;
-        sync_page_properties(&confluence_client, markdown_page, &existing_page.id)?;
-
-        let restrictions_type = if args.single_editor {
-            RestrictionType::SingleEditor(&current_user)
+    for markdown_page in markdown_pages.iter() {
+        if markdown_page.is_folder() {
+            sync_folder(
+                markdown_page,
+                &link_generator,
+                &args,
+                &space,
+                &confluence_client,
+            )?;
         } else {
-            RestrictionType::OpenSpace
-        };
-        sync_restrictions(restrictions_type, &confluence_client, &existing_page)?;
+            sync_page(
+                markdown_page,
+                &link_generator,
+                &args,
+                &space,
+                &confluence_client,
+                &current_user,
+            )?;
+        }
     }
 
+    Ok(())
+}
+
+fn sync_page(
+    markdown_page: &MarkdownPage,
+    link_generator: &LinkGenerator,
+    args: &Args,
+    space: &ConfluenceSpace,
+    confluence_client: &ConfluenceClient,
+    current_user: &tera::Value,
+) -> Result<()> {
+    let rendered_page = markdown_page.render(link_generator)?;
+    if let Some(ref d) = args.output {
+        output_content(d, &rendered_page)?;
+    }
+    let page_id = link_generator
+        .get_file_id(&PathBuf::from(&rendered_page.source))
+        .expect("error: All pages should have been created already.");
+    let existing_page = space
+        .get_existing_node(&page_id)
+        .expect("error: Page should have been created already.");
+    sync_page_content(confluence_client, space, rendered_page, &existing_page)?;
+    sync_page_attachments(
+        confluence_client,
+        &existing_page.id,
+        &markdown_page.attachments,
+    )?;
+    sync_page_labels(
+        confluence_client,
+        &existing_page.id,
+        &markdown_page.front_matter.labels,
+    )?;
+    sync_page_properties(confluence_client, markdown_page, &existing_page.id)?;
+    let restrictions_type = if args.single_editor {
+        RestrictionType::SingleEditor(current_user)
+    } else {
+        RestrictionType::OpenSpace
+    };
+    sync_restrictions(restrictions_type, confluence_client, &existing_page)?;
     Ok(())
 }
 

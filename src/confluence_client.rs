@@ -332,6 +332,25 @@ impl ConfluenceClient {
             .send()
     }
 
+    pub(crate) fn move_page(&self, page_id: &str, parent_id: &str) -> Result {
+        let url = self.graphql_api();
+        self.client
+            .post(url)
+            .query(&[("q", "useMovePageHandlerMovePageAppendMutation")])
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .json(&json!({
+                    "operationName": "useMovePageHandlerMovePageAppendMutation",
+                    "variables": {
+                        "pageId": page_id,
+                        "parentId": parent_id,
+                    },
+                    "query": "mutation useMovePageHandlerMovePageAppendMutation($pageId: ID!, $parentId: ID!) {\n  movePageAppend(input: {pageId: $pageId, parentId: $parentId}) {\n    page {\n      id\n      links {\n        webui\n        editui\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n"
+                }))
+            .send()
+    }
+
     pub(crate) fn set_restrictions(&self, id: &str, body: Value) -> Result {
         let url = self.rest_api(&format!("content/{}/restriction", id));
         self.client
