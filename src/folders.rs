@@ -1,9 +1,64 @@
 #[cfg(test)]
 mod test {
-    // #[test]
-    // fn it_creates_folders_when_flag_is_present() {
-    //     todo!();
-    // }
+    use comrak::{nodes::AstNode, Arena};
+
+    use crate::{
+        confluence_page::{ConfluenceFolder, ConfluenceNode, ConfluenceNodeType},
+        error::TestResult,
+        link_generator::LinkGenerator,
+        test_helpers::markdown_page_from_str,
+    };
+
+    #[test]
+    fn it_creates_folders_when_flag_is_present() -> TestResult {
+        let mut link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+
+        let new_title = String::from("New Title");
+        let new_source = String::from("new-test.md");
+
+        let arena = Arena::<AstNode>::new();
+        link_generator.register_markdown_page(&markdown_page_from_str(
+            &new_source,
+            &format!("---\nfolder: true\n---\n# {} \n", new_title),
+            &arena,
+        )?)?;
+
+        let pages_to_create = link_generator.get_nodes_to_create();
+
+        assert_eq!(pages_to_create, vec![new_title.clone()]);
+        assert!(link_generator.is_folder(&new_title));
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_does_not_create_folders_if_they_already_exist() -> TestResult {
+        let mut link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+
+        let existing_title = String::from("Existing Title");
+        let existing_source = String::from("existing-test.md");
+
+        let arena = Arena::<AstNode>::new();
+        link_generator.register_markdown_page(&markdown_page_from_str(
+            &existing_source,
+            &format!("---\nfolder: true\n---\n# {} \n", existing_title),
+            &arena,
+        )?)?;
+
+        link_generator.register_confluence_node(&ConfluenceNode {
+            id: "1".into(),
+            title: existing_title.clone(),
+            parent_id: Some("99".into()),
+            data: ConfluenceNodeType::Folder(ConfluenceFolder {}),
+        });
+
+        let pages_to_create = link_generator.get_nodes_to_create();
+
+        assert_eq!(pages_to_create.len(), 0);
+        assert!(link_generator.is_folder(&existing_title));
+
+        Ok(())
+    }
 
     // #[test]
     // fn it_changes_pages_to_folders() {

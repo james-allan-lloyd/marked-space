@@ -195,7 +195,7 @@ impl LinkGenerator {
         self.folders.contains(title)
     }
 
-    pub fn get_pages_to_create(&self) -> Vec<String> {
+    pub fn get_nodes_to_create(&self) -> Vec<String> {
         self.title_to_file
             .iter()
             .filter_map(|(title, file)| {
@@ -280,7 +280,7 @@ mod test {
             }),
         });
 
-        assert!(link_generator.get_pages_to_create().is_empty());
+        assert!(link_generator.get_nodes_to_create().is_empty());
 
         let url_for_file = link_generator.get_file_url(&PathBuf::from(&source));
         assert!(url_for_file.is_some());
@@ -316,7 +316,7 @@ mod test {
             }),
         });
 
-        assert!(link_generator.get_pages_to_create().is_empty());
+        assert!(link_generator.get_nodes_to_create().is_empty());
 
         let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
         let expected_url =
@@ -375,7 +375,7 @@ mod test {
             &arena,
         )?)?;
 
-        let pages_to_create = link_generator.get_pages_to_create();
+        let pages_to_create = link_generator.get_nodes_to_create();
 
         // let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
         assert_eq!(pages_to_create, vec![new_title]);

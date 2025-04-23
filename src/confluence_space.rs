@@ -102,9 +102,8 @@ impl ConfluenceSpace {
         link_generator: &mut LinkGenerator,
         confluence_client: &ConfluenceClient,
     ) -> Result<()> {
-        for title in link_generator.get_pages_to_create() {
+        for title in link_generator.get_nodes_to_create() {
             if link_generator.is_folder(&title) {
-                // todo
                 self.create_folder(title, confluence_client, link_generator)?;
             } else {
                 self.create_page(title, confluence_client, link_generator)?;

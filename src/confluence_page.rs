@@ -34,6 +34,8 @@ impl ConfluenceNode {
                 .map(|bulk_page| Self::new_from_page_bulk(&bulk_page))
                 .collect();
 
+        // TODO: read folders
+
         Ok(results)
     }
 
@@ -71,7 +73,7 @@ impl ConfluenceNode {
 
     pub(crate) fn page_data(&self) -> Option<&ConfluencePageData> {
         match &self.data {
-            ConfluenceNodeType::Page(confluence_page_data) => Some(&confluence_page_data),
+            ConfluenceNodeType::Page(confluence_page_data) => Some(confluence_page_data),
             _ => None,
         }
     }
@@ -85,11 +87,7 @@ pub struct ConfluencePageData {
 }
 
 #[derive(Debug, Clone)]
-pub struct ConfluenceFolder {
-    pub id: String,
-    pub title: String,
-    pub parent_id: Option<String>,
-}
+pub struct ConfluenceFolder {}
 
 impl ConfluencePageData {
     pub fn version_message_prefix() -> &'static str {
