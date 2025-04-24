@@ -63,5 +63,5 @@ jobs:
           prerelease: true
           title: Development Build
           files: |
-            ubuntu-latest/marked-space
-            windows-latest/marked-space.exe
+            marked-space
+            marked-space.exe
