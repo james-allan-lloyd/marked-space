@@ -15,7 +15,7 @@ pub enum FrontMatterError {
     ParseError(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FrontMatter {
     pub labels: Vec<String>,
     pub emoji: String,
@@ -86,12 +86,11 @@ impl FrontMatter {
             }
         }
 
-        if front_matter_str.is_empty() {
-            return Ok((FrontMatter::default(), content_str));
-        }
-
         let yaml_fm_docs = Yaml::load_from_str(&front_matter_str)
             .context("Failed to parse front matter as YAML")?;
+        if yaml_fm_docs.is_empty() {
+            return Ok((FrontMatter::default(), content_str));
+        }
         let yaml_fm = &yaml_fm_docs[0];
         if !yaml_fm.is_hash() {
             return Err(FrontMatterError::ParseError(String::from(
@@ -247,5 +246,15 @@ gah = bar
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn it_parses_front_matter_that_is_only_a_comment() {
+        let fm_result = FrontMatter::from_str("---\n#comment\n---\n# title");
+
+        assert!(fm_result.is_ok());
+
+        let (fm, _content) = fm_result.unwrap();
+        assert_eq!(fm, FrontMatter::default());
     }
 }
