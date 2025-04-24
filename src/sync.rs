@@ -263,13 +263,7 @@ pub fn sync_space<'a>(
 
     for markdown_page in markdown_pages.iter() {
         if markdown_page.is_folder() {
-            sync_folder(
-                markdown_page,
-                &link_generator,
-                &args,
-                &space,
-                &confluence_client,
-            )?;
+            sync_folder(markdown_page, &link_generator, &space, &confluence_client)?;
         } else {
             sync_page(
                 markdown_page,
@@ -303,6 +297,9 @@ fn sync_page(
     let existing_page = space
         .get_existing_node(&page_id)
         .expect("error: Page should have been created already.");
+    if existing_page.page_data().is_none() {
+        return Err(anyhow::anyhow!("{} is not a page and cannot be converted (at this time). You'll need to delete it manually before marked-space can create it as a page", existing_page.title));
+    }
     sync_page_content(confluence_client, space, rendered_page, &existing_page)?;
     sync_page_attachments(
         confluence_client,

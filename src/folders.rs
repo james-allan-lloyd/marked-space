@@ -8,14 +8,11 @@ use crate::{
     link_generator::LinkGenerator,
     markdown_page::MarkdownPage,
     parent::get_parent_file,
-    Args,
 };
-use anyhow::anyhow;
 
 pub fn sync_folder(
     markdown_page: &MarkdownPage,
     link_generator: &LinkGenerator,
-    args: &Args,
     space: &ConfluenceSpace,
     confluence_client: &ConfluenceClient,
 ) -> Result<()> {
@@ -23,17 +20,7 @@ pub fn sync_folder(
         .get_file_id(&PathBuf::from(&markdown_page.source))
         .expect("error: All pages should have been created already.");
 
-    let parent_file = get_parent_file(&PathBuf::from(&markdown_page.source));
-    println!(
-        "Parent file: {} for {}",
-        if parent_file.is_some() {
-            "some"
-        } else {
-            "none"
-        },
-        &markdown_page.source
-    );
-    let parent_id = parent_file
+    let parent_id = get_parent_file(&PathBuf::from(&markdown_page.source))
         .and_then(|f| link_generator.get_file_id(&f))
         .or(Some(space.homepage_id.clone()));
 
@@ -117,11 +104,6 @@ mod test {
         Ok(())
     }
 
-    // #[test]
-    // fn it_changes_pages_to_folders() {
-    //     todo!();
-    // }
-    //
     // #[test]
     // fn it_warns_if_page_has_content_with_flag() {
     //     todo!();
