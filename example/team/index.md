@@ -19,6 +19,23 @@ The actual name of non-`index.md` files can be whatever you wish them to be.
 The title for the page is taken from the first heading in the file (and is
 required for all marked-space files).
 
+In later versions of marked-space we also added the ability to designate
+certain `index.md`s and their directories as Confluence Folders. You can mark a
+directory as a folder with the following:
+
+```
+---
+folder: true
+---
+# Title of the folder
+```
+
+The title of the folder is still required, but the actual content will be ignored.
+
+**Note**: conversion between folder and pages is not currently supported. You
+will need to delete the existing item (moving any children out first) so that
+it can be recreated with `marked-space`.
+
 ## Moving Pages
 
 Moving pages either by moving the file or by retitling is possible **but do not
