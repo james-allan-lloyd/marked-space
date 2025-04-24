@@ -141,6 +141,12 @@ impl ConfluencePageData {
             None
         }
     }
+
+    pub(crate) fn is_managed(&self) -> bool {
+        self.version
+            .message
+            .starts_with(ConfluencePageData::version_message_prefix())
+    }
 }
 
 #[cfg(test)]

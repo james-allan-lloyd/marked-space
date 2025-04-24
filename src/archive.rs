@@ -11,7 +11,9 @@ use crate::{
 pub(crate) fn should_archive(node: &ConfluenceNode, link_generator: &LinkGenerator) -> bool {
     match &node.data {
         ConfluenceNodeType::Page(p) => {
-            !matches!(&p.status, ContentStatus::Archived) && link_generator.is_orphaned(node, p)
+            !matches!(&p.status, ContentStatus::Archived)
+                && link_generator.is_orphaned(node, p)
+                && p.is_managed()
         }
         ConfluenceNodeType::Folder(_confluence_folder) => false,
     }
@@ -20,7 +22,9 @@ pub(crate) fn should_archive(node: &ConfluenceNode, link_generator: &LinkGenerat
 pub(crate) fn should_unarchive(node: &ConfluenceNode, link_generator: &LinkGenerator) -> bool {
     match &node.data {
         ConfluenceNodeType::Page(p) => {
-            matches!(&p.status, ContentStatus::Archived) && !link_generator.is_orphaned(node, p)
+            matches!(&p.status, ContentStatus::Archived)
+                && !link_generator.is_orphaned(node, p)
+                && p.is_managed()
         }
         ConfluenceNodeType::Folder(_confluence_folder) => false,
     }
@@ -128,6 +132,23 @@ mod tests {
         }
     }
 
+    fn unmanaged(status: ContentStatus) -> ConfluenceNode {
+        ConfluenceNode {
+            id: String::from("3"),
+            title: String::from("Unmanaged Page"),
+            parent_id: None,
+
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    message: "".into(),
+                    number: 1,
+                },
+                path: None, // "foo.md".to_string(),
+                status,
+            }),
+        }
+    }
+
     fn test_link_generator() -> LinkGenerator {
         LinkGenerator::new("example.atlassian.net", "TEST")
     }
@@ -178,6 +199,22 @@ mod tests {
     fn it_does_not_unarchive_orphans() {
         assert!(!should_unarchive(
             &orphan(ContentStatus::Archived),
+            &test_link_generator()
+        ));
+    }
+
+    #[test]
+    fn it_does_not_unarchive_unmanaged() {
+        assert!(!should_unarchive(
+            &unmanaged(ContentStatus::Archived),
+            &test_link_generator()
+        ));
+    }
+
+    #[test]
+    fn it_does_not_archive_unmanaged() {
+        assert!(!should_archive(
+            &unmanaged(ContentStatus::Current),
             &test_link_generator()
         ));
     }
