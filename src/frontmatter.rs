@@ -134,6 +134,13 @@ impl FrontMatter {
             })
             .unwrap_or_default();
 
+        let folder = yaml_fm["folder"]
+            .borrowed_or(&Yaml::Boolean(false))
+            .as_bool()
+            .ok_or(anyhow::anyhow!(
+                "Failed to parse \"folder\" key (should be true/false)"
+            ))?;
+
         let emoji = String::from(yaml_fm["emoji"].as_str().unwrap_or_default());
         Ok((
             FrontMatter {
@@ -142,7 +149,7 @@ impl FrontMatter {
                 metadata: yaml_fm["metadata"].clone(),
                 unknown_keys,
                 imports,
-                folder: yaml_fm["folder"].as_bool().unwrap_or(false),
+                folder,
             },
             content_str,
         ))
@@ -225,6 +232,19 @@ gah = bar
                 "Unable to parse front matter: Expected YAML hash map for front matter"
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_parses_yes_as_true() -> TestResult {
+        let fm_result = FrontMatter::from_str("---\nfolder: yes\n---\n# title");
+
+        assert!(fm_result.is_err());
+        assert_eq!(
+            fm_result.err().unwrap().to_string(),
+            "Failed to parse \"folder\" key (should be true/false)"
+        );
 
         Ok(())
     }

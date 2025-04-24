@@ -38,7 +38,8 @@ impl<'a> MarkdownPage<'a> {
         let source = markdown_space.space_relative_path_string(markdown_page)?;
         let file = File::open(markdown_page)?;
         let mut reader = io::BufReader::new(file);
-        let (fm, original_content) = FrontMatter::from_reader(&mut reader)?;
+        let (fm, original_content) =
+            FrontMatter::from_reader(&mut reader).with_context(|| source.clone())?;
 
         let content = template_renderer
             .render_template_str(&source, &original_content, &fm)
