@@ -28,6 +28,10 @@ pub fn sync_folder(
         .get_existing_node(&page_id)
         .expect("error: Page should have been created already.");
 
+    if existing_folder.page_data().is_some() {
+        return Err(anyhow::anyhow!("{} is a page and cannot be converted to a folder at this time. Please remove the page to create the folder.", existing_folder.title));
+    }
+
     if existing_folder.parent_id != parent_id {
         confluence_client
             .move_page(&page_id, &parent_id.unwrap())?
