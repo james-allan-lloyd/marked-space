@@ -10,6 +10,7 @@ use markdown_space::MarkdownSpace;
 
 mod archive;
 mod attachment;
+mod builtins;
 mod checksum;
 mod confluence_client;
 mod confluence_page;

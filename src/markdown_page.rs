@@ -538,32 +538,6 @@ mod tests {
     }
 
     #[test]
-    fn it_renders_predefined_functions() -> TestResult {
-        let arena = Arena::<AstNode>::new();
-        let markdown_content = "# compulsory title\n{{hello_world()}}";
-        let page = page_from_str("page.md", markdown_content, &arena)?;
-
-        let rendered_page = page.render(&LinkGenerator::default())?;
-
-        assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
-
-        Ok(())
-    }
-
-    #[test]
-    fn it_renders_builtins() -> TestResult {
-        let arena = Arena::<AstNode>::new();
-        let markdown_content = "# compulsory title\n{{hello_world(name=\"world!\")}}";
-
-        let page = page_from_str("page.md", markdown_content, &arena)?;
-        let rendered_page = page.render(&LinkGenerator::default())?;
-
-        assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
-
-        Ok(())
-    }
-
-    #[test]
     fn it_parses_yaml_frontmatter() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let markdown_content = r##"---
