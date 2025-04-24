@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    attachment::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePage,
+    attachment::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePageData,
     confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
     helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
     markdown_space::MarkdownSpace, parent::get_parent_file, template_renderer::TemplateRenderer,
@@ -25,7 +25,6 @@ pub struct MarkdownPage<'a> {
     pub attachments: Vec<ImageAttachment>,
     pub local_links: Vec<LocalLink>,
     pub front_matter: FrontMatter,
-
     pub warnings: Vec<String>,
 }
 
@@ -39,7 +38,8 @@ impl<'a> MarkdownPage<'a> {
         let source = markdown_space.space_relative_path_string(markdown_page)?;
         let file = File::open(markdown_page)?;
         let mut reader = io::BufReader::new(file);
-        let (fm, original_content) = FrontMatter::from_reader(&mut reader)?;
+        let (fm, original_content) =
+            FrontMatter::from_reader(&mut reader).with_context(|| source.clone())?;
 
         let content = template_renderer
             .render_template_str(&source, &original_content, &fm)
@@ -210,6 +210,10 @@ impl<'a> MarkdownPage<'a> {
             checksum,
         })
     }
+
+    pub(crate) fn is_folder(&self) -> bool {
+        self.front_matter.folder
+    }
 }
 
 #[derive(Debug)]
@@ -229,7 +233,7 @@ impl RenderedPage {
     pub fn version_message(&self) -> String {
         format!(
             "{} source={}; checksum={}",
-            ConfluencePage::version_message_prefix(),
+            ConfluencePageData::version_message_prefix(),
             self.source.replace('\\', "/"), // needs to be platform independent
             self.checksum
         )
@@ -259,7 +263,7 @@ mod tests {
 
     use comrak::{nodes::AstNode, Arena};
 
-    use crate::confluence_page::ConfluencePage;
+    use crate::confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData};
     use crate::error::TestResult;
     use crate::link_generator::LinkGenerator;
     use crate::markdown_page::LocalLink;
@@ -340,17 +344,19 @@ mod tests {
         Ok(())
     }
 
-    fn dummy_confluence_page(title: &str, id: &str) -> ConfluencePage {
-        ConfluencePage {
+    fn dummy_confluence_page(title: &str, id: &str) -> ConfluenceNode {
+        ConfluenceNode {
             id: id.to_string(),
             title: title.to_string(),
             parent_id: None,
-            version: Version {
-                message: String::default(),
-                number: 1,
-            },
-            path: None, // "foo.md".to_string(),
-            status: ContentStatus::Current,
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    message: String::default(),
+                    number: 1,
+                },
+                path: None, // "foo.md".to_string(),
+                status: ContentStatus::Current,
+            }),
         }
     }
 
@@ -376,7 +382,7 @@ mod tests {
 
         link_generator.register_markdown_page(&page)?;
         link_generator.register_markdown_page(&linked_page)?;
-        link_generator.register_confluence_page(&dummy_confluence_page("A Linked Page", "47"));
+        link_generator.register_confluence_node(&dummy_confluence_page("A Linked Page", "47"));
 
         let content = page.to_html_string(&link_generator)?;
         println!("actual {:#?}", content);
@@ -409,7 +415,7 @@ mod tests {
 
         link_generator.register_markdown_page(&page)?;
         link_generator.register_markdown_page(&linked_page)?;
-        link_generator.register_confluence_page(&dummy_confluence_page("A Linked Page", "47"));
+        link_generator.register_confluence_node(&dummy_confluence_page("A Linked Page", "47"));
 
         let content = page.to_html_string(&link_generator)?;
         println!("actual {:#?}", content);
@@ -443,7 +449,7 @@ mod tests {
 
         link_generator.register_markdown_page(&page)?;
         link_generator.register_markdown_page(&linked_page)?;
-        link_generator.register_confluence_page(&dummy_confluence_page("A Linked Page", "47"));
+        link_generator.register_confluence_node(&dummy_confluence_page("A Linked Page", "47"));
 
         let content = page.to_html_string(&link_generator)?;
         println!("actual {:#?}", content);

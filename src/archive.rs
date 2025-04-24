@@ -2,63 +2,83 @@ use std::path::Path;
 
 use crate::{
     confluence_client::ConfluenceClient,
-    confluence_page::ConfluencePage,
+    confluence_page::{ConfluenceNode, ConfluenceNodeType},
     console::{print_status, Status},
     link_generator::LinkGenerator,
     responses::ContentStatus,
 };
 
-pub(crate) fn should_archive(p: &ConfluencePage, link_generator: &LinkGenerator) -> bool {
-    !matches!(&p.status, ContentStatus::Archived) && link_generator.is_orphaned(p)
+pub(crate) fn should_archive(node: &ConfluenceNode, link_generator: &LinkGenerator) -> bool {
+    match &node.data {
+        ConfluenceNodeType::Page(p) => {
+            !matches!(&p.status, ContentStatus::Archived) && link_generator.is_orphaned(node, p)
+        }
+        ConfluenceNodeType::Folder(_confluence_folder) => false,
+    }
 }
 
-pub(crate) fn should_unarchive(p: &ConfluencePage, link_generator: &LinkGenerator) -> bool {
-    matches!(&p.status, ContentStatus::Archived) && !link_generator.is_orphaned(p)
+pub(crate) fn should_unarchive(node: &ConfluenceNode, link_generator: &LinkGenerator) -> bool {
+    match &node.data {
+        ConfluenceNodeType::Page(p) => {
+            matches!(&p.status, ContentStatus::Archived) && !link_generator.is_orphaned(node, p)
+        }
+        ConfluenceNodeType::Folder(_confluence_folder) => false,
+    }
 }
 
 pub(crate) fn unarchive(
-    p: &ConfluencePage,
+    node: &ConfluenceNode,
     confluence_client: &ConfluenceClient,
 ) -> anyhow::Result<()> {
-    let path = p.path.clone();
-    print_status(
-        Status::Unarchived,
-        &format!(
-            "restored \"{}\" from {}",
-            p.title,
-            path.unwrap_or_default().display()
-        ),
-    );
-    p.unarchive(confluence_client)
+    match &node.data {
+        crate::confluence_page::ConfluenceNodeType::Page(p) => {
+            let path = p.path.clone();
+            print_status(
+                Status::Unarchived,
+                &format!(
+                    "restored \"{}\" from {}",
+                    node.title,
+                    path.unwrap_or_default().display()
+                ),
+            );
+            node.unarchive(confluence_client)
+        }
+        crate::confluence_page::ConfluenceNodeType::Folder(_confluence_folder) => todo!(),
+    }
 }
 
 pub(crate) fn archive(
-    p: &ConfluencePage,
+    node: &ConfluenceNode,
     space_dir: &Path,
     confluence_client: &ConfluenceClient,
 ) -> anyhow::Result<()> {
-    if let Some(path) = &p.path {
-        if !space_dir.join(path).exists() {
-            print_status(
-                Status::Archived,
-                &format!(
-                    "orphaned \"{}\" from {} (deleted)",
-                    p.title,
-                    space_dir.join(path).display()
-                ),
-            );
-        }
-    } else {
-        print_status(
-            Status::Archived,
-            &format!(
-                "orphaned page \"{}\" (probably created outside of markedspace)",
-                p.title
-            ),
-        );
-    }
+    match &node.data {
+        crate::confluence_page::ConfluenceNodeType::Page(p) => {
+            if let Some(path) = &p.path {
+                if !space_dir.join(path).exists() {
+                    print_status(
+                        Status::Archived,
+                        &format!(
+                            "orphaned \"{}\" from {} (deleted)",
+                            node.title,
+                            space_dir.join(path).display()
+                        ),
+                    );
+                }
+            } else {
+                print_status(
+                    Status::Archived,
+                    &format!(
+                        "orphaned page \"{}\" (probably created outside of markedspace)",
+                        node.title
+                    ),
+                );
+            }
 
-    p.archive(confluence_client)
+            node.archive(confluence_client)
+        }
+        crate::confluence_page::ConfluenceNodeType::Folder(_confluence_folder) => todo!(),
+    }
 }
 
 #[cfg(test)]
@@ -67,38 +87,44 @@ mod tests {
 
     use crate::{
         archive::{should_archive, should_unarchive},
-        confluence_page::ConfluencePage,
+        confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData},
         error::TestResult,
         link_generator::LinkGenerator,
         responses::{ContentStatus, Version},
         test_helpers::markdown_page_from_str,
     };
 
-    fn nonorphan(status: ContentStatus) -> ConfluencePage {
-        ConfluencePage {
+    fn nonorphan(status: ContentStatus) -> ConfluenceNode {
+        ConfluenceNode {
             id: String::from("1"),
             title: String::from("Not Orphaned Page"),
             parent_id: None,
-            version: Version {
-                message: String::from(ConfluencePage::version_message_prefix()),
-                number: 1,
-            },
-            path: None, // "foo.md".to_string(),
-            status,
+
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    message: String::from(ConfluencePageData::version_message_prefix()),
+                    number: 1,
+                },
+                path: None, // "foo.md".to_string(),
+                status,
+            }),
         }
     }
 
-    fn orphan(status: ContentStatus) -> ConfluencePage {
-        ConfluencePage {
+    fn orphan(status: ContentStatus) -> ConfluenceNode {
+        ConfluenceNode {
             id: String::from("2"),
             title: String::from("Orphaned Page"),
             parent_id: None,
-            version: Version {
-                message: String::from(ConfluencePage::version_message_prefix()),
-                number: 1,
-            },
-            path: None, // "foo.md".to_string(),
-            status,
+
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    message: String::from(ConfluencePageData::version_message_prefix()),
+                    number: 1,
+                },
+                path: None, // "foo.md".to_string(),
+                status,
+            }),
         }
     }
 
@@ -125,7 +151,7 @@ mod tests {
             &arena,
         )?)?;
 
-        assert!(!link_generator.is_orphaned(&page));
+        assert!(!link_generator.is_orphaned(&page, page.page_data().unwrap()));
         assert!(should_unarchive(&page, &link_generator));
 
         Ok(())
@@ -135,15 +161,15 @@ mod tests {
     fn it_does_not_archive_nonorphans() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let mut link_generator = test_link_generator();
-        let page = nonorphan(ContentStatus::Current);
+        let node = nonorphan(ContentStatus::Current);
         link_generator.register_markdown_page(&markdown_page_from_str(
             "test.md",
-            &format!("# {} \n", page.title),
+            &format!("# {} \n", node.title),
             &arena,
         )?)?;
 
-        assert!(!link_generator.is_orphaned(&page));
-        assert!(!should_archive(&page, &link_generator));
+        assert!(!link_generator.is_orphaned(&node, node.page_data().unwrap()));
+        assert!(!should_archive(&node, &link_generator));
 
         Ok(())
     }

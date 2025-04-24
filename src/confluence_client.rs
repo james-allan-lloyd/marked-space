@@ -37,6 +37,32 @@ impl ConfluenceClient {
         }
     }
 
+    fn rest_api(&self, p: &str) -> String {
+        format!(
+            "{}://{}/wiki/rest/api/{}",
+            if self.insecure { "http" } else { "https" },
+            self.hostname,
+            p
+        )
+    }
+
+    fn rest_api_v2(&self, p: &str) -> String {
+        format!(
+            "{}://{}/wiki/api/v2/{}",
+            if self.insecure { "http" } else { "https" },
+            self.hostname,
+            p
+        )
+    }
+
+    fn graphql_api(&self) -> String {
+        format!(
+            "{}://{}/cgraphql",
+            if self.insecure { "http" } else { "https" },
+            self.hostname
+        )
+    }
+
     pub fn get_space_by_key(&self, space_key: &str) -> Result {
         let url = format!("https://{}/wiki/api/v2/spaces", self.hostname);
         self.client
@@ -49,6 +75,15 @@ impl ConfluenceClient {
 
     pub fn create_page(&self, body_json: Value) -> Result {
         let url = format!("https://{}/wiki/api/v2/pages", self.hostname);
+        self.client
+            .post(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .json(&body_json)
+            .send()
+    }
+
+    pub(crate) fn create_folder(&self, body_json: Value) -> Result {
+        let url = self.rest_api_v2("folders");
         self.client
             .post(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
@@ -69,6 +104,16 @@ impl ConfluenceClient {
             "https://{}/wiki/api/v2/spaces/{}/pages",
             self.hostname, space_id
         );
+
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .send()
+    }
+
+    pub fn get_all_pages_from_homepage(&self, homepage_id: &str) -> Result {
+        let url = self.rest_api_v2(&format!("pages/{}/descendants", homepage_id));
 
         self.client
             .get(url)
@@ -237,23 +282,6 @@ impl ConfluenceClient {
             .send()
     }
 
-    fn rest_api(&self, p: &str) -> String {
-        format!(
-            "{}://{}/wiki/rest/api/{}",
-            if self.insecure { "http" } else { "https" },
-            self.hostname,
-            p
-        )
-    }
-
-    fn graphql_api(&self) -> String {
-        format!(
-            "{}://{}/cgraphql",
-            if self.insecure { "http" } else { "https" },
-            self.hostname
-        )
-    }
-
     pub(crate) fn search_users(&self, public_name: &str) -> Result {
         let url = self.rest_api("search/user");
         self.client
@@ -301,6 +329,25 @@ impl ConfluenceClient {
                 },
                 "query": "mutation UnarchivePagesMutation($pageIDs: [Long!]!, $includeChildren: [Boolean!]!, $parentPageId: Long) {\n  bulkUnarchivePages(\n    pageIDs: $pageIDs\n    includeChildren: $includeChildren\n    parentPageId: $parentPageId\n  ) {\n    taskId\n    status\n    __typename\n  }\n}\n"
             }))
+            .send()
+    }
+
+    pub(crate) fn move_page(&self, page_id: &str, parent_id: &str) -> Result {
+        let url = self.graphql_api();
+        self.client
+            .post(url)
+            .query(&[("q", "useMovePageHandlerMovePageAppendMutation")])
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .json(&json!({
+                    "operationName": "useMovePageHandlerMovePageAppendMutation",
+                    "variables": {
+                        "pageId": page_id,
+                        "parentId": parent_id,
+                    },
+                    "query": "mutation useMovePageHandlerMovePageAppendMutation($pageId: ID!, $parentId: ID!) {\n  movePageAppend(input: {pageId: $pageId, parentId: $parentId}) {\n    page {\n      id\n      links {\n        webui\n        editui\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n"
+                }))
             .send()
     }
 

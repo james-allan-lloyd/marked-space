@@ -160,6 +160,19 @@ pub struct User {
     // pub display_name: String,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Descendant {
+    pub id: String,
+    // pub status: OnlyArchivedAndCurrentContentStatus
+    pub title: String,
+    #[serde(rename = "type")]
+    pub _type: String,
+    pub parent_id: String,
+    // pub depth: i32,
+    // pub child_position: i32,
+}
+
 #[cfg(test)]
 mod test {
     use serde_json::json;

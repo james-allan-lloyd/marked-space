@@ -22,6 +22,7 @@ pub struct FrontMatter {
     pub metadata: Yaml,
     pub unknown_keys: Vec<String>,
     pub imports: Vec<String>,
+    pub folder: bool,
 }
 
 enum FrontMatterParseState {
@@ -38,6 +39,7 @@ impl Default for FrontMatter {
             metadata: Yaml::Null,
             unknown_keys: Vec::default(),
             imports: Vec::default(),
+            folder: false,
         }
     }
 }
@@ -98,7 +100,8 @@ impl FrontMatter {
             .into());
         }
 
-        static VALID_TOP_LEVEL_KEYS: [&str; 4] = ["emoji", "labels", "metadata", "imports"];
+        static VALID_TOP_LEVEL_KEYS: [&str; 5] =
+            ["emoji", "labels", "metadata", "imports", "folder"];
         let string_keys: HashSet<&str> = yaml_fm
             .as_hash()
             .unwrap()
@@ -131,6 +134,13 @@ impl FrontMatter {
             })
             .unwrap_or_default();
 
+        let folder = yaml_fm["folder"]
+            .borrowed_or(&Yaml::Boolean(false))
+            .as_bool()
+            .ok_or(anyhow::anyhow!(
+                "Failed to parse \"folder\" key (should be true/false)"
+            ))?;
+
         let emoji = String::from(yaml_fm["emoji"].as_str().unwrap_or_default());
         Ok((
             FrontMatter {
@@ -139,6 +149,7 @@ impl FrontMatter {
                 metadata: yaml_fm["metadata"].clone(),
                 unknown_keys,
                 imports,
+                folder,
             },
             content_str,
         ))
@@ -221,6 +232,19 @@ gah = bar
                 "Unable to parse front matter: Expected YAML hash map for front matter"
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_parses_yes_as_true() -> TestResult {
+        let fm_result = FrontMatter::from_str("---\nfolder: yes\n---\n# title");
+
+        assert!(fm_result.is_err());
+        assert_eq!(
+            fm_result.err().unwrap().to_string(),
+            "Failed to parse \"folder\" key (should be true/false)"
+        );
 
         Ok(())
     }

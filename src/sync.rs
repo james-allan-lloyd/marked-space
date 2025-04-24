@@ -13,10 +13,11 @@ use crate::{
     attachment::ImageAttachment,
     checksum::sha256_digest,
     confluence_client::ConfluenceClient,
-    confluence_page::ConfluencePage,
+    confluence_page::ConfluenceNode,
     confluence_space::ConfluenceSpace,
     console::{print_error, print_info, print_status, Status},
     error::ConfluenceError,
+    folders::sync_folder,
     link_generator::LinkGenerator,
     markdown_page::{MarkdownPage, RenderedPage},
     markdown_space::MarkdownSpace,
@@ -168,8 +169,9 @@ fn sync_page_content(
     confluence_client: &ConfluenceClient,
     space: &ConfluenceSpace,
     rendered_page: RenderedPage,
-    existing_page: &ConfluencePage,
+    existing_node: &ConfluenceNode,
 ) -> Result<()> {
+    let page_data = existing_node.page_data().unwrap();
     let op = SyncOperation::start(
         format!("[{}] \"{}\"", rendered_page.source, rendered_page.title),
         true,
@@ -183,9 +185,9 @@ fn sync_page_content(
         Some(space.homepage_id.clone())
     };
 
-    let id = existing_page.id.clone();
+    let id = existing_node.id.clone();
     let version_message = rendered_page.version_message();
-    if page_up_to_date(existing_page, &rendered_page, &parent_id, &version_message) {
+    if page_up_to_date(existing_node, &rendered_page, &parent_id, &version_message) {
         op.end(Status::Skipped);
         return Ok(());
     }
@@ -202,7 +204,7 @@ fn sync_page_content(
         },
         "version": {
             "message": version_message,
-            "number": existing_page.version.number + 1
+            "number": page_data.version.number + 1
         },
     });
 
@@ -217,14 +219,14 @@ fn sync_page_content(
 }
 
 fn page_up_to_date(
-    existing_page: &ConfluencePage,
+    existing_node: &ConfluenceNode,
     page: &RenderedPage,
     parent_id: &Option<String>,
     version_message: &String,
 ) -> bool {
-    parent_id == &existing_page.parent_id
-        && version_message == &existing_page.version.message
-        && existing_page.title == page.title
+    parent_id == &existing_node.parent_id
+        && existing_node.title == page.title
+        && version_message == &existing_node.page_data().unwrap().version.message
 }
 
 pub fn sync_space<'a>(
@@ -257,40 +259,65 @@ pub fn sync_space<'a>(
     space.link_pages(&mut link_generator);
     space.archive_orphans(&link_generator, &markdown_space.dir, &confluence_client)?;
     space.restore_archived_pages(&link_generator, &confluence_client)?;
-    space.create_initial_pages(&mut link_generator, &confluence_client)?;
+    space.create_initial_nodes(&mut link_generator, &confluence_client)?;
 
     for markdown_page in markdown_pages.iter() {
-        let rendered_page = markdown_page.render(&link_generator)?;
-        if let Some(ref d) = args.output {
-            output_content(d, &rendered_page)?;
-        }
-        let page_id = link_generator
-            .get_file_id(&PathBuf::from(&rendered_page.source))
-            .expect("All pages should have been created already.");
-        let existing_page = space
-            .get_existing_page(&page_id)
-            .expect("Page should have been created already.");
-        sync_page_content(&confluence_client, &space, rendered_page, &existing_page)?;
-        sync_page_attachments(
-            &confluence_client,
-            &existing_page.id,
-            &markdown_page.attachments,
-        )?;
-        sync_page_labels(
-            &confluence_client,
-            &existing_page.id,
-            &markdown_page.front_matter.labels,
-        )?;
-        sync_page_properties(&confluence_client, markdown_page, &existing_page.id)?;
-
-        let restrictions_type = if args.single_editor {
-            RestrictionType::SingleEditor(&current_user)
+        if markdown_page.is_folder() {
+            sync_folder(markdown_page, &link_generator, &space, &confluence_client)?;
         } else {
-            RestrictionType::OpenSpace
-        };
-        sync_restrictions(restrictions_type, &confluence_client, &existing_page)?;
+            sync_page(
+                markdown_page,
+                &link_generator,
+                &args,
+                &space,
+                &confluence_client,
+                &current_user,
+            )?;
+        }
     }
 
+    Ok(())
+}
+
+fn sync_page(
+    markdown_page: &MarkdownPage,
+    link_generator: &LinkGenerator,
+    args: &Args,
+    space: &ConfluenceSpace,
+    confluence_client: &ConfluenceClient,
+    current_user: &tera::Value,
+) -> Result<()> {
+    let rendered_page = markdown_page.render(link_generator)?;
+    if let Some(ref d) = args.output {
+        output_content(d, &rendered_page)?;
+    }
+    let page_id = link_generator
+        .get_file_id(&PathBuf::from(&rendered_page.source))
+        .expect("error: All pages should have been created already.");
+    let existing_page = space
+        .get_existing_node(&page_id)
+        .expect("error: Page should have been created already.");
+    if existing_page.page_data().is_none() {
+        return Err(anyhow::anyhow!("{} is not a page and cannot be converted (at this time). You'll need to delete it manually before marked-space can create it as a page", existing_page.title));
+    }
+    sync_page_content(confluence_client, space, rendered_page, &existing_page)?;
+    sync_page_attachments(
+        confluence_client,
+        &existing_page.id,
+        &markdown_page.attachments,
+    )?;
+    sync_page_labels(
+        confluence_client,
+        &existing_page.id,
+        &markdown_page.front_matter.labels,
+    )?;
+    sync_page_properties(confluence_client, markdown_page, &existing_page.id)?;
+    let restrictions_type = if args.single_editor {
+        RestrictionType::SingleEditor(current_user)
+    } else {
+        RestrictionType::OpenSpace
+    };
+    sync_restrictions(restrictions_type, confluence_client, &existing_page)?;
     Ok(())
 }
 
@@ -363,7 +390,11 @@ fn output_content(d: &String, page: &RenderedPage) -> Result<()> {
 mod tests {
     use std::path::Path;
 
-    use crate::{markdown_page::MarkdownPage, template_renderer::TemplateRenderer};
+    use crate::{
+        confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData},
+        markdown_page::MarkdownPage,
+        template_renderer::TemplateRenderer,
+    };
 
     use self::responses::Version;
 
@@ -391,16 +422,18 @@ mod tests {
             &mut template_renderer,
         )?;
         link_generator.register_markdown_page(&markdown_page)?;
-        link_generator.register_confluence_page(&ConfluencePage {
+        link_generator.register_confluence_node(&ConfluenceNode {
             id: "29".to_string(),
             title: markdown_page.title.clone(),
             parent_id: None,
-            version: Version {
-                message: String::default(),
-                number: 1,
-            },
-            path: None, // "foo.md".to_string(),
-            status: ContentStatus::Current,
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    message: String::default(),
+                    number: 1,
+                },
+                path: None, // "foo.md".to_string(),
+                status: ContentStatus::Current,
+            }),
         });
         markdown_page.render(link_generator)
     }
@@ -525,16 +558,19 @@ mod tests {
 
     #[test]
     fn it_updates_title() -> TestResult {
-        let confluence_page = ConfluencePage {
+        let confluence_page = ConfluenceNode {
             id: String::from("1"),
             title: String::from("Old Title"),
             parent_id: None,
-            version: Version {
-                message: String::default(),
-                number: 1,
-            },
-            path: None,
-            status: ContentStatus::Current,
+
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: Version {
+                    message: String::default(),
+                    number: 1,
+                },
+                path: None,
+                status: ContentStatus::Current,
+            }),
         };
         let rendered_page = RenderedPage {
             title: String::from("New title"),

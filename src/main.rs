@@ -18,6 +18,7 @@ mod confluence_space;
 mod confluence_storage_renderer;
 mod console;
 mod error;
+mod folders;
 mod frontmatter;
 mod helpers;
 mod imports;
