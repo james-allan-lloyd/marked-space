@@ -93,5 +93,5 @@ Confluence specific ones.
 [Task Lists](./task-list.md) are also supported, but you should probably only
 use them in a read only display way, as they will be overwritten.
 
-[Expandable Sections](./expand.md) allow you to made sections that can be
-expanded on click.
+[Alerts and Expandable Sections](./alerts.md) allow you use Github style alerts
+in your Markdown, and also support sections that can be expanded on click.
