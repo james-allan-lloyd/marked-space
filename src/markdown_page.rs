@@ -72,6 +72,7 @@ impl<'a> MarkdownPage<'a> {
         options.extension.front_matter_delimiter = Some("---".to_string());
         options.extension.shortcodes = true;
         options.extension.tagfilter = true;
+        options.extension.alerts = true;
         options
     }
 
@@ -533,32 +534,6 @@ mod tests {
         let rendered_page = page.render(&LinkGenerator::default())?;
 
         assert_eq!(rendered_page.content.trim(), "<p>page.md</p>");
-
-        Ok(())
-    }
-
-    #[test]
-    fn it_renders_predefined_functions() -> TestResult {
-        let arena = Arena::<AstNode>::new();
-        let markdown_content = "# compulsory title\n{{hello_world()}}";
-        let page = page_from_str("page.md", markdown_content, &arena)?;
-
-        let rendered_page = page.render(&LinkGenerator::default())?;
-
-        assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
-
-        Ok(())
-    }
-
-    #[test]
-    fn it_renders_builtins() -> TestResult {
-        let arena = Arena::<AstNode>::new();
-        let markdown_content = "# compulsory title\n{{hello_world(name=\"world!\")}}";
-
-        let page = page_from_str("page.md", markdown_content, &arena)?;
-        let rendered_page = page.render(&LinkGenerator::default())?;
-
-        assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
 
         Ok(())
     }
