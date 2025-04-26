@@ -11,6 +11,7 @@ use std::str;
 
 use once_cell::sync::Lazy;
 
+use crate::alerts::render_expand;
 use crate::attachment::{render_link_enter, render_link_leave};
 use crate::link_generator::LinkGenerator;
 
@@ -820,9 +821,22 @@ impl<'o> ConfluenceStorageRenderer<'o> {
             NodeValue::Subscript => (),
             NodeValue::SpoileredText => (),
             NodeValue::EscapedTag(_) => (),
-            NodeValue::Alert(ref _node_alert) => (),
+            NodeValue::Alert(ref node_alert) => self.render_alert(entering, node_alert)?,
         }
         Ok(false)
+    }
+
+    fn render_alert(
+        &mut self,
+        entering: bool,
+        node_alert: &comrak::nodes::NodeAlert,
+    ) -> Result<(), io::Error> {
+        if let Some(title) = &node_alert.title {
+            if title.starts_with("[expand]") {
+                render_expand(self.output, title, entering)?;
+            }
+        }
+        Ok(())
     }
 
     fn render_sourcepos<'a>(&mut self, node: &'a AstNode<'a>) -> io::Result<()> {

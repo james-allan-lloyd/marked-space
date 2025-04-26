@@ -72,6 +72,7 @@ impl<'a> MarkdownPage<'a> {
         options.extension.front_matter_delimiter = Some("---".to_string());
         options.extension.shortcodes = true;
         options.extension.tagfilter = true;
+        options.extension.alerts = true;
         options
     }
 
