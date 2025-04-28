@@ -33,6 +33,7 @@ mod page_emojis;
 mod parent;
 mod responses;
 mod restrictions;
+mod sort;
 mod sync;
 mod sync_operation;
 mod template_renderer;

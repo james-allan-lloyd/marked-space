@@ -123,6 +123,28 @@ impl ConfluenceClient {
             .send()
     }
 
+    pub(crate) fn get_folder_descendants(&self, page_id: String) -> Result {
+        let url = self.rest_api_v2(&format!("folders/{}/descendants", page_id));
+
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .query(&[("depth", "1")])
+            .header("Accept", "application/json")
+            .send()
+    }
+
+    pub(crate) fn get_page_descendants(&self, page_id: String) -> Result {
+        let url = self.rest_api_v2(&format!("pages/{}/descendants", page_id));
+
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .query(&[("depth", "1")])
+            .header("Accept", "application/json")
+            .send()
+    }
+
     pub fn update_page(&self, page_id: &String, payload: Value) -> Result {
         let url = format!("https://{}/wiki/api/v2/pages/{}", self.hostname, page_id);
         // let url = format!("https://{}/wiki/api/content/{}", self.hostname, page_id);
@@ -387,6 +409,24 @@ impl ConfluenceClient {
         let url = self.rest_api(&format!("content/{}/restriction/byOperation", id));
         self.client
             .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
+    pub(crate) fn move_page_relative(
+        &self,
+        page_id: &str,
+        position: &str,
+        target_id: &str,
+    ) -> Result {
+        let url = self.rest_api(&format!(
+            "content/{}/move/{}/{}",
+            page_id, position, target_id
+        ));
+        self.client
+            .put(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
             .header("Accept", "application/json")
             .header("X-Atlassian-Token", "no-check")
