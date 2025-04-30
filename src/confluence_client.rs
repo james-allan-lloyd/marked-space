@@ -91,9 +91,9 @@ impl ConfluenceClient {
             .send()
     }
 
-    pub fn get(&self, url: reqwest::Url) -> Result {
+    pub fn get(&self, url: &reqwest::Url) -> Result {
         self.client
-            .get(url)
+            .get(url.clone())
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
             .header("Accept", "application/json")
             .send()
@@ -118,6 +118,7 @@ impl ConfluenceClient {
         self.client
             .get(url)
             .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .query(&[("limit", "1")])
             .header("Accept", "application/json")
             .send()
     }
