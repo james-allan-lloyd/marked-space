@@ -149,6 +149,12 @@ impl ConfluencePageData {
     }
 }
 
+impl From<ConfluencePageData> for ConfluenceNodeType {
+    fn from(s: ConfluencePageData) -> Self {
+        ConfluenceNodeType::Page(s)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

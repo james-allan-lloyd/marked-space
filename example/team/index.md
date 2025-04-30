@@ -1,3 +1,7 @@
+---
+sort: inc
+---
+
 # marked-space Documentation and Example Confluence Space
 
 Welcome to the Marked-Space documentation. This documentation is designed to
