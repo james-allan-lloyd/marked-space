@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::confluence_client::ConfluenceClient;
@@ -37,16 +38,43 @@ pub fn sort_descendants(
     if all_descendants_data.is_empty() {
         return Ok(());
     }
+
+    // Create a simple sorted list
     let mut sorted_descendants = Vec::from(all_descendants_data);
     sorted_descendants.sort_by_key(|d| d.title.clone());
 
+    // Setup predecssors based on that sorted list
+    let mut predecessors: HashMap<String, Option<String>> = HashMap::default();
+    predecessors.insert(sorted_descendants[0].id.clone(), None);
     for i in 1..sorted_descendants.len() {
-        let page_id = &sorted_descendants[i].id;
-        let next_page_id = &sorted_descendants[i - 1].id;
-        print_status(Reordered, &sorted_descendants[i].title);
-        client
-            .move_page_relative(page_id, "after", next_page_id)?
-            .error_for_status()?;
+        let current_id = sorted_descendants[i].id.clone();
+        let predecessor = sorted_descendants[i - 1].id.clone();
+        predecessors.insert(current_id, Some(predecessor));
+    }
+
+    // If the predecessor is not the same as in the sorted list, tell confluence to update.
+    // It probably still does too many updates for a single reorder; one to fix where the update
+    // was, one to fix where it goes and one to fix the original item. Probably the move for the
+    // original item is all that's actually necessary.
+    for i in 0..all_descendants_data.len() {
+        let page_id = &all_descendants_data[i].id;
+        let unsorted_predecessor = if i == 0 {
+            None
+        } else {
+            Some(all_descendants_data[i - 1].id.clone())
+        };
+        if predecessors[page_id] != unsorted_predecessor {
+            // println!(
+            //     "current {} unsorted pre {:?} sorted pre {:?}",
+            //     page_id, unsorted_predecessor, predecessors[page_id]
+            // );
+            if predecessors[page_id].is_some() {
+                print_status(Reordered, &all_descendants_data[i].title);
+                client
+                    .move_page_relative(page_id, "after", predecessors[page_id].as_ref().unwrap())?
+                    .error_for_status()?;
+            }
+        }
     }
 
     Ok(())
@@ -198,6 +226,94 @@ mod test {
         sort_descendants(&test_server.client, &all_descendants_data)?;
 
         mock.assert();
+
+        Ok(())
+    }
+
+    fn generate_descendant_list(size: u32) -> Vec<Descendant> {
+        (0..size)
+            .map(|i| Descendant {
+                id: i.to_string(),
+                title: format!("Page {}", i),
+                _type: "page".into(),
+                parent_id: "99".into(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn it_only_move_the_necessary_pages() -> TestResult {
+        let mut test_server = TestServer::default();
+
+        let mut all_descendants_data = generate_descendant_list(4);
+
+        println!(
+            "before: {:?}",
+            all_descendants_data
+                .iter()
+                .map(|d| d.id.clone())
+                .collect::<Vec<String>>()
+        );
+
+        let moved_node = all_descendants_data[3].clone();
+        all_descendants_data.remove(3);
+
+        all_descendants_data.insert(1, moved_node);
+
+        println!(
+            "after: {:?}",
+            all_descendants_data
+                .iter()
+                .map(|d| d.id.clone())
+                .collect::<Vec<String>>()
+        );
+
+        let mocks = vec![
+            test_server.mock_move_page("1", "after", "0"), // remove 3
+            test_server.mock_move_page("3", "after", "2"), // insert 3 after 2
+        ];
+
+        sort_descendants(&test_server.client, &all_descendants_data)?;
+
+        mocks.iter().for_each(|mock| mock.assert());
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_only_move_the_necessary_pages_first_and_last() -> TestResult {
+        let mut test_server = TestServer::default();
+
+        let mut all_descendants_data = generate_descendant_list(4);
+
+        println!(
+            "before: {:?}",
+            all_descendants_data
+                .iter()
+                .map(|d| d.id.clone())
+                .collect::<Vec<String>>()
+        );
+
+        let moved_node = all_descendants_data[0].clone();
+        all_descendants_data.remove(0);
+
+        all_descendants_data.insert(3, moved_node);
+
+        println!(
+            "after: {:?}",
+            all_descendants_data
+                .iter()
+                .map(|d| d.id.clone())
+                .collect::<Vec<String>>()
+        );
+
+        let mocks = vec![
+            test_server.mock_move_page("1", "after", "0"), // remove 3
+        ];
+
+        sort_descendants(&test_server.client, &all_descendants_data)?;
+
+        mocks.iter().for_each(|mock| mock.assert());
 
         Ok(())
     }

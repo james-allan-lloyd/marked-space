@@ -27,7 +27,7 @@ In later versions of marked-space we also added the ability to designate
 certain `index.md`s and their directories as Confluence Folders. You can mark a
 directory as a folder with the following:
 
-```
+```plain
 ---
 folder: true
 ---
