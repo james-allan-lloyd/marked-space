@@ -39,8 +39,6 @@ where
             .and_then(|l| l.next)
             .and_then(|n| current_url.join(&n).ok());
         self.current_page = VecDeque::from_iter(existing_page.results.iter().cloned());
-        let links = existing_page.links.unwrap();
-        self.next_url = links.next.map(|l| current_url.join(l.as_str()).unwrap()); //FIXME: error
         Ok(self)
     }
 
