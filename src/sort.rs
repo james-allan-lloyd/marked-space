@@ -99,124 +99,12 @@ mod test {
 
     use super::{sort_descendants, sync_sort};
 
-    fn mock_move_page(
-        server: &mut mockito::ServerGuard,
-        page_id: &str,
-        position: &str,
-        target_id: &str,
-    ) -> mockito::Mock {
-        let url = format!(
-            "/wiki/rest/api/content/{}/move/{}/{}",
-            page_id, position, target_id
-        );
-
-        server
-            .mock("PUT", url.as_str())
-            .with_status(200)
-            .with_header("authorization", "Basic Og==")
-            .with_header("content-type", "application/json")
-            .with_header("X-Atlassian-Token", "no-check")
-            .create()
-    }
-
-    fn mock_descendants(
-        server: &mut mockito::ServerGuard,
-        page_id: &str,
-        all_descendants_data: &Vec<Descendant>,
-    ) -> mockito::Mock {
-        let url = format!("/wiki/api/v2/pages/{}/descendants", page_id);
-        server
-            .mock("GET", url.as_str())
-            .match_query(Matcher::Any)
-            .with_status(200)
-            .with_header("authorization", "Basic Og==")
-            .with_header("content-type", "application/json")
-            .with_header("X-Atlassian-Token", "no-check")
-            .with_body(json!({"results": all_descendants_data}).to_string())
-            .create()
-    }
-
-    #[test]
-    fn it_sorts_pages() -> TestResult {
-        let mut server = mockito::Server::new();
-        let host = server.host_with_port();
-        let client = confluence_client::ConfluenceClient::new_insecure(&host);
-
-        let all_descendants_data = vec![
-            Descendant {
-                id: "3".into(),
-                title: "Page B".into(),
-                _type: "page".into(),
-                parent_id: "1".into(),
-            },
-            Descendant {
-                id: "2".into(),
-                title: "Page A".into(),
-                _type: "page".into(),
-                parent_id: "1".into(),
-            },
-        ];
-
-        let mock = mock_move_page(&mut server, "3", "after", "2");
-
-        sort_descendants(&client, &all_descendants_data)?;
-
-        mock.assert();
-
-        Ok(())
-    }
-
-    #[test]
-    fn it_only_sorts_pages_with_sort_parameter_set() -> TestResult {
-        let mut server = mockito::Server::new();
-        let host = server.host_with_port();
-        let client = confluence_client::ConfluenceClient::new_insecure(&host);
-
-        let mut link_generator = LinkGenerator::default();
-
-        let markdown_space = MarkdownSpace::default("test", &PathBuf::from("test"));
-        let markdown_page = markdown_space.page_from_str("index.md", "# Title\nContent")?;
-        let sorted_markdown_page = markdown_space
-            .page_from_str("index.md", "---\nsort: inc\n---\n# Sorted Title\nContent")?;
-        assert_eq!(sorted_markdown_page.front_matter.sort, Sort::Incrementing);
-        register_mark_and_conf_page("1", &mut link_generator, &markdown_page)?;
-        register_mark_and_conf_page("2", &mut link_generator, &sorted_markdown_page)?;
-
-        let all_descendants_data = vec![
-            Descendant {
-                id: "3".into(),
-                title: "Page B".into(),
-                _type: "page".into(),
-                parent_id: "1".into(),
-            },
-            Descendant {
-                id: "2".into(),
-                title: "Page A".into(),
-                _type: "page".into(),
-                parent_id: "1".into(),
-            },
-        ];
-
-        mock_descendants(&mut server, "1", &all_descendants_data);
-        mock_descendants(&mut server, "2", &all_descendants_data);
-
-        let mock = mock_move_page(&mut server, "3", "after", "2");
-
-        sync_sort(&markdown_page, &link_generator, &client)?;
-        assert!(!mock.matched());
-
-        sync_sort(&sorted_markdown_page, &link_generator, &client)?;
-        assert!(mock.matched());
-
-        Ok(())
-    }
-
-    fn register_mark_and_conf_page(
+    fn register_mark_and_conf_page<'a>(
         page_id: &str,
         link_generator: &mut LinkGenerator,
-        markdown_page: &crate::markdown_page::MarkdownPage<'_>,
-    ) -> Result<(), anyhow::Error> {
-        link_generator.register_markdown_page(markdown_page)?;
+        markdown_page: crate::markdown_page::MarkdownPage<'a>,
+    ) -> Result<crate::markdown_page::MarkdownPage<'a>, anyhow::Error> {
+        link_generator.register_markdown_page(&markdown_page)?;
         link_generator.register_confluence_node(&ConfluenceNode {
             id: page_id.into(),
             title: markdown_page.title.clone(),
@@ -230,6 +118,138 @@ mod test {
                 status: ContentStatus::Current,
             }),
         });
+        Ok(markdown_page)
+    }
+
+    struct TestServer {
+        server: mockito::ServerGuard,
+        client: confluence_client::ConfluenceClient,
+    }
+
+    impl Default for TestServer {
+        fn default() -> Self {
+            let server = mockito::Server::new();
+            let host = server.host_with_port();
+            let client = confluence_client::ConfluenceClient::new_insecure(&host);
+            Self { server, client }
+        }
+    }
+
+    impl TestServer {
+        fn mock_descendants(
+            &mut self,
+            page_id: &str,
+            all_descendants_data: &Vec<Descendant>,
+        ) -> mockito::Mock {
+            let url = format!("/wiki/api/v2/pages/{}/descendants", page_id);
+            self.server
+                .mock("GET", url.as_str())
+                .match_query(Matcher::Any)
+                .with_status(200)
+                .with_header("authorization", "Basic Og==")
+                .with_header("content-type", "application/json")
+                .with_header("X-Atlassian-Token", "no-check")
+                .with_body(json!({"results": all_descendants_data}).to_string())
+                .create()
+        }
+
+        fn mock_move_page(
+            &mut self,
+            page_id: &str,
+            position: &str,
+            target_id: &str,
+        ) -> mockito::Mock {
+            let url = format!(
+                "/wiki/rest/api/content/{}/move/{}/{}",
+                page_id, position, target_id
+            );
+
+            self.server
+                .mock("PUT", url.as_str())
+                .with_status(200)
+                .with_header("authorization", "Basic Og==")
+                .with_header("content-type", "application/json")
+                .with_header("X-Atlassian-Token", "no-check")
+                .create()
+        }
+    }
+
+    #[test]
+    fn it_sorts_pages() -> TestResult {
+        let mut test_server = TestServer::default();
+
+        let all_descendants_data = vec![
+            Descendant {
+                id: "3".into(),
+                title: "Page B".into(),
+                _type: "page".into(),
+                parent_id: "1".into(),
+            },
+            Descendant {
+                id: "2".into(),
+                title: "Page A".into(),
+                _type: "page".into(),
+                parent_id: "1".into(),
+            },
+        ];
+
+        let mock = test_server.mock_move_page("3", "after", "2");
+
+        sort_descendants(&test_server.client, &all_descendants_data)?;
+
+        mock.assert();
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_only_sorts_pages_with_sort_parameter_set() -> TestResult {
+        let mut test_server = TestServer::default();
+
+        let mut link_generator = LinkGenerator::default();
+
+        let markdown_space = MarkdownSpace::default("test", &PathBuf::from("test"));
+        let markdown_page = register_mark_and_conf_page(
+            "1",
+            &mut link_generator,
+            markdown_space.page_from_str("index.md", "# Title\nContent")?,
+        )?;
+
+        let sorted_markdown_page = register_mark_and_conf_page(
+            "2",
+            &mut link_generator,
+            markdown_space
+                .page_from_str("index.md", "---\nsort: inc\n---\n# Sorted Title\nContent")?,
+        )?;
+
+        assert_eq!(sorted_markdown_page.front_matter.sort, Sort::Incrementing);
+
+        let all_descendants_data = vec![
+            Descendant {
+                id: "3".into(),
+                title: "Page B".into(),
+                _type: "page".into(),
+                parent_id: "1".into(),
+            },
+            Descendant {
+                id: "2".into(),
+                title: "Page A".into(),
+                _type: "page".into(),
+                parent_id: "1".into(),
+            },
+        ];
+
+        test_server.mock_descendants("1", &all_descendants_data);
+        test_server.mock_descendants("2", &all_descendants_data);
+
+        let mock = test_server.mock_move_page("3", "after", "2");
+
+        sync_sort(&markdown_page, &link_generator, &test_server.client)?;
+        assert!(!mock.matched());
+
+        sync_sort(&sorted_markdown_page, &link_generator, &test_server.client)?;
+        assert!(mock.matched());
+
         Ok(())
     }
 }
