@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::confluence_client::ConfluenceClient;
@@ -52,6 +52,8 @@ pub fn sort_descendants(
         predecessors.insert(current_id, Some(predecessor));
     }
 
+    let mut moved_ids: HashSet<String> = HashSet::default();
+
     // If the predecessor is not the same as in the sorted list, tell confluence to update.
     // It probably still does too many updates for a single reorder; one to fix where the update
     // was, one to fix where it goes and one to fix the original item. Probably the move for the
@@ -63,15 +65,22 @@ pub fn sort_descendants(
         } else {
             Some(all_descendants_data[i - 1].id.clone())
         };
-        if predecessors[page_id] != unsorted_predecessor {
-            // println!(
-            //     "current {} unsorted pre {:?} sorted pre {:?}",
-            //     page_id, unsorted_predecessor, predecessors[page_id]
-            // );
-            if predecessors[page_id].is_some() {
+        let sorted_predecessor = predecessors[page_id].clone();
+        let moved_predecessor = if let Some(ref sorted_pre_id) = sorted_predecessor {
+            moved_ids.contains(sorted_pre_id)
+        } else {
+            false
+        };
+        if moved_predecessor || sorted_predecessor != unsorted_predecessor {
+            println!(
+                "current {} unsorted pre {:?} sorted pre {:?}",
+                page_id, unsorted_predecessor, predecessors[page_id]
+            );
+            if sorted_predecessor.is_some() {
                 print_status(Reordered, &all_descendants_data[i].title);
+                moved_ids.insert(page_id.to_owned());
                 client
-                    .move_page_relative(page_id, "after", predecessors[page_id].as_ref().unwrap())?
+                    .move_page_relative(page_id, "after", sorted_predecessor.as_ref().unwrap())?
                     .error_for_status()?;
             }
         }
@@ -242,7 +251,7 @@ mod test {
     }
 
     #[test]
-    fn it_only_move_the_necessary_pages() -> TestResult {
+    fn it_only_moves_the_necessary_pages() -> TestResult {
         let mut test_server = TestServer::default();
 
         let mut all_descendants_data = generate_descendant_list(4);
@@ -269,8 +278,9 @@ mod test {
         );
 
         let mocks = vec![
-            test_server.mock_move_page("1", "after", "0"), // remove 3
-            test_server.mock_move_page("3", "after", "2"), // insert 3 after 2
+            test_server.mock_move_page("3", "after", "2"),
+            test_server.mock_move_page("1", "after", "0"),
+            test_server.mock_move_page("2", "after", "1"),
         ];
 
         sort_descendants(&test_server.client, &all_descendants_data)?;
@@ -281,7 +291,7 @@ mod test {
     }
 
     #[test]
-    fn it_only_move_the_necessary_pages_first_and_last() -> TestResult {
+    fn it_only_moves_the_necessary_pages_first_and_last() -> TestResult {
         let mut test_server = TestServer::default();
 
         let mut all_descendants_data = generate_descendant_list(4);
@@ -307,8 +317,53 @@ mod test {
                 .collect::<Vec<String>>()
         );
 
+        // Actually this is worst case; need to move all the nodes to be after the first that gets
+        // moved to the end.
         let mocks = vec![
-            test_server.mock_move_page("1", "after", "0"), // remove 3
+            test_server.mock_move_page("1", "after", "0"),
+            test_server.mock_move_page("2", "after", "1"),
+            test_server.mock_move_page("3", "after", "2"),
+        ];
+
+        sort_descendants(&test_server.client, &all_descendants_data)?;
+
+        mocks.iter().for_each(|mock| mock.assert());
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_only_move_the_necessary_pages_last_to_first_mult() -> TestResult {
+        let mut test_server = TestServer::default();
+
+        let mut all_descendants_data = generate_descendant_list(4);
+
+        println!(
+            "before: {:?}",
+            all_descendants_data
+                .iter()
+                .map(|d| d.id.clone())
+                .collect::<Vec<String>>()
+        );
+
+        let mut node = all_descendants_data.pop().unwrap();
+        all_descendants_data.insert(0, node);
+        node = all_descendants_data.pop().unwrap();
+        all_descendants_data.insert(0, node);
+
+        println!(
+            "after: {:?}",
+            all_descendants_data
+                .iter()
+                .map(|d| d.id.clone())
+                .collect::<Vec<String>>()
+        );
+
+        // this is the optimal case; part of the list is in order, so we don't need to move
+        // everything.
+        let mocks = vec![
+            test_server.mock_move_page("2", "after", "1"),
+            test_server.mock_move_page("3", "after", "2"),
         ];
 
         sort_descendants(&test_server.client, &all_descendants_data)?;
