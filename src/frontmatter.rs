@@ -101,8 +101,8 @@ impl FrontMatter {
             .into());
         }
 
-        static VALID_TOP_LEVEL_KEYS: [&str; 5] =
-            ["emoji", "labels", "metadata", "imports", "folder"];
+        static VALID_TOP_LEVEL_KEYS: [&str; 6] =
+            ["emoji", "labels", "metadata", "imports", "folder", "sort"];
         let string_keys: HashSet<&str> = yaml_fm
             .as_hash()
             .unwrap()
