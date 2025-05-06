@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::VecDeque;
 
 use std::path::PathBuf;
 
@@ -44,25 +44,29 @@ impl MoveContent for ConfluenceClient {
     }
 }
 
+/// A more complex than it should be sorting algorithm to get around the fact that the Confluence
+/// API only supports relative moves.
+///
+/// When working through it (with a number of options), these were my goals:
+/// - Actually result in a sorted child list on the server
+/// - Minimize the number of calls to the server (hence we model the presumed server state so that
+///   we don't have to move everything)
+/// - Prefer to optimize for reordering children at the end (ie, new pages).
+///
+/// It has the worst performance when the unordered item is at the beginning.
 fn sort_descendants<T: MoveContent>(
     all_descendants_data: &[Descendant],
     move_content: &mut T,
 ) -> Result<()> {
-    if all_descendants_data.is_empty() {
+    if all_descendants_data.len() < 2 {
         return Ok(());
     }
 
-    let mut server_state = Vec::from(all_descendants_data);
+    let mut server_state: VecDeque<&Descendant> = VecDeque::from_iter(all_descendants_data);
 
     // Create a simple sorted list
     let mut sorted_descendants = Vec::from(all_descendants_data);
     sorted_descendants.sort_by_key(|d| d.title.clone());
-
-    let mut final_positions: HashMap<String, usize> = HashMap::default();
-    for i in 0..sorted_descendants.len() {
-        let current_id = sorted_descendants[i].id.clone();
-        final_positions.insert(current_id, i);
-    }
 
     let mut i = 0;
 
@@ -73,7 +77,7 @@ fn sort_descendants<T: MoveContent>(
             .iter()
             .position(|d| d.id == sorted_descendants[0].id)
             .unwrap();
-        let descendant = server_state.remove(source_pos);
+        let descendant = server_state.remove(source_pos).unwrap();
         server_state.insert(0, descendant);
     }
 
@@ -97,7 +101,7 @@ fn sort_descendants<T: MoveContent>(
                 .iter()
                 .position(|d| d.id == sorted_descendants[i + 1].id)
                 .unwrap();
-            let descendant = server_state.remove(source_pos);
+            let descendant = server_state.remove(source_pos).unwrap();
             if target_pos < server_state.len() {
                 // println!("insert {} {}", target_pos, sorted_descendants[i].id);
                 // insert after
@@ -105,7 +109,7 @@ fn sort_descendants<T: MoveContent>(
             } else {
                 // println!("append");
                 // insert at end
-                server_state.push(descendant);
+                server_state.push_back(descendant);
             }
         }
 
@@ -338,11 +342,9 @@ mod test {
     }
 
     #[test]
-    fn it_only_moves_the_necessary_pages() -> TestResult {
-        test_sort_descendants(
-            vec!["0", "3", "1", "2"],
-            vec![("1", "after", "0"), ("2", "after", "1")],
-        )
+    fn it_only_moves_pages_that_were_added() -> TestResult {
+        // adding is assumed to put them at the end. Should be only one move
+        test_sort_descendants(vec!["0", "2", "3", "1"], vec![("1", "after", "0")])
     }
 
     #[test]
