@@ -58,15 +58,6 @@ fn sort_descendants<T: MoveContent>(
     let mut sorted_descendants = Vec::from(all_descendants_data);
     sorted_descendants.sort_by_key(|d| d.title.clone());
 
-    // Setup predecssors based on that sorted list
-    let mut predecessors: HashMap<String, Option<String>> = HashMap::default();
-    predecessors.insert(sorted_descendants[0].id.clone(), None);
-    for i in 1..sorted_descendants.len() {
-        let current_id = sorted_descendants[i].id.clone();
-        let predecessor = sorted_descendants[i - 1].id.clone();
-        predecessors.insert(current_id, Some(predecessor));
-    }
-
     let mut final_positions: HashMap<String, usize> = HashMap::default();
     for i in 0..sorted_descendants.len() {
         let current_id = sorted_descendants[i].id.clone();
@@ -74,47 +65,52 @@ fn sort_descendants<T: MoveContent>(
     }
 
     let mut i = 0;
-    while i < sorted_descendants.len() {
-        if sorted_descendants[i].id != server_state[i].id {
-            let page_id = &server_state[i].id;
-            let target_pos = final_positions[page_id];
 
-            // because Confluence will remove the element before our target, we use target pos
-            // (rather than the one before)
-            let after_target_id = &server_state[target_pos].id;
+    if sorted_descendants[0].id != server_state[0].id {
+        move_content.move_content(&sorted_descendants[0].id, "before", &server_state[0].id)?;
+        print_status(Reordered, &sorted_descendants[0].title);
+        let source_pos = server_state
+            .iter()
+            .position(|d| d.id == sorted_descendants[0].id)
+            .unwrap();
+        let descendant = server_state.remove(source_pos);
+        server_state.insert(0, descendant);
+    }
 
-            print_status(Reordered, &server_state[i].title);
+    while i < sorted_descendants.len() - 1 {
+        // println!("{:?}", server_state);
+        assert_eq!(sorted_descendants[i].id, server_state[i].id);
+
+        let current = &sorted_descendants[i];
+        let next_sorted = &sorted_descendants[i + 1];
+        let next_unsorted = &server_state[i + 1];
+        if next_sorted.id != next_unsorted.id {
+            // println!("i: {}, {} != {}", i + 1, next_sorted.id, next_unsorted.id);
+            let after_target_id = &current.id;
+            let page_id = &next_sorted.id;
+
             move_content.move_content(page_id, "after", after_target_id)?;
+            print_status(Reordered, &server_state[i].title);
 
-            let descendant = server_state.remove(i);
+            let target_pos = i + 1;
+            let source_pos = server_state
+                .iter()
+                .position(|d| d.id == sorted_descendants[i + 1].id)
+                .unwrap();
+            let descendant = server_state.remove(source_pos);
             if target_pos < server_state.len() {
+                // println!("insert {} {}", target_pos, sorted_descendants[i].id);
                 // insert after
                 server_state.insert(target_pos, descendant);
             } else {
+                // println!("append");
                 // insert at end
                 server_state.push(descendant);
             }
-        } else {
-            i += 1;
         }
-    }
 
-    // If the predecessor is not the same as in the sorted list, tell confluence to update.
-    // It probably still does too many updates for a single reorder; one to fix where the update
-    // was, one to fix where it goes and one to fix the original item. Probably the move for the
-    // original item is all that's actually necessary.
-    // let mut unsorted_predecessor = None;
-    // for unsorted_descendant in all_descendants_data {
-    //     let page_id = &unsorted_descendant.id;
-    //     let sorted_predecessor = predecessors[page_id].clone();
-    //     if sorted_predecessor != unsorted_predecessor && sorted_predecessor.is_some() {
-    //         print_status(Reordered, &unsorted_descendant.title);
-    //         move_content.move_content(page_id, "after", sorted_predecessor.as_ref().unwrap())?;
-    //         // unsorted_predecessor remains as the current_id
-    //     } else {
-    //         unsorted_predecessor = Some(page_id.to_owned());
-    //     }
-    // }
+        i += 1;
+    }
 
     Ok(())
 }
@@ -242,7 +238,7 @@ mod test {
     }
 
     struct TestSorter {
-        moves: Vec<(String, String)>,
+        moves: Vec<(String, String, String)>,
         result: Vec<String>,
     }
 
@@ -262,17 +258,29 @@ mod test {
             _operation: &str,
             target_id: &str,
         ) -> crate::error::Result<()> {
-            self.moves
-                .push((String::from(content_id), String::from(target_id)));
+            self.moves.push((
+                String::from(content_id),
+                String::from(_operation),
+                String::from(target_id),
+            ));
 
-            println!("before: {:?}", self.result);
+            println!("before {}: {:?}", _operation, self.result);
             let pos = self.result.iter().position(|id| id == content_id).unwrap();
             self.result.remove(pos);
             let target_pos = self.result.iter().position(|id| id == target_id).unwrap();
-            if target_pos + 1 < self.result.len() {
-                self.result.insert(target_pos + 1, content_id.into());
-            } else {
-                self.result.push(content_id.into());
+            match _operation {
+                "after" => {
+                    if target_pos + 1 < self.result.len() {
+                        self.result.insert(target_pos + 1, content_id.into());
+                    } else {
+                        self.result.push(content_id.into());
+                    }
+                }
+                "before" => {
+                    println!("before pos: {} id: {}", target_pos, target_id);
+                    self.result.insert(target_pos, content_id.into());
+                }
+                _ => todo!(),
             }
 
             println!("after: {:?}", self.result);
@@ -287,7 +295,7 @@ mod test {
 
     fn test_sort_descendants(
         input_order: Vec<&str>,
-        output_moves: Vec<(&str, &str)>,
+        output_moves: Vec<(&str, &str, &str)>,
     ) -> TestResult {
         let mut test_sorter = TestSorter::create(&input_order);
         let all_descendants_data = input_order
@@ -308,8 +316,14 @@ mod test {
 
         let expected = output_moves
             .iter()
-            .map(|(node, target)| (String::from(*node), String::from(*target)))
-            .collect::<Vec<(String, String)>>();
+            .map(|(node, operation, target)| {
+                (
+                    String::from(*node),
+                    String::from(*operation),
+                    String::from(*target),
+                )
+            })
+            .collect::<Vec<(String, String, String)>>();
         assert_eq!(
             expected, test_sorter.moves,
             "\nExpected moves: {:?} to sort {:?}\n  actual: {:?}",
@@ -320,30 +334,58 @@ mod test {
 
     #[test]
     fn it_sorts_pages() -> TestResult {
-        test_sort_descendants(vec!["3", "2"], vec![("3", "2")])
+        test_sort_descendants(vec!["3", "2"], vec![("2", "before", "3")])
     }
 
     #[test]
     fn it_only_moves_the_necessary_pages() -> TestResult {
-        test_sort_descendants(vec!["0", "3", "1", "2"], vec![("3", "2")])
+        test_sort_descendants(
+            vec!["0", "3", "1", "2"],
+            vec![("1", "after", "0"), ("2", "after", "1")],
+        )
+    }
+
+    #[test]
+    fn it_only_moves_the_necessary_pages_ignoring_ordered_pages() -> TestResult {
+        test_sort_descendants(
+            vec!["0", "1", "2", "4", "3", "5"],
+            vec![("3", "after", "2")],
+        )
     }
 
     #[test]
     fn it_only_moves_the_necessary_pages_first_and_last() -> TestResult {
-        test_sort_descendants(vec!["3", "0", "1", "2"], vec![("3", "2")])
+        test_sort_descendants(
+            vec!["3", "0", "1", "2"],
+            vec![
+                ("0", "before", "3"),
+                ("1", "after", "0"),
+                ("2", "after", "1"),
+            ],
+        )
     }
 
     #[test]
     fn it_only_move_the_necessary_pages_last_to_first_mult() -> TestResult {
         test_sort_descendants(
             vec!["2", "3", "0", "1"],
-            vec![("2", "0"), ("3", "1"), ("2", "1")],
+            vec![("0", "before", "2"), ("1", "after", "0")],
         )
     }
 
     #[test]
     fn it_sorts_pages_with_multiple_required_moves() -> TestResult {
-        test_sort_descendants(vec!["3", "2", "0", "1"], vec![("3", "1"), ("2", "1")])
+        // 0 3 2 1
+        // 0 1 3 2
+        // 0 1 2 3
+        test_sort_descendants(
+            vec!["3", "2", "0", "1"],
+            vec![
+                ("0", "before", "3"),
+                ("1", "after", "0"),
+                ("2", "after", "1"),
+            ],
+        )
     }
 
     #[test]
@@ -386,7 +428,7 @@ mod test {
         test_server.mock_descendants("1", &all_descendants_data);
         test_server.mock_descendants("2", &all_descendants_data);
 
-        let mock = test_server.mock_move_page("3", "after", "2");
+        let mock = test_server.mock_move_page("2", "before", "3");
 
         sync_sort(&markdown_page, &link_generator, &mut test_server.client)?;
         assert!(!mock.matched());
