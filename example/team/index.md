@@ -1,3 +1,7 @@
+---
+sort: inc
+---
+
 # marked-space Documentation and Example Confluence Space
 
 Welcome to the Marked-Space documentation. This documentation is designed to
@@ -23,7 +27,7 @@ In later versions of marked-space we also added the ability to designate
 certain `index.md`s and their directories as Confluence Folders. You can mark a
 directory as a folder with the following:
 
-```
+```plain
 ---
 folder: true
 ---

@@ -24,6 +24,7 @@ use crate::{
     page_emojis::get_property_updates,
     responses::{self, Attachment, MultiEntityResult},
     restrictions::{sync_restrictions, RestrictionType},
+    sort::sync_sort,
     sync_operation::SyncOperation,
     template_renderer::TemplateRenderer,
     Args, Result,
@@ -230,7 +231,7 @@ fn page_up_to_date(
 }
 
 pub fn sync_space<'a>(
-    confluence_client: ConfluenceClient,
+    mut confluence_client: ConfluenceClient,
     markdown_space: &'a MarkdownSpace<'a>,
     args: Args,
 ) -> Result<()> {
@@ -274,6 +275,7 @@ pub fn sync_space<'a>(
                 &current_user,
             )?;
         }
+        sync_sort(markdown_page, &link_generator, &mut confluence_client)?;
     }
 
     Ok(())

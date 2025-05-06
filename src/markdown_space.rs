@@ -24,6 +24,31 @@ pub struct MarkdownSpace<'a> {
 }
 
 impl<'a> MarkdownSpace<'a> {
+    #[cfg(test)]
+    pub fn default(key: &str, dir: &Path) -> Self {
+        MarkdownSpace {
+            markdown_pages: Vec::default(),
+            key: String::from(key),
+            dir: PathBuf::from(dir),
+            arena: Arena::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn page_from_str(
+        &'a self,
+        filename: &str,
+        content: &str,
+    ) -> crate::error::Result<MarkdownPage<'a>> {
+        MarkdownPage::from_str(
+            &PathBuf::from(filename),
+            content,
+            &self.arena,
+            filename.to_string(),
+            &mut TemplateRenderer::default()?,
+        )
+    }
+
     pub fn from_directory(dir: &Path) -> Result<Self> {
         let space_key = dir.file_name().unwrap().to_str().unwrap();
         if !is_valid_space_key(space_key) {

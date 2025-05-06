@@ -10,6 +10,7 @@ pub enum Status {
     Deleted,
     Archived,
     Unarchived,
+    Reordered,
 }
 
 pub fn print_warning(warning_str: &str) {
@@ -41,6 +42,7 @@ pub fn print_status(status: Status, status_str: &str) {
         Status::Deleted => ("deleted", Style::new()),
         Status::Archived => ("archived", Style::new().blue()),
         Status::Unarchived => ("unarchived", Style::new().blue()),
+        Status::Reordered => ("reordered", Style::new().cyan()),
     };
     println!(
         "{}: {}",

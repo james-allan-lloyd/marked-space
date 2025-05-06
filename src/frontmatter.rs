@@ -1,6 +1,6 @@
 use saphyr::Yaml;
 
-use crate::Result;
+use crate::{sort::Sort, Result};
 use std::{
     collections::HashSet,
     io::{self, BufRead},
@@ -23,6 +23,7 @@ pub struct FrontMatter {
     pub unknown_keys: Vec<String>,
     pub imports: Vec<String>,
     pub folder: bool,
+    pub sort: Sort,
 }
 
 enum FrontMatterParseState {
@@ -40,6 +41,7 @@ impl Default for FrontMatter {
             unknown_keys: Vec::default(),
             imports: Vec::default(),
             folder: false,
+            sort: Sort::Unsorted,
         }
     }
 }
@@ -99,8 +101,8 @@ impl FrontMatter {
             .into());
         }
 
-        static VALID_TOP_LEVEL_KEYS: [&str; 5] =
-            ["emoji", "labels", "metadata", "imports", "folder"];
+        static VALID_TOP_LEVEL_KEYS: [&str; 6] =
+            ["emoji", "labels", "metadata", "imports", "folder", "sort"];
         let string_keys: HashSet<&str> = yaml_fm
             .as_hash()
             .unwrap()
@@ -141,6 +143,9 @@ impl FrontMatter {
             ))?;
 
         let emoji = String::from(yaml_fm["emoji"].as_str().unwrap_or_default());
+
+        let sort = Sort::from_str(yaml_fm["sort"].as_str())?;
+
         Ok((
             FrontMatter {
                 labels,
@@ -149,6 +154,7 @@ impl FrontMatter {
                 unknown_keys,
                 imports,
                 folder,
+                sort,
             },
             content_str,
         ))
