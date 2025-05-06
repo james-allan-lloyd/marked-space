@@ -70,6 +70,20 @@ point Confluence supported markdown themselves, but apparently outgrew that).
 restrict this to only the user running the command, you can specify
 `--single-editor`.
 
+## Sorting Pages
+
+Pages can sort their children incrementally using the following:
+
+```markdown
+---
+sort: inc
+---
+
+# Sorting children
+```
+
+The default is not to sort, and respect any order assigned via the UI.
+
 ## Orphaned Pages
 
 When markdown pages are deleted on disk, we don't automatically remove them
