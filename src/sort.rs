@@ -52,6 +52,8 @@ fn sort_descendants<T: MoveContent>(
         return Ok(());
     }
 
+    let mut server_state = Vec::from(all_descendants_data);
+
     // Create a simple sorted list
     let mut sorted_descendants = Vec::from(all_descendants_data);
     sorted_descendants.sort_by_key(|d| d.title.clone());
@@ -65,22 +67,54 @@ fn sort_descendants<T: MoveContent>(
         predecessors.insert(current_id, Some(predecessor));
     }
 
+    let mut final_positions: HashMap<String, usize> = HashMap::default();
+    for i in 0..sorted_descendants.len() {
+        let current_id = sorted_descendants[i].id.clone();
+        final_positions.insert(current_id, i);
+    }
+
+    let mut i = 0;
+    while i < sorted_descendants.len() {
+        if sorted_descendants[i].id != server_state[i].id {
+            let page_id = &server_state[i].id;
+            let target_pos = final_positions[page_id];
+
+            // because Confluence will remove the element before our target, we use target pos
+            // (rather than the one before)
+            let after_target_id = &server_state[target_pos].id;
+
+            print_status(Reordered, &server_state[i].title);
+            move_content.move_content(page_id, "after", after_target_id)?;
+
+            let descendant = server_state.remove(i);
+            if target_pos < server_state.len() {
+                // insert after
+                server_state.insert(target_pos, descendant);
+            } else {
+                // insert at end
+                server_state.push(descendant);
+            }
+        } else {
+            i += 1;
+        }
+    }
+
     // If the predecessor is not the same as in the sorted list, tell confluence to update.
     // It probably still does too many updates for a single reorder; one to fix where the update
     // was, one to fix where it goes and one to fix the original item. Probably the move for the
     // original item is all that's actually necessary.
-    let mut unsorted_predecessor = None;
-    for unsorted_descendant in all_descendants_data {
-        let page_id = &unsorted_descendant.id;
-        let sorted_predecessor = predecessors[page_id].clone();
-        if sorted_predecessor != unsorted_predecessor && sorted_predecessor.is_some() {
-            print_status(Reordered, &unsorted_descendant.title);
-            move_content.move_content(page_id, "after", sorted_predecessor.as_ref().unwrap())?;
-            // unsorted_predecessor remains as the current_id
-        } else {
-            unsorted_predecessor = Some(page_id.to_owned());
-        }
-    }
+    // let mut unsorted_predecessor = None;
+    // for unsorted_descendant in all_descendants_data {
+    //     let page_id = &unsorted_descendant.id;
+    //     let sorted_predecessor = predecessors[page_id].clone();
+    //     if sorted_predecessor != unsorted_predecessor && sorted_predecessor.is_some() {
+    //         print_status(Reordered, &unsorted_descendant.title);
+    //         move_content.move_content(page_id, "after", sorted_predecessor.as_ref().unwrap())?;
+    //         // unsorted_predecessor remains as the current_id
+    //     } else {
+    //         unsorted_predecessor = Some(page_id.to_owned());
+    //     }
+    // }
 
     Ok(())
 }
@@ -233,8 +267,8 @@ mod test {
 
             println!("before: {:?}", self.result);
             let pos = self.result.iter().position(|id| id == content_id).unwrap();
-            let target_pos = self.result.iter().position(|id| id == target_id).unwrap();
             self.result.remove(pos);
+            let target_pos = self.result.iter().position(|id| id == target_id).unwrap();
             if target_pos + 1 < self.result.len() {
                 self.result.insert(target_pos + 1, content_id.into());
             } else {
@@ -271,12 +305,15 @@ mod test {
             "Not sorted: {:?}",
             &test_sorter.result
         );
+
+        let expected = output_moves
+            .iter()
+            .map(|(node, target)| (String::from(*node), String::from(*target)))
+            .collect::<Vec<(String, String)>>();
         assert_eq!(
-            output_moves
-                .iter()
-                .map(|(node, target)| (String::from(*node), String::from(*target)))
-                .collect::<Vec<(String, String)>>(),
-            test_sorter.moves,
+            expected, test_sorter.moves,
+            "\nExpected moves: {:?} to sort {:?}\n  actual: {:?}",
+            expected, input_order, test_sorter.moves
         );
         Ok(())
     }
@@ -298,15 +335,15 @@ mod test {
 
     #[test]
     fn it_only_move_the_necessary_pages_last_to_first_mult() -> TestResult {
-        test_sort_descendants(vec!["2", "3", "0", "1"], vec![("2", "1"), ("3", "2")])
+        test_sort_descendants(
+            vec!["2", "3", "0", "1"],
+            vec![("2", "0"), ("3", "1"), ("2", "1")],
+        )
     }
 
     #[test]
     fn it_sorts_pages_with_multiple_required_moves() -> TestResult {
-        test_sort_descendants(
-            vec!["3", "2", "0", "1"],
-            vec![("3", "2"), ("2", "1"), ("3", "2")],
-        )
+        test_sort_descendants(vec!["3", "2", "0", "1"], vec![("3", "1"), ("2", "1")])
     }
 
     #[test]
