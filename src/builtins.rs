@@ -70,11 +70,66 @@ format!(r#"<ac:structured-macro ac:name="contentbylabel" ac:schema-version="4" d
     )
 }
 
-pub(crate) fn add_builtins(tera: &mut Tera) {
+fn properties_report(
+    args: &HashMap<String, tera::Value>,
+    default_space_key: &str,
+) -> std::result::Result<serde_json::Value, tera::Error> {
+    // We already know the space
+    let space = args
+        .get(&"space".to_string())
+        .map_or(String::from(default_space_key), |s| s.to_string());
+
+    let label = args
+        .get(&"label".to_string())
+        .ok_or("Missing required argument 'label'")?;
+
+    Ok(serde_json::to_value(format!(
+        r#"<ac:structured-macro ac:name="detailssummary" ac:schema-version="2">
+        <ac:parameter ac:name="firstcolumn">Title</ac:parameter>
+        <ac:parameter ac:name="sortBy">Title</ac:parameter>
+        <ac:parameter ac:name="cql">space = {} and label = {}</ac:parameter>
+    </ac:structured-macro>"#,
+        space, label
+    ))
+    .unwrap())
+}
+
+fn properties(
+    _args: &HashMap<String, serde_json::Value>,
+) -> std::result::Result<serde_json::Value, tera::Error> {
+    // TODO: Read these from the properties section from frontmatter
+    let status = "New";
+    let owner = "John Doe";
+
+    let structure = format!(
+        "\\<ac:structured-macro ac:name=\"details\" ac:schema-version=\"1\"\\>\
+        \\<ac:rich-text-body\\>\
+            <table>\
+                <tbody>\
+                    <tr><th><strong>Status</strong></th><td>{}</td></tr>\
+                    <tr><th><strong>Owner</strong></th><td>{}</td></tr>\
+                </tbody>\
+            </table>\
+        \\</ac:rich-text-body\\>\
+    \\</ac:structured-macro\\>",
+        status, owner
+    );
+
+    Ok(serde_json::to_value(structure).unwrap())
+}
+
+pub(crate) fn add_builtins(tera: &mut Tera, default_space_key: String) {
     tera.register_function("hello_world", hello_world);
     tera.register_function("toc", toc);
     tera.register_function("children", children);
     tera.register_function("labellist", labellist);
+    tera.register_function(
+        "properties_report",
+        Box::new(move |args: &HashMap<String, tera::Value>| {
+            properties_report(args, &default_space_key)
+        }),
+    );
+    tera.register_function("properties", properties);
 }
 
 #[cfg(test)]
@@ -84,8 +139,11 @@ mod test {
     use comrak::{nodes::AstNode, Arena};
 
     use crate::{
-        builtins::labellist, error::TestResult, link_generator::LinkGenerator,
-        markdown_page::page_from_str,
+        builtins::labellist,
+        error::Result,
+        error::TestResult,
+        link_generator::LinkGenerator,
+        markdown_page::{page_from_str, RenderedPage},
     };
 
     #[test]
@@ -131,6 +189,22 @@ mod test {
         let s = result.unwrap();
         println!("s: {:#}", s);
         assert!(s.to_string().contains(r#"label in (\"foo\",\"bar\")"#));
+
+        Ok(())
+    }
+
+    fn test_render(markdown_content: &str) -> Result<RenderedPage> {
+        let arena = Arena::<AstNode>::new();
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+        page.render(&LinkGenerator::default())
+    }
+
+    #[test]
+    fn properties_report_defaults_to_current_space() -> TestResult {
+        let rendered_page =
+            test_render("# compulsory title\n{{ properties_report(label=\"foo\") }}")?;
+
+        assert_eq!(rendered_page.content.trim(), "<p><ac:structured-macro ac:name=\"detailssummary\" ac:schema-version=\"2\"> <ac:parameter ac:name=\"firstcolumn\">Title</ac:parameter> <ac:parameter ac:name=\"sortBy\">Title</ac:parameter> <ac:parameter ac:name=\"cql\">space = SPACE and label = \"foo\"</ac:parameter> </ac:structured-macro></p>");
 
         Ok(())
     }
