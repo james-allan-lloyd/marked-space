@@ -39,9 +39,10 @@ fn make_metadata_lookup(metadata: Yaml) -> impl tera::Function {
 // Required method
 impl TemplateRenderer {
     pub fn new(space: &MarkdownSpace, client: &ConfluenceClient) -> Result<TemplateRenderer> {
+        let space_key = space.key.clone();
         let mut tera = Tera::new(space.dir.join("**/*.md").into_os_string().to_str().unwrap())?;
 
-        add_builtins(&mut tera);
+        add_builtins(&mut tera, space_key.clone());
         tera.register_function("mention", CachedMentions::new(client.clone()));
 
         Ok(TemplateRenderer { tera })
@@ -50,7 +51,7 @@ impl TemplateRenderer {
     #[cfg(test)]
     pub fn default() -> Result<TemplateRenderer> {
         let mut tera = Tera::default();
-        add_builtins(&mut tera);
+        add_builtins(&mut tera, String::from("SPACE"));
 
         Ok(TemplateRenderer { tera })
     }
@@ -60,7 +61,7 @@ impl TemplateRenderer {
         use crate::mentions::CachedMentions;
 
         let mut tera = Tera::default();
-        add_builtins(&mut tera);
+        add_builtins(&mut tera, String::from("SPACE"));
 
         tera.register_function("mention", CachedMentions::new(client.clone()));
 
