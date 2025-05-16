@@ -215,10 +215,6 @@ impl<'a> MarkdownPage<'a> {
     pub(crate) fn is_folder(&self) -> bool {
         self.front_matter.folder
     }
-
-    pub(crate) fn is_homepage(&self) -> bool {
-        self.source == "index.md"
-    }
 }
 
 #[derive(Debug)]

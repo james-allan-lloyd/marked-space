@@ -83,7 +83,7 @@ fn main() -> Result<ExitCode> {
     check_environment_vars()?;
 
     let dir = PathBuf::from(args.space.clone());
-    let markdown_space = MarkdownSpace::from_directory(&dir)?;
+    let mut markdown_space = MarkdownSpace::from_directory(&dir)?;
 
     let host = match (args.host.clone(), env::var("CONFLUENCE_HOST").ok()) {
         (Some(host), _) => host,
@@ -95,7 +95,7 @@ fn main() -> Result<ExitCode> {
     };
     let confluence_client = ConfluenceClient::new(host.as_str());
 
-    match sync_space(confluence_client, &markdown_space, args) {
+    match sync_space(confluence_client, &mut markdown_space, args) {
         Ok(_) => Ok(ExitCode::SUCCESS),
         Err(err) => {
             eprintln!("Error: {:#}", err);

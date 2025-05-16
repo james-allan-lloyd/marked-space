@@ -232,19 +232,22 @@ fn page_up_to_date(
 
 pub fn sync_space<'a>(
     mut confluence_client: ConfluenceClient,
-    markdown_space: &'a MarkdownSpace<'a>,
+    markdown_space: &'a mut MarkdownSpace<'a>,
     args: Args,
 ) -> Result<()> {
     let space_key = markdown_space.key.clone();
-    let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
-    let mut link_generator = LinkGenerator::new(
-        &confluence_client.hostname,
-        &markdown_space.key,
-        &space.homepage_id,
-    );
+    let space_dir = markdown_space.dir.clone();
 
     let mut template_renderer = TemplateRenderer::new(markdown_space, &confluence_client)?;
-    let markdown_pages = markdown_space.parse(&mut link_generator, &mut template_renderer)?;
+    let markdown_pages = markdown_space.parse(&mut template_renderer)?;
+
+    let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
+    let mut link_generator =
+        LinkGenerator::new(&confluence_client.hostname, &space_key, &space.homepage_id);
+
+    for markdown_page in &markdown_pages {
+        link_generator.register_markdown_page(markdown_page)?;
+    }
 
     print_info(&format!(
         "Synchronizing space {} on {}...",
@@ -262,7 +265,7 @@ pub fn sync_space<'a>(
 
     space.read_all_pages(&confluence_client)?;
     space.link_pages(&mut link_generator);
-    space.archive_orphans(&link_generator, &markdown_space.dir, &confluence_client)?;
+    space.archive_orphans(&link_generator, &space_dir, &confluence_client)?;
     space.restore_archived_pages(&link_generator, &confluence_client)?;
     space.create_initial_nodes(&mut link_generator, &confluence_client)?;
 
@@ -544,8 +547,8 @@ mod tests {
             .unwrap();
 
         let confluence_client = ConfluenceClient::new("host.example.com");
-        let space = MarkdownSpace::from_directory(temp.child("test").path())?;
-        let sync_result = sync_space(confluence_client, &space, Args::default());
+        let mut space = MarkdownSpace::from_directory(temp.child("test").path())?;
+        let sync_result = sync_space(confluence_client, &mut space, Args::default());
 
         assert!(sync_result.is_err());
 

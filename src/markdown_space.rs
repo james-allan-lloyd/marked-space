@@ -6,11 +6,13 @@ use walkdir::WalkDir;
 use crate::{
     console::{print_info, print_warning},
     error::{ConfluenceError, Result},
-    link_generator::LinkGenerator,
     markdown_page::MarkdownPage,
     template_renderer::TemplateRenderer,
 };
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 fn is_valid_space_key(space_key: &str) -> bool {
     Regex::new("^[A-Za-z0-9]+$").unwrap().is_match(space_key)
@@ -21,16 +23,22 @@ pub struct MarkdownSpace<'a> {
     pub arena: Arena<AstNode<'a>>,
     pub markdown_pages: Vec<PathBuf>,
     pub dir: PathBuf,
+    pub file_to_title: HashMap<String, String>,
+    pub title_to_file: HashMap<String, String>,
 }
 
 impl<'a> MarkdownSpace<'a> {
     #[cfg(test)]
     pub fn default(key: &str, dir: &Path) -> Self {
+        use std::collections::HashMap;
+
         MarkdownSpace {
             markdown_pages: Vec::default(),
             key: String::from(key),
             dir: PathBuf::from(dir),
             arena: Arena::new(),
+            file_to_title: HashMap::default(),
+            title_to_file: HashMap::default(),
         }
     }
 
@@ -86,6 +94,8 @@ impl<'a> MarkdownSpace<'a> {
                 key,
                 dir: PathBuf::from(dir),
                 arena: Arena::new(),
+                file_to_title: HashMap::default(),
+                title_to_file: HashMap::default(),
             })
         } else {
             Err(crate::error::ConfluenceError::generic_error(
@@ -111,12 +121,34 @@ impl<'a> MarkdownSpace<'a> {
             .replace('\\', "/"))
     }
 
+    fn register_page(&'a mut self, markdown_page: &MarkdownPage) -> Result<()> {
+        let title = markdown_page.title.to_owned();
+        let filename = markdown_page.source.replace('\\', "/");
+        if self.title_to_file.contains_key(&title) {
+            return Err(ConfluenceError::DuplicateTitle {
+                file: filename,
+                title,
+            }
+            .into());
+        }
+        self.title_to_file.insert(title.clone(), filename.clone());
+
+        // if markdown_page.is_folder() {
+        //     self.folders.insert(title.clone());
+        // }
+
+        self.file_to_title.insert(filename.clone(), title.clone());
+
+        Ok(())
+    }
+
     pub(crate) fn parse(
-        &'a self,
-        link_generator: &mut LinkGenerator,
+        &'a mut self,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<Vec<MarkdownPage<'a>>> {
         let mut parse_errors = Vec::<anyhow::Error>::default();
+        let mut title_to_file: HashMap<String, String> = HashMap::default();
+        let mut file_to_title: HashMap<String, String> = HashMap::default();
         let markdown_pages: Vec<MarkdownPage> = self
             .markdown_pages
             .iter()
@@ -131,8 +163,22 @@ impl<'a> MarkdownSpace<'a> {
                 for warning in markdown_page.warnings.iter() {
                     print_warning(warning);
                 }
+                let title = markdown_page.title.to_owned();
+                let filename = markdown_page.source.replace('\\', "/");
+                if title_to_file.contains_key(&title) {
+                    return Err(ConfluenceError::DuplicateTitle {
+                        file: filename,
+                        title,
+                    }
+                    .into());
+                }
+                title_to_file.insert(title.clone(), filename.clone());
 
-                link_generator.register_markdown_page(&markdown_page)?;
+                // if markdown_page.is_folder() {
+                //     self.folders.insert(title.clone());
+                // }
+
+                file_to_title.insert(filename.clone(), title.clone());
 
                 let missing_files: Vec<String> = markdown_page
                     .local_links
@@ -204,8 +250,8 @@ mod tests {
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
     use crate::{
-        attachment::ImageAttachment, error::TestResult, link_generator::LinkGenerator,
-        markdown_page::MarkdownPage, template_renderer::TemplateRenderer,
+        attachment::ImageAttachment, error::TestResult, markdown_page::MarkdownPage,
+        template_renderer::TemplateRenderer,
     };
 
     use super::MarkdownSpace;
@@ -291,8 +337,8 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let space = result.unwrap();
-        let result = parse_default(&space);
+        let mut space = result.unwrap();
+        let result = parse_default(&mut space);
 
         assert!(result.is_err());
         let error = result.err().unwrap();
@@ -317,9 +363,9 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let space = result.unwrap();
+        let mut space = result.unwrap();
 
-        let result = parse_default(&space);
+        let result = parse_default(&mut space);
         assert!(result.is_err());
         let acutal_error = format!("{:#}", result.err().unwrap());
 
@@ -332,12 +378,9 @@ mod tests {
     }
 
     fn parse_default<'a>(
-        space: &'a MarkdownSpace<'a>,
+        space: &'a mut MarkdownSpace<'a>,
     ) -> anyhow::Result<Vec<MarkdownPage<'a>>, anyhow::Error> {
-        space.parse(
-            &mut LinkGenerator::default(),
-            &mut TemplateRenderer::default()?,
-        )
+        space.parse(&mut TemplateRenderer::default()?)
     }
 
     #[test]
@@ -357,9 +400,9 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let space = result.unwrap();
+        let mut space = result.unwrap();
 
-        let result = parse_default(&space);
+        let result = parse_default(&mut space);
         let acutal_error = format!("{:#}", result.err().unwrap());
         println!("Actual error: {:#}", acutal_error);
         assert!(acutal_error.contains(
@@ -381,9 +424,9 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let space = result.unwrap();
+        let mut space = result.unwrap();
 
-        let result = parse_default(&space)?;
+        let result = parse_default(&mut space)?;
 
         let page = &result
             .iter()
