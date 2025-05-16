@@ -215,6 +215,10 @@ impl<'a> MarkdownPage<'a> {
     pub(crate) fn is_folder(&self) -> bool {
         self.front_matter.folder
     }
+
+    pub(crate) fn is_homepage(&self) -> bool {
+        self.source == "index.md"
+    }
 }
 
 #[derive(Debug)]
@@ -365,7 +369,7 @@ mod tests {
     fn it_uses_the_title_when_linktext_is_empty() -> TestResult {
         let link_filename = PathBuf::from("hello-world.md");
         let link_text = String::from("");
-        let link_url = String::from("https://my.atlassian.net/wiki/spaces/TEAM/pages/47");
+        let link_url = String::from("https://example.atlassian.net/wiki/spaces/TEST/pages/47");
         let arena = Arena::<AstNode>::new();
         let markdown_content = &format!(
             "# My Page Title\n\nMy page content: [{}]({})",
@@ -379,7 +383,7 @@ mod tests {
             &arena,
         )?;
 
-        let mut link_generator = LinkGenerator::new("my.atlassian.net", "TEAM");
+        let mut link_generator = LinkGenerator::default();
 
         link_generator.register_markdown_page(&page)?;
         link_generator.register_markdown_page(&linked_page)?;
@@ -398,7 +402,7 @@ mod tests {
     fn it_translates_file_links() -> TestResult {
         let link_filename = PathBuf::from("hello-world.md");
         let link_text = String::from("Link text");
-        let link_url = String::from("https://my.atlassian.net/wiki/spaces/TEAM/pages/47");
+        let link_url = String::from("https://example.atlassian.net/wiki/spaces/TEST/pages/47");
         let arena = Arena::<AstNode>::new();
         let markdown_content = &format!(
             "# My Page Title\n\nMy page content: [{}](./hello-world.md)",
@@ -412,7 +416,7 @@ mod tests {
             &arena,
         )?;
 
-        let mut link_generator = LinkGenerator::new("my.atlassian.net", "TEAM");
+        let mut link_generator = LinkGenerator::default();
 
         link_generator.register_markdown_page(&page)?;
         link_generator.register_markdown_page(&linked_page)?;
@@ -433,7 +437,7 @@ mod tests {
 
         let link_filename = PathBuf::from("hello-world.md");
         let link_text = String::from("Link text");
-        let link_url = String::from("https://my.atlassian.net/wiki/spaces/TEAM/pages/47");
+        let link_url = String::from("https://example.atlassian.net/wiki/spaces/TEST/pages/47");
         let markdown_content = &format!(
             "# My Page Title\n\nMy page content: [{}](./hello-world.md)", // should handle
             // relative paths
@@ -446,7 +450,7 @@ mod tests {
             &arena,
         )?;
 
-        let mut link_generator = LinkGenerator::new("my.atlassian.net", "TEAM");
+        let mut link_generator = LinkGenerator::default();
 
         link_generator.register_markdown_page(&page)?;
         link_generator.register_markdown_page(&linked_page)?;

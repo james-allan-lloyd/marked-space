@@ -51,7 +51,6 @@ impl ConfluenceSpace {
     }
 
     pub fn link_pages(&mut self, link_generator: &mut LinkGenerator) {
-        link_generator.homepage_id = Some(self.homepage_id.clone());
         self.nodes.iter().for_each(|confluence_page| {
             link_generator.register_confluence_node(confluence_page);
         });

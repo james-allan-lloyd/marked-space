@@ -150,7 +150,7 @@ mod tests {
     }
 
     fn test_link_generator() -> LinkGenerator {
-        LinkGenerator::new("example.atlassian.net", "TEST")
+        LinkGenerator::default()
     }
 
     #[test]

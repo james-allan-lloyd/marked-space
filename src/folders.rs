@@ -59,7 +59,7 @@ mod test {
 
     #[test]
     fn it_creates_folders_when_flag_is_present() -> TestResult {
-        let mut link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+        let mut link_generator = LinkGenerator::default();
 
         let new_title = String::from("New Title");
         let new_source = String::from("new-test.md");
@@ -81,7 +81,7 @@ mod test {
 
     #[test]
     fn it_does_not_create_folders_if_they_already_exist() -> TestResult {
-        let mut link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+        let mut link_generator = LinkGenerator::default();
 
         let existing_title = String::from("Existing Title");
         let existing_source = String::from("existing-test.md");

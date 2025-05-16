@@ -236,7 +236,12 @@ pub fn sync_space<'a>(
     args: Args,
 ) -> Result<()> {
     let space_key = markdown_space.key.clone();
-    let mut link_generator = LinkGenerator::new(&confluence_client.hostname, &markdown_space.key);
+    let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
+    let mut link_generator = LinkGenerator::new(
+        &confluence_client.hostname,
+        &markdown_space.key,
+        &space.homepage_id,
+    );
 
     let mut template_renderer = TemplateRenderer::new(markdown_space, &confluence_client)?;
     let markdown_pages = markdown_space.parse(&mut link_generator, &mut template_renderer)?;
@@ -255,7 +260,6 @@ pub fn sync_space<'a>(
         .error_for_status()?
         .json()?;
 
-    let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     space.read_all_pages(&confluence_client)?;
     space.link_pages(&mut link_generator);
     space.archive_orphans(&link_generator, &markdown_space.dir, &confluence_client)?;
