@@ -42,7 +42,8 @@ impl LinkGenerator {
         }
     }
 
-    pub fn default() -> Self {
+    #[cfg(test)]
+    pub fn default_test() -> Self {
         LinkGenerator {
             host: "example.atlassian.net".into(),
             space_key: "TEST".into(),
@@ -272,7 +273,7 @@ mod test {
 
     #[test]
     fn it_handles_retitles() -> TestResult {
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         let old_title = String::from("Old Title");
         let new_title = String::from("New Title");
@@ -308,7 +309,7 @@ mod test {
 
     #[test]
     fn it_handles_moves() -> TestResult {
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         let title = String::from("Test Title");
         let old_source = String::from("old-test.md");
@@ -346,7 +347,7 @@ mod test {
 
     #[test]
     fn it_returns_none_if_title_and_file_has_changed() -> TestResult {
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         let old_title = String::from("Old Title");
         let new_title = String::from("New Title");
@@ -381,7 +382,7 @@ mod test {
 
     #[test]
     fn it_knows_which_pages_need_creating() -> TestResult {
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         let new_title = String::from("New Title");
         let new_source = String::from("new-test.md");
@@ -403,7 +404,7 @@ mod test {
 
     #[test]
     fn it_does_not_create_homepage_because_it_always_exists() -> TestResult {
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         let new_title = String::from("Homepage");
         let new_source = String::from("index.md");
@@ -452,7 +453,7 @@ mod test {
             }),
         };
 
-        let link_generator = LinkGenerator::default();
+        let link_generator = LinkGenerator::default_test();
         assert!(link_generator.is_orphaned(
             &orphaned_confluence_page,
             orphaned_confluence_page.page_data().unwrap()

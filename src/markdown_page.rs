@@ -8,7 +8,7 @@ use crate::{
     attachment::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePageData,
     confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
     helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
-    markdown_space::MarkdownSpace, parent::get_parent_file, template_renderer::TemplateRenderer,
+    parent::get_parent_file, template_renderer::TemplateRenderer,
 };
 use anyhow::Context;
 use comrak::{
@@ -28,23 +28,42 @@ pub struct MarkdownPage<'a> {
     pub warnings: Vec<String>,
 }
 
+pub fn remove_prefix(prefix: &Path, page_path: &Path) -> Result<String> {
+    let space_relative_path = page_path.strip_prefix(prefix).map_err(|_e| {
+        ConfluenceError::generic_error(format!(
+            "Page is not in space directory {}: {}",
+            prefix.display(),
+            page_path.display()
+        ))
+    })?;
+
+    Ok(PathBuf::from(space_relative_path)
+        .to_str()
+        .ok_or(ConfluenceError::generic_error(
+            "Failed to convert path to str",
+        ))?
+        .replace('\\', "/"))
+}
+
 impl<'a> MarkdownPage<'a> {
     pub fn from_file(
-        markdown_space: &MarkdownSpace,
+        // markdown_space: &MarkdownSpace,
+        space_dir: &Path,
         markdown_page: &Path,
         arena: &'a Arena<AstNode<'a>>,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<MarkdownPage<'a>> {
-        let source = markdown_space.space_relative_path_string(markdown_page)?;
+        let source_string = remove_prefix(space_dir, markdown_page)?;
+        // let markdown_page = space_dir.join(source);
         let file = File::open(markdown_page)?;
         let mut reader = io::BufReader::new(file);
         let (fm, original_content) =
-            FrontMatter::from_reader(&mut reader).with_context(|| source.clone())?;
+            FrontMatter::from_reader(&mut reader).with_context(|| source_string.clone())?;
 
         let content = template_renderer
-            .render_template_str(&source, &original_content, &fm)
-            .context(format!("Loading markdown from file {}", source))?;
-        Self::parse_markdown(arena, source, markdown_page, &content, fm)
+            .render_template_str(&source_string, &original_content, &fm)
+            .context(format!("Loading markdown from file {}", source_string))?;
+        Self::parse_markdown(arena, source_string, markdown_page, &content, fm)
     }
 
     #[cfg(test)]
@@ -287,7 +306,7 @@ mod tests {
         let markdown_content = &String::from("# My Page Title\n\nMy page content");
         let page = page_from_str("page.md", markdown_content, &arena)?;
 
-        let content = page.to_html_string(&LinkGenerator::default())?;
+        let content = page.to_html_string(&LinkGenerator::default_test())?;
 
         assert!(content.contains("My page content"));
         assert!(!content.contains("<h1>My Page Title</h1>"));
@@ -379,7 +398,7 @@ mod tests {
             &arena,
         )?;
 
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         link_generator.register_markdown_page(&page)?;
         link_generator.register_markdown_page(&linked_page)?;
@@ -412,7 +431,7 @@ mod tests {
             &arena,
         )?;
 
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         link_generator.register_markdown_page(&page)?;
         link_generator.register_markdown_page(&linked_page)?;
@@ -446,7 +465,7 @@ mod tests {
             &arena,
         )?;
 
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         link_generator.register_markdown_page(&page)?;
         link_generator.register_markdown_page(&linked_page)?;
@@ -469,7 +488,7 @@ mod tests {
 
         assert_eq!(page.attachments.len(), 1);
 
-        let content = page.to_html_string(&LinkGenerator::default())?;
+        let content = page.to_html_string(&LinkGenerator::default_test())?;
 
         assert!(content.contains(r#"<ri:attachment ri:filename="myimage.png"/>"#));
 
@@ -490,7 +509,7 @@ mod tests {
         let page = page_from_str("page.md", markdown_content.as_str(), &arena)?;
 
         assert_eq!(page.attachments.len(), 0); // should not view the external link as an attachment
-        let html_content = page.to_html_string(&LinkGenerator::default())?;
+        let html_content = page.to_html_string(&LinkGenerator::default_test())?;
 
         println!("Got content: {:#}", html_content);
 
@@ -514,7 +533,7 @@ mod tests {
         );
         let arena = Arena::<AstNode>::new();
         let page = page_from_str("page.md", markdown_content.as_str(), &arena)?;
-        let html_content = page.to_html_string(&LinkGenerator::default())?;
+        let html_content = page.to_html_string(&LinkGenerator::default_test())?;
 
         println!("Got content: {:#}", html_content);
 
@@ -531,7 +550,7 @@ mod tests {
         let markdown_content = "# compulsory title\n{{filename}}";
         let page = page_from_str("page.md", markdown_content, &arena)?;
 
-        let rendered_page = page.render(&LinkGenerator::default())?;
+        let rendered_page = page.render(&LinkGenerator::default_test())?;
 
         assert_eq!(rendered_page.content.trim(), "<p>page.md</p>");
 
@@ -637,7 +656,7 @@ metadata:
 "##;
         let page = page_from_str("page.md", markdown_content, &arena)?;
 
-        let rendered_page = page.render(&LinkGenerator::default())?;
+        let rendered_page = page.render(&LinkGenerator::default_test())?;
 
         assert_eq!(rendered_page.content.trim(), "<p>value</p>");
 

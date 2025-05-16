@@ -150,7 +150,7 @@ mod tests {
     }
 
     fn test_link_generator() -> LinkGenerator {
-        LinkGenerator::default()
+        LinkGenerator::default_test()
     }
 
     #[test]

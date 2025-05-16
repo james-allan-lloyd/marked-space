@@ -425,7 +425,7 @@ mod tests {
         let mut template_renderer = TemplateRenderer::default()?;
         let arena = Arena::<AstNode>::new();
         let markdown_page = MarkdownPage::from_file(
-            markdown_space,
+            &markdown_space.dir,
             markdown_page_path,
             &arena,
             &mut template_renderer,
@@ -457,7 +457,7 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/markdown1.md").path(),
-            &mut LinkGenerator::default(),
+            &mut LinkGenerator::default_test(),
         );
 
         assert!(parsed_page.is_ok());
@@ -474,7 +474,7 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/markdown1.md").path(),
-            &mut LinkGenerator::default(),
+            &mut LinkGenerator::default_test(),
         );
 
         assert!(parsed_page.is_ok());
@@ -495,7 +495,7 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/index.md").path(),
-            &mut LinkGenerator::default(),
+            &mut LinkGenerator::default_test(),
         )?;
 
         assert!(parsed_page.parent.is_none());
@@ -515,7 +515,7 @@ mod tests {
             .write_str("# Subpages Parent\nparent content")?;
         temp.child("test/subpages/child.md")
             .write_str("# Subpage Child\nchild content")?;
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
         let space = MarkdownSpace::from_directory(temp.child("test").path())?;
         let _home_page = parse_page(
             &space,

@@ -10,7 +10,7 @@ use crate::{
     template_renderer::TemplateRenderer,
 };
 use std::{
-    collections::HashMap,
+    collections::HashSet,
     path::{Path, PathBuf},
 };
 
@@ -23,22 +23,16 @@ pub struct MarkdownSpace<'a> {
     pub arena: Arena<AstNode<'a>>,
     pub markdown_pages: Vec<PathBuf>,
     pub dir: PathBuf,
-    pub file_to_title: HashMap<String, String>,
-    pub title_to_file: HashMap<String, String>,
 }
 
 impl<'a> MarkdownSpace<'a> {
     #[cfg(test)]
     pub fn default(key: &str, dir: &Path) -> Self {
-        use std::collections::HashMap;
-
         MarkdownSpace {
             markdown_pages: Vec::default(),
             key: String::from(key),
             dir: PathBuf::from(dir),
             arena: Arena::new(),
-            file_to_title: HashMap::default(),
-            title_to_file: HashMap::default(),
         }
     }
 
@@ -94,8 +88,6 @@ impl<'a> MarkdownSpace<'a> {
                 key,
                 dir: PathBuf::from(dir),
                 arena: Arena::new(),
-                file_to_title: HashMap::default(),
-                title_to_file: HashMap::default(),
             })
         } else {
             Err(crate::error::ConfluenceError::generic_error(
@@ -121,40 +113,18 @@ impl<'a> MarkdownSpace<'a> {
             .replace('\\', "/"))
     }
 
-    fn register_page(&'a mut self, markdown_page: &MarkdownPage) -> Result<()> {
-        let title = markdown_page.title.to_owned();
-        let filename = markdown_page.source.replace('\\', "/");
-        if self.title_to_file.contains_key(&title) {
-            return Err(ConfluenceError::DuplicateTitle {
-                file: filename,
-                title,
-            }
-            .into());
-        }
-        self.title_to_file.insert(title.clone(), filename.clone());
-
-        // if markdown_page.is_folder() {
-        //     self.folders.insert(title.clone());
-        // }
-
-        self.file_to_title.insert(filename.clone(), title.clone());
-
-        Ok(())
-    }
-
     pub(crate) fn parse(
         &'a mut self,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<Vec<MarkdownPage<'a>>> {
         let mut parse_errors = Vec::<anyhow::Error>::default();
-        let mut title_to_file: HashMap<String, String> = HashMap::default();
-        let mut file_to_title: HashMap<String, String> = HashMap::default();
+        let mut titles: HashSet<String> = HashSet::default();
         let markdown_pages: Vec<MarkdownPage> = self
             .markdown_pages
             .iter()
             .map(|markdown_page_path| {
                 let markdown_page = MarkdownPage::from_file(
-                    self,
+                    &self.dir,
                     markdown_page_path,
                     &self.arena,
                     template_renderer,
@@ -165,20 +135,19 @@ impl<'a> MarkdownSpace<'a> {
                 }
                 let title = markdown_page.title.to_owned();
                 let filename = markdown_page.source.replace('\\', "/");
-                if title_to_file.contains_key(&title) {
+                if titles.contains(&title) {
                     return Err(ConfluenceError::DuplicateTitle {
                         file: filename,
                         title,
                     }
                     .into());
                 }
-                title_to_file.insert(title.clone(), filename.clone());
+                titles.insert(title.clone());
 
                 // if markdown_page.is_folder() {
                 //     self.folders.insert(title.clone());
                 // }
-
-                file_to_title.insert(filename.clone(), title.clone());
+                // file_to_title.insert(filename.clone(), title.clone());
 
                 let missing_files: Vec<String> = markdown_page
                     .local_links

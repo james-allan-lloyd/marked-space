@@ -94,7 +94,7 @@ mod test {
         let markdown_content = "# compulsory title\n{{hello_world()}}";
         let page = page_from_str("page.md", markdown_content, &arena)?;
 
-        let rendered_page = page.render(&LinkGenerator::default())?;
+        let rendered_page = page.render(&LinkGenerator::default_test())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
 
@@ -107,7 +107,7 @@ mod test {
         let markdown_content = "# compulsory title\n{{hello_world(name=\"world!\")}}";
 
         let page = page_from_str("page.md", markdown_content, &arena)?;
-        let rendered_page = page.render(&LinkGenerator::default())?;
+        let rendered_page = page.render(&LinkGenerator::default_test())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
 
