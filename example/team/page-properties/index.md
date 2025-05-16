@@ -1,4 +1,3 @@
 # Page Properties
 
-{{ properties_report(label="page-properties") }}
-
+{{ builtins::properties_report(label="page-properties") }}

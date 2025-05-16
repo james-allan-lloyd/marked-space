@@ -1,5 +1,5 @@
 ---
-properties:
+metadata:
   owner: Olivia
   status: Approved
 labels:
@@ -9,7 +9,8 @@ labels:
 # Page with page properties
 
 ```text
-{{ '{{ properties() }}' }}
+{{ '{{ builtins::properties() }}' }}
 ```
 
-{{ properties() }}
+{{ builtins::properties(metadata=['owner', 'status']) }}
+

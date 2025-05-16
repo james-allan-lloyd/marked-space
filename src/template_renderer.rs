@@ -14,6 +14,7 @@ use crate::mentions::CachedMentions;
 
 pub struct TemplateRenderer {
     tera: Tera,
+    space_key: String,
 }
 
 fn make_metadata_lookup(metadata: Yaml) -> impl tera::Function {
@@ -42,18 +43,19 @@ impl TemplateRenderer {
         let space_key = space.key.clone();
         let mut tera = Tera::new(space.dir.join("**/*.md").into_os_string().to_str().unwrap())?;
 
-        add_builtins(&mut tera, space_key.clone());
+        add_builtins(&mut tera)?;
         tera.register_function("mention", CachedMentions::new(client.clone()));
 
-        Ok(TemplateRenderer { tera })
+        Ok(TemplateRenderer { tera, space_key })
     }
 
     #[cfg(test)]
     pub fn default() -> Result<TemplateRenderer> {
         let mut tera = Tera::default();
-        add_builtins(&mut tera, String::from("SPACE"));
+        let space_key = String::from("SPACE");
+        add_builtins(&mut tera)?;
 
-        Ok(TemplateRenderer { tera })
+        Ok(TemplateRenderer { tera, space_key })
     }
 
     #[cfg(test)]
@@ -61,11 +63,12 @@ impl TemplateRenderer {
         use crate::mentions::CachedMentions;
 
         let mut tera = Tera::default();
-        add_builtins(&mut tera, String::from("SPACE"));
+        let space_key = String::from("SPACE");
+        add_builtins(&mut tera)?;
 
         tera.register_function("mention", CachedMentions::new(client.clone()));
 
-        Ok(TemplateRenderer { tera })
+        Ok(TemplateRenderer { tera, space_key })
     }
 
     pub fn render_template_str(
@@ -76,6 +79,7 @@ impl TemplateRenderer {
     ) -> Result<String> {
         let mut context = tera::Context::new();
         context.insert("filename", &source);
+        context.insert("default_space_key", &self.space_key);
         self.tera
             .register_function("metadata", make_metadata_lookup(fm.metadata.clone()));
 
