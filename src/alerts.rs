@@ -102,7 +102,7 @@ mod test {
 </ac:rich-text-body></ac:structured-macro>"###;
 
         let page = page_from_str("page.md", markdown_content, &arena)?;
-        let rendered_page = page.render(&LinkGenerator::default())?;
+        let rendered_page = page.render(&LinkGenerator::default_test())?;
 
         assert_eq!(rendered_page.content.trim(), expected_rendered_content);
 
@@ -126,7 +126,7 @@ mod test {
 </ac:rich-text-body></ac:structured-macro>"###;
 
         let page = page_from_str("page.md", markdown_content, &arena)?;
-        let rendered_page = page.render(&LinkGenerator::default())?;
+        let rendered_page = page.render(&LinkGenerator::default_test())?;
 
         assert_eq!(rendered_page.content.trim(), expected_rendered_content);
 
@@ -153,7 +153,7 @@ mod test {
 </ac:rich-text-body></ac:structured-macro>"###;
 
         let page = page_from_str("page.md", markdown_content, &arena)?;
-        let rendered_page = page.render(&LinkGenerator::default())?;
+        let rendered_page = page.render(&LinkGenerator::default_test())?;
 
         assert_eq!(rendered_page.content.trim(), expected_rendered_content);
 
@@ -180,7 +180,7 @@ mod test {
 </ac:rich-text-body></ac:structured-macro>"###;
 
         let page = page_from_str("page.md", markdown_content, &arena)?;
-        let rendered_page = page.render(&LinkGenerator::default())?;
+        let rendered_page = page.render(&LinkGenerator::default_test())?;
 
         assert_eq!(rendered_page.content.trim(), expected_rendered_content);
 

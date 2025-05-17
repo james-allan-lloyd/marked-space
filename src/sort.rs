@@ -394,7 +394,7 @@ mod test {
     fn it_only_sorts_pages_with_sort_parameter_set() -> TestResult {
         let mut test_server = TestServer::default();
 
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         let markdown_space = MarkdownSpace::default("test", &PathBuf::from("test"));
         let markdown_page = register_mark_and_conf_page(

@@ -4,6 +4,8 @@ sort: inc
 
 # marked-space Documentation and Example Confluence Space
 
+Test
+
 Welcome to the Marked-Space documentation. This documentation is designed to
 not only help you work with marked-space to generate your Confluence spaces
 from markdown, but also to be used as an example that itself generates
@@ -36,16 +38,23 @@ folder: true
 
 The title of the folder is still required, but the actual content will be ignored.
 
-**Note**: conversion between folder and pages is not currently supported. You
-will need to delete the existing item (moving any children out first) so that
-it can be recreated with `marked-space`.
+> [!NOTE]
+> Conversion between folder and pages is not currently supported. You will need
+> to delete the existing item (moving any children out first) so that it can be
+> recreated with `marked-space`.
 
 ## Moving Pages
 
-Moving pages either by moving the file or by retitling is possible **but do not
-do this in the same update** or otherwise the link to the original page will be
-lost. This is because marked-space identifies the page by the filename and a
-hash of the content; change both and we won't know how a page maps to the file.
+`marked-space` will do its best to track pages that move in the file hierarchy
+and move them on Confluence, rather than deleting and recreating them. This is
+done primarily to preserve any comments made on the Confluence page.
+
+> [!WARNING]
+> Moving pages either by moving the file or by retitling is possible **but do
+> not do this in the same update** or otherwise the link to the original page
+> will be lost. This is because marked-space identifies the page by the
+> filename and a hash of the content; change both and we won't know how a page
+> maps to the file.
 
 ## Linking Between Pages
 

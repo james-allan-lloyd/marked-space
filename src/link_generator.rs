@@ -16,11 +16,11 @@ use crate::{
     markdown_page::MarkdownPage,
 };
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct LinkGenerator {
     host: String,
     space_key: String,
-    pub homepage_id: Option<String>,
+    homepage_id: String,
     filename_to_id: HashMap<String, String>,
     filename_to_title: HashMap<String, String>,
     title_to_file: HashMap<String, String>,
@@ -29,11 +29,25 @@ pub struct LinkGenerator {
 }
 
 impl LinkGenerator {
-    pub fn new(host: &str, space_key: &str) -> Self {
+    pub fn new(host: &str, space_key: &str, homepage_id: &str) -> Self {
         LinkGenerator {
             host: host.to_string(),
             space_key: space_key.to_string(),
-            homepage_id: None,
+            homepage_id: homepage_id.into(),
+            filename_to_id: HashMap::default(),
+            filename_to_title: HashMap::default(),
+            title_to_file: HashMap::default(),
+            title_to_id: HashMap::default(),
+            folders: HashSet::default(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn default_test() -> Self {
+        LinkGenerator {
+            host: "example.atlassian.net".into(),
+            space_key: "TEST".into(),
+            homepage_id: "999".into(),
             filename_to_id: HashMap::default(),
             filename_to_title: HashMap::default(),
             title_to_file: HashMap::default(),
@@ -67,21 +81,28 @@ impl LinkGenerator {
     pub fn register_confluence_node(&mut self, confluence_node: &ConfluenceNode) {
         let title = confluence_node.title.clone();
         let id = confluence_node.id.clone();
+        let homepage_id = self.homepage_id.clone();
         if let Some(filename) = self.title_to_file.get(&title) {
             self.filename_to_id.insert(filename.clone(), id.clone());
         }
-        self.title_to_id.insert(title, id.clone());
-
-        if let ConfluenceNodeType::Page(confluence_page) = &confluence_node.data {
-            if let Some(version_path) = &confluence_page.path {
-                if let Ok(p) = Self::path_to_string(version_path) {
-                    // this is the move logic: use the path from the version string if there isn't already a mapping to the id through title.
-                    self.filename_to_id.entry(p).or_insert(id);
-                } else {
-                    print_warning(&format!(
-                        "failed to convert {} to string",
-                        version_path.display()
-                    ));
+        self.title_to_id.insert(title.clone(), id.clone());
+        if id == homepage_id {
+            self.filename_to_id
+                .insert("index.md".into(), homepage_id.clone());
+            self.title_to_id.insert(title.clone(), homepage_id.clone());
+        } else {
+            self.title_to_id.insert(title.clone(), id.clone());
+            if let ConfluenceNodeType::Page(confluence_page) = &confluence_node.data {
+                if let Some(version_path) = &confluence_page.path {
+                    if let Ok(p) = Self::path_to_string(version_path) {
+                        // this is the move logic: use the path from the version string if there isn't already a mapping to the id through title.
+                        self.filename_to_id.entry(p).or_insert(id);
+                    } else {
+                        print_warning(&format!(
+                            "failed to convert {} to string",
+                            version_path.display()
+                        ));
+                    }
                 }
             }
         }
@@ -117,8 +138,7 @@ impl LinkGenerator {
 
     fn get_file_url(&self, filename: &Path) -> Option<String> {
         if filename == PathBuf::from("index.md") {
-            // return Some((unwrap().as_ref()));
-            return self.homepage_id.clone().map(|id| self.id_to_url(&id));
+            return Some(self.id_to_url(&self.homepage_id));
         }
         if let Ok(s) = Self::path_to_string(filename) {
             self.filename_to_id.get(&s).map(|id| self.id_to_url(id))
@@ -241,8 +261,7 @@ mod test {
 
     #[test]
     fn it_returns_homepage_link_for_root_index_md() -> TestResult {
-        let mut link_generator = LinkGenerator::new("example.atlassian.net", "Test");
-        link_generator.homepage_id = Some("999".to_string());
+        let link_generator = LinkGenerator::new("example.atlassian.net", "Test", "999");
 
         let url_for_file = link_generator.get_file_url(&PathBuf::from("index.md"));
         assert_eq!(
@@ -254,7 +273,7 @@ mod test {
 
     #[test]
     fn it_handles_retitles() -> TestResult {
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
 
         let old_title = String::from("Old Title");
         let new_title = String::from("New Title");
@@ -290,7 +309,7 @@ mod test {
 
     #[test]
     fn it_handles_moves() -> TestResult {
-        let mut link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+        let mut link_generator = LinkGenerator::default_test();
 
         let title = String::from("Test Title");
         let old_source = String::from("old-test.md");
@@ -328,7 +347,7 @@ mod test {
 
     #[test]
     fn it_returns_none_if_title_and_file_has_changed() -> TestResult {
-        let mut link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+        let mut link_generator = LinkGenerator::default_test();
 
         let old_title = String::from("Old Title");
         let new_title = String::from("New Title");
@@ -363,7 +382,7 @@ mod test {
 
     #[test]
     fn it_knows_which_pages_need_creating() -> TestResult {
-        let mut link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+        let mut link_generator = LinkGenerator::default_test();
 
         let new_title = String::from("New Title");
         let new_source = String::from("new-test.md");
@@ -384,6 +403,41 @@ mod test {
     }
 
     #[test]
+    fn it_does_not_create_homepage_because_it_always_exists() -> TestResult {
+        let mut link_generator = LinkGenerator::default_test();
+
+        let new_title = String::from("Homepage");
+        let new_source = String::from("index.md");
+
+        let arena = Arena::<AstNode>::new();
+        link_generator.register_markdown_page(&markdown_page_from_str(
+            &new_source,
+            &format!("# {} \n", new_title),
+            &arena,
+        )?)?;
+
+        link_generator.register_confluence_node(&ConfluenceNode {
+            id: "999".to_string(),
+            title: "Default Homepage".into(),
+            parent_id: None,
+            data: ConfluenceNodeType::Page(ConfluencePageData {
+                version: responses::Version {
+                    message: "Default created".into(),
+                    number: 1,
+                },
+                path: None,
+                status: ContentStatus::Current,
+            }),
+        });
+
+        let pages_to_create = link_generator.get_nodes_to_create();
+
+        assert_eq!(pages_to_create, Vec::<String>::default());
+
+        Ok(())
+    }
+
+    #[test]
     fn it_identifies_orphans() {
         let orphaned_confluence_page = ConfluenceNode {
             id: String::from("99"),
@@ -399,7 +453,7 @@ mod test {
             }),
         };
 
-        let link_generator = LinkGenerator::new("example.atlassian.net", "TEST");
+        let link_generator = LinkGenerator::default_test();
         assert!(link_generator.is_orphaned(
             &orphaned_confluence_page,
             orphaned_confluence_page.page_data().unwrap()

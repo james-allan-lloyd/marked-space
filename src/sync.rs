@@ -232,14 +232,22 @@ fn page_up_to_date(
 
 pub fn sync_space<'a>(
     mut confluence_client: ConfluenceClient,
-    markdown_space: &'a MarkdownSpace<'a>,
+    markdown_space: &'a mut MarkdownSpace<'a>,
     args: Args,
 ) -> Result<()> {
     let space_key = markdown_space.key.clone();
-    let mut link_generator = LinkGenerator::new(&confluence_client.hostname, &markdown_space.key);
+    let space_dir = markdown_space.dir.clone();
 
     let mut template_renderer = TemplateRenderer::new(markdown_space, &confluence_client)?;
-    let markdown_pages = markdown_space.parse(&mut link_generator, &mut template_renderer)?;
+    let markdown_pages = markdown_space.parse(&mut template_renderer)?;
+
+    let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
+    let mut link_generator =
+        LinkGenerator::new(&confluence_client.hostname, &space_key, &space.homepage_id);
+
+    for markdown_page in &markdown_pages {
+        link_generator.register_markdown_page(markdown_page)?;
+    }
 
     print_info(&format!(
         "Synchronizing space {} on {}...",
@@ -255,10 +263,9 @@ pub fn sync_space<'a>(
         .error_for_status()?
         .json()?;
 
-    let mut space = ConfluenceSpace::get(&confluence_client, &space_key)?;
     space.read_all_pages(&confluence_client)?;
     space.link_pages(&mut link_generator);
-    space.archive_orphans(&link_generator, &markdown_space.dir, &confluence_client)?;
+    space.archive_orphans(&link_generator, &space_dir, &confluence_client)?;
     space.restore_archived_pages(&link_generator, &confluence_client)?;
     space.create_initial_nodes(&mut link_generator, &confluence_client)?;
 
@@ -418,7 +425,7 @@ mod tests {
         let mut template_renderer = TemplateRenderer::default()?;
         let arena = Arena::<AstNode>::new();
         let markdown_page = MarkdownPage::from_file(
-            markdown_space,
+            &markdown_space.dir,
             markdown_page_path,
             &arena,
             &mut template_renderer,
@@ -450,7 +457,7 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/markdown1.md").path(),
-            &mut LinkGenerator::default(),
+            &mut LinkGenerator::default_test(),
         );
 
         assert!(parsed_page.is_ok());
@@ -467,7 +474,7 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/markdown1.md").path(),
-            &mut LinkGenerator::default(),
+            &mut LinkGenerator::default_test(),
         );
 
         assert!(parsed_page.is_ok());
@@ -488,7 +495,7 @@ mod tests {
         let parsed_page = parse_page(
             &MarkdownSpace::from_directory(temp.child("test").path())?,
             temp.child("test/index.md").path(),
-            &mut LinkGenerator::default(),
+            &mut LinkGenerator::default_test(),
         )?;
 
         assert!(parsed_page.parent.is_none());
@@ -508,7 +515,7 @@ mod tests {
             .write_str("# Subpages Parent\nparent content")?;
         temp.child("test/subpages/child.md")
             .write_str("# Subpage Child\nchild content")?;
-        let mut link_generator = LinkGenerator::default();
+        let mut link_generator = LinkGenerator::default_test();
         let space = MarkdownSpace::from_directory(temp.child("test").path())?;
         let _home_page = parse_page(
             &space,
@@ -540,8 +547,8 @@ mod tests {
             .unwrap();
 
         let confluence_client = ConfluenceClient::new("host.example.com");
-        let space = MarkdownSpace::from_directory(temp.child("test").path())?;
-        let sync_result = sync_space(confluence_client, &space, Args::default());
+        let mut space = MarkdownSpace::from_directory(temp.child("test").path())?;
+        let sync_result = sync_space(confluence_client, &mut space, Args::default());
 
         assert!(sync_result.is_err());
 

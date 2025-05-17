@@ -6,11 +6,13 @@ use walkdir::WalkDir;
 use crate::{
     console::{print_info, print_warning},
     error::{ConfluenceError, Result},
-    link_generator::LinkGenerator,
     markdown_page::MarkdownPage,
     template_renderer::TemplateRenderer,
 };
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 fn is_valid_space_key(space_key: &str) -> bool {
     Regex::new("^[A-Za-z0-9]+$").unwrap().is_match(space_key)
@@ -112,17 +114,17 @@ impl<'a> MarkdownSpace<'a> {
     }
 
     pub(crate) fn parse(
-        &'a self,
-        link_generator: &mut LinkGenerator,
+        &'a mut self,
         template_renderer: &mut TemplateRenderer,
     ) -> Result<Vec<MarkdownPage<'a>>> {
         let mut parse_errors = Vec::<anyhow::Error>::default();
+        let mut titles: HashSet<String> = HashSet::default();
         let markdown_pages: Vec<MarkdownPage> = self
             .markdown_pages
             .iter()
             .map(|markdown_page_path| {
                 let markdown_page = MarkdownPage::from_file(
-                    self,
+                    &self.dir,
                     markdown_page_path,
                     &self.arena,
                     template_renderer,
@@ -131,8 +133,21 @@ impl<'a> MarkdownSpace<'a> {
                 for warning in markdown_page.warnings.iter() {
                     print_warning(warning);
                 }
+                let title = markdown_page.title.to_owned();
+                let filename = markdown_page.source.replace('\\', "/");
+                if titles.contains(&title) {
+                    return Err(ConfluenceError::DuplicateTitle {
+                        file: filename,
+                        title,
+                    }
+                    .into());
+                }
+                titles.insert(title.clone());
 
-                link_generator.register_markdown_page(&markdown_page)?;
+                // if markdown_page.is_folder() {
+                //     self.folders.insert(title.clone());
+                // }
+                // file_to_title.insert(filename.clone(), title.clone());
 
                 let missing_files: Vec<String> = markdown_page
                     .local_links
@@ -204,8 +219,8 @@ mod tests {
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
     use crate::{
-        attachment::ImageAttachment, error::TestResult, link_generator::LinkGenerator,
-        markdown_page::MarkdownPage, template_renderer::TemplateRenderer,
+        attachment::ImageAttachment, error::TestResult, markdown_page::MarkdownPage,
+        template_renderer::TemplateRenderer,
     };
 
     use super::MarkdownSpace;
@@ -291,8 +306,8 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let space = result.unwrap();
-        let result = parse_default(&space);
+        let mut space = result.unwrap();
+        let result = parse_default(&mut space);
 
         assert!(result.is_err());
         let error = result.err().unwrap();
@@ -317,9 +332,9 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let space = result.unwrap();
+        let mut space = result.unwrap();
 
-        let result = parse_default(&space);
+        let result = parse_default(&mut space);
         assert!(result.is_err());
         let acutal_error = format!("{:#}", result.err().unwrap());
 
@@ -332,12 +347,9 @@ mod tests {
     }
 
     fn parse_default<'a>(
-        space: &'a MarkdownSpace<'a>,
+        space: &'a mut MarkdownSpace<'a>,
     ) -> anyhow::Result<Vec<MarkdownPage<'a>>, anyhow::Error> {
-        space.parse(
-            &mut LinkGenerator::default(),
-            &mut TemplateRenderer::default()?,
-        )
+        space.parse(&mut TemplateRenderer::default()?)
     }
 
     #[test]
@@ -357,9 +369,9 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let space = result.unwrap();
+        let mut space = result.unwrap();
 
-        let result = parse_default(&space);
+        let result = parse_default(&mut space);
         let acutal_error = format!("{:#}", result.err().unwrap());
         println!("Actual error: {:#}", acutal_error);
         assert!(acutal_error.contains(
@@ -381,9 +393,9 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let space = result.unwrap();
+        let mut space = result.unwrap();
 
-        let result = parse_default(&space)?;
+        let result = parse_default(&mut space)?;
 
         let page = &result
             .iter()
