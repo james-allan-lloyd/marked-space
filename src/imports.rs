@@ -25,6 +25,7 @@ pub fn generate_import_lines(fm: &FrontMatter) -> String {
 
     fm.imports
         .iter()
+        .chain([String::from("builtins")].iter())
         .map(generate_import_line)
         .collect::<Vec<String>>()
         .join("")
@@ -49,7 +50,10 @@ test passed
         };
 
         let import_lines = generate_import_lines(&fm1);
-        assert_eq!(import_lines, "{% import '_tera/test.md' as test %}\n");
+        assert_eq!(
+            import_lines,
+            "{% import '_tera/test.md' as test %}\n{% import '_tera/builtins' as builtins %}\n"
+        );
         Ok(())
     }
 

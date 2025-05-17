@@ -122,3 +122,7 @@ use them in a read only display way, as they will be overwritten.
 
 [Alerts and Expandable Sections](./alerts.md) allow you use Github style alerts
 in your Markdown, and also support sections that can be expanded on click.
+
+[Page Properties](./page-properties/index.md) allow you to create property
+tables on Confluence which can then be used by the Properties Report macro to
+create tables.

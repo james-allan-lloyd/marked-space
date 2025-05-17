@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::error::Result;
 use tera::Tera;
 
 fn hello_world(
@@ -70,11 +71,33 @@ format!(r#"<ac:structured-macro ac:name="contentbylabel" ac:schema-version="4" d
     )
 }
 
-pub(crate) fn add_builtins(tera: &mut Tera) {
+const PROPERTIES_TABLE: &str = r###"{% macro properties(metadata) -%}
+<ac:structured-macro ac:name="details" ac:schema-version="1" data-layout="default" ac:local-id="779bc5f9-b8c3-41df-bccc-1840efc20a80" ac:macro-id="4008e080-6218-49a8-82f8-1387005d53d2"><ac:rich-text-body >
+<table><tbody>
+{%- for metadata_key in metadata -%}
+<tr><th>{{ metadata_key|title }}</th><td>{{ metadata(path=metadata_key) }}</td></tr>
+{%- endfor -%}
+</tbody></table></ac:rich-text-body></ac:structured-macro>
+
+{%- endmacro %}
+
+{% macro properties_report(space='', label) -%}
+<ac:structured-macro ac:name="detailssummary" ac:schema-version="2">
+    <ac:parameter ac:name="firstcolumn">Title</ac:parameter>
+    <ac:parameter ac:name="sortBy">Title</ac:parameter>
+    <ac:parameter ac:name="cql">space = {% if space.len %}{{space}}{% else %}{{ default_space_key }}{%endif%} and label = "{{ label }}"</ac:parameter>
+</ac:structured-macro>
+{%- endmacro %}
+"###;
+
+pub(crate) fn add_builtins(tera: &mut Tera) -> Result<()> {
     tera.register_function("hello_world", hello_world);
     tera.register_function("toc", toc);
     tera.register_function("children", children);
     tera.register_function("labellist", labellist);
+    tera.add_raw_template("_tera/builtins", PROPERTIES_TABLE)?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -82,11 +105,44 @@ mod test {
     use std::collections::HashMap;
 
     use comrak::{nodes::AstNode, Arena};
+    use scraper::{Html, Selector};
 
     use crate::{
-        builtins::labellist, error::TestResult, link_generator::LinkGenerator,
-        markdown_page::page_from_str,
+        builtins::labellist,
+        error::Result,
+        error::TestResult,
+        link_generator::LinkGenerator,
+        markdown_page::{page_from_str, RenderedPage},
     };
+
+    fn test_render(markdown_content: &str) -> Result<RenderedPage> {
+        let arena = Arena::<AstNode>::new();
+        let page = page_from_str("page.md", markdown_content, &arena)?;
+        page.render(&LinkGenerator::default_test())
+    }
+
+    fn extract_properties_table(parsed_html: Html) -> Vec<(String, String)> {
+        let parsed_table: Vec<(String, String)> = parsed_html
+            .select(&Selector::parse("tr").unwrap())
+            .map(|row| {
+                let header = row
+                    .select(&Selector::parse("th").unwrap())
+                    .next()
+                    .unwrap()
+                    .text()
+                    .collect();
+                let value = row
+                    .select(&Selector::parse("td").unwrap())
+                    .next()
+                    .unwrap()
+                    .text()
+                    .collect();
+                println!("{:?}", (&header, &value));
+                (header, value)
+            })
+            .collect();
+        parsed_table
+    }
 
     #[test]
     fn it_renders_predefined_functions() -> TestResult {
@@ -97,7 +153,6 @@ mod test {
         let rendered_page = page.render(&LinkGenerator::default_test())?;
 
         assert_eq!(rendered_page.content.trim(), "<p><em>hello world!</em></p>");
-
         Ok(())
     }
 
@@ -131,6 +186,113 @@ mod test {
         let s = result.unwrap();
         println!("s: {:#}", s);
         assert!(s.to_string().contains(r#"label in (\"foo\",\"bar\")"#));
+
+        Ok(())
+    }
+
+    #[test]
+    fn properties_report_defaults_to_current_space() -> TestResult {
+        let rendered_page =
+            test_render("# compulsory title\n{{ builtins::properties_report(label=\"foo\") }}")?;
+
+        assert_eq!(rendered_page.content.trim(), "<p><ac:structured-macro ac:name=\"detailssummary\" ac:schema-version=\"2\"> <ac:parameter ac:name=\"firstcolumn\">Title</ac:parameter> <ac:parameter ac:name=\"sortBy\">Title</ac:parameter> <ac:parameter ac:name=\"cql\">space = SPACE and label = \"foo\"</ac:parameter> </ac:structured-macro></p>");
+
+        Ok(())
+    }
+
+    #[test]
+    fn properties_renders_from_metadata() -> TestResult {
+        let rendered_page = test_render(
+            r###"---
+metadata:
+    Owner: James
+    Status: Complete
+---
+# compulsory title
+
+{{ builtins::properties(metadata=["Owner", "Status"]) }}
+"###,
+        )?;
+
+        // assert_eq!(rendered_page.content.trim(), "");
+        println!("{}", rendered_page.content.trim());
+
+        let parsed_html = Html::parse_fragment(rendered_page.content.trim());
+        let parsed_table = extract_properties_table(parsed_html);
+
+        assert_eq!(
+            parsed_table,
+            vec![
+                (String::from("Owner"), String::from("James")),
+                (String::from("Status"), String::from("Complete"))
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn properties_renders_from_metadata_capitalize_keys() -> TestResult {
+        let rendered_page = test_render(
+            r###"---
+metadata:
+    owner: James
+    status: Complete
+---
+# compulsory title
+
+{{ builtins::properties(metadata=["owner", "status"]) }}
+"###,
+        )?;
+
+        // assert_eq!(rendered_page.content.trim(), "");
+        println!("{}", rendered_page.content.trim());
+
+        let parsed_html = Html::parse_fragment(rendered_page.content.trim());
+        let parsed_table = extract_properties_table(parsed_html);
+
+        assert_eq!(
+            parsed_table,
+            vec![
+                (String::from("Owner"), String::from("James")),
+                (String::from("Status"), String::from("Complete"))
+            ]
+        );
+
+        Ok(())
+    }
+
+    // TODO: would be nice to enable this, but tera functions stop recursive macro evaluation...
+    #[allow(dead_code)]
+    fn properties_renders_from_metadata_passing_through_templates() -> TestResult {
+        let rendered_page = test_render(
+            r###"---
+metadata:
+    owner: James
+    status: "{{ Self::status(value=Complete) }}"
+---
+# compulsory title
+{% macro status(value) -%}
+Status: {{value}}
+{%- endmacro %}
+
+{{ builtins::properties(metadata=["owner", "status"]) }}
+"###,
+        )?;
+
+        // assert_eq!(rendered_page.content.trim(), "");
+        println!("{}", rendered_page.content.trim());
+
+        let parsed_html = Html::parse_fragment(rendered_page.content.trim());
+        let parsed_table = extract_properties_table(parsed_html);
+
+        assert_eq!(
+            parsed_table,
+            vec![
+                (String::from("Owner"), String::from("James")),
+                (String::from("Status"), String::from("Status: Complete"))
+            ]
+        );
 
         Ok(())
     }
