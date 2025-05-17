@@ -10,7 +10,7 @@ use crate::error::Result;
 use crate::frontmatter::FrontMatter;
 use crate::imports::generate_import_lines;
 use crate::markdown_space::MarkdownSpace;
-use crate::mentions::make_mention;
+use crate::mentions::CachedMentions;
 
 pub struct TemplateRenderer {
     tera: Tera,
@@ -42,7 +42,7 @@ impl TemplateRenderer {
         let mut tera = Tera::new(space.dir.join("**/*.md").into_os_string().to_str().unwrap())?;
 
         add_builtins(&mut tera);
-        tera.register_function("mention", make_mention(client.clone()));
+        tera.register_function("mention", CachedMentions::new(client.clone()));
 
         Ok(TemplateRenderer { tera })
     }
@@ -57,10 +57,12 @@ impl TemplateRenderer {
 
     #[cfg(test)]
     pub fn default_with_client(client: &ConfluenceClient) -> Result<TemplateRenderer> {
+        use crate::mentions::CachedMentions;
+
         let mut tera = Tera::default();
         add_builtins(&mut tera);
 
-        tera.register_function("mention", make_mention(client.clone()));
+        tera.register_function("mention", CachedMentions::new(client.clone()));
 
         Ok(TemplateRenderer { tera })
     }
