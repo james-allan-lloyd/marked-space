@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::RwLock};
 
 use crate::{
     confluence_client::ConfluenceClient, confluence_paginator::ConfluencePaginator,
@@ -19,39 +19,60 @@ fn get_user(
     Ok(results.pop())
 }
 
-pub(crate) fn mention_macro(
-    client: &ConfluenceClient,
-    args: &HashMap<String, serde_json::Value>,
-) -> std::result::Result<serde_json::Value, tera::Error> {
-    let public_name = args.get("public_name").ok_or("Missing 'public_name'")?;
+pub struct CachedMentions {
+    client: ConfluenceClient,
+    cache: RwLock<HashMap<String, String>>,
+}
 
-    let public_name_str = match public_name {
-        serde_json::Value::String(s) => Ok(s),
-        _ => Err(tera::Error::msg("public_name must be a string")),
-    }?;
-
-    match get_user(client, public_name_str) {
-        Ok(Some(user)) => Ok(serde_json::to_value(format!(
-            // trailing space prevents the tag being recognized as a markdown link
-            "<ac:link ><ri:user ri:account-id=\"{}\"/></ac:link>",
-            user.account_id
-        ))
-        .unwrap()),
-        Ok(None) => {
-            print_warning(&format!("Unknown user \"{}\"", public_name_str));
-            Ok(serde_json::to_value("@unknown_user").unwrap())
+impl CachedMentions {
+    pub fn new(client: ConfluenceClient) -> CachedMentions {
+        Self {
+            client,
+            cache: RwLock::new(HashMap::new()),
         }
-
-        Err(err) => Err(tera::Error::msg(err.to_string())),
     }
 }
 
-pub(crate) fn make_mention(client: ConfluenceClient) -> impl tera::Function {
-    Box::new(
-        move |args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
-            mention_macro(&client, args)
-        },
-    )
+impl tera::Function for CachedMentions {
+    fn call(&self, args: &HashMap<String, tera::Value>) -> tera::Result<tera::Value> {
+        let public_name = args.get("public_name").ok_or("Missing 'public_name'")?;
+
+        let public_name_str = match public_name {
+            serde_json::Value::String(s) => Ok(s),
+            _ => Err(tera::Error::msg("public_name must be a string")),
+        }?;
+
+        {
+            let read_cache = self.cache.read().unwrap();
+            if let Some(account_id) = read_cache.get(public_name_str) {
+                return Ok(serde_json::to_value(format!(
+                    // trailing space prevents the tag being recognized as a markdown link
+                    "<ac:link ><ri:user ri:account-id=\"{}\"/></ac:link>",
+                    account_id
+                ))
+                .unwrap());
+            }
+        }
+
+        let mut write_cache = self.cache.write().unwrap();
+        match get_user(&self.client, public_name_str) {
+            Ok(Some(user)) => {
+                write_cache.insert(public_name_str.to_owned(), user.account_id.clone());
+                Ok(serde_json::to_value(format!(
+                    // trailing space prevents the tag being recognized as a markdown link
+                    "<ac:link ><ri:user ri:account-id=\"{}\"/></ac:link>",
+                    user.account_id
+                ))
+                .unwrap())
+            }
+            Ok(None) => {
+                print_warning(&format!("Unknown user \"{}\"", public_name_str));
+                Ok(serde_json::to_value("@unknown_user").unwrap())
+            }
+
+            Err(err) => Err(tera::Error::msg(err.to_string())),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -205,6 +226,42 @@ mod tests {
         )?;
 
         assert_eq!(result, "@unknown_user");
+
+        mock.assert();
+        Ok(())
+    }
+
+    #[test]
+    fn it_caches_account_ids() -> TestResult {
+        let mut server = mockito::Server::new();
+        let client = confluence_client::ConfluenceClient::new_insecure(&server.host_with_port());
+        let mut template_renderer = TemplateRenderer::default_with_client(&client)?;
+
+        let mock = server
+            .mock("GET", "/wiki/rest/api/search/user")
+            .match_query(mockito::Matcher::UrlEncoded(
+                "cql".into(),
+                "user.fullname~\"John Doe\"".into(),
+            ))
+            .with_status(200)
+            .with_header("authorization", "Basic Og==")
+            .with_header("content-type", "application/json")
+            .with_header("X-Atlassian-Token", "no-check")
+            .with_body(TEST_USER)
+            .expect(1) // only called once
+            .create();
+
+        template_renderer.render_template_str(
+            "test.md",
+            "{{ mention(public_name=\"John Doe\") }}",
+            &FrontMatter::default(),
+        )?;
+
+        template_renderer.render_template_str(
+            "test2.md",
+            "{{ mention(public_name=\"John Doe\") }}",
+            &FrontMatter::default(),
+        )?;
 
         mock.assert();
         Ok(())
