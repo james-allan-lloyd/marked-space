@@ -38,26 +38,31 @@ impl CachedMentions {
         .unwrap()
     }
 
-    fn account_id(&self, public_name: &str) -> tera::Result<Option<String>> {
-        {
-            let read_cache = self.cache.read().unwrap();
-            if let Some(optional_account_id) = read_cache.get(public_name) {
-                Ok(optional_account_id.to_owned())
-            } else {
-                let mut write_cache = self.cache.write().unwrap();
-                match get_user(&self.client, public_name) {
-                    Ok(Some(user)) => {
-                        write_cache.insert(public_name.to_owned(), Some(user.account_id.clone()));
-                        Ok(Some(user.account_id))
-                    }
-                    Ok(None) => {
-                        write_cache.insert(String::from(public_name), None);
-                        print_warning(&format!("Unknown user \"{}\"", public_name));
-                        Ok(None)
-                    }
+    fn read_cache(&self, public_name: &str) -> Option<Option<String>> {
+        self.cache
+            .read()
+            .unwrap()
+            .get(public_name)
+            .map(|optional_account_id| optional_account_id.to_owned())
+    }
 
-                    Err(err) => Err(tera::Error::msg(err.to_string())),
+    fn account_id(&self, public_name: &str) -> tera::Result<Option<String>> {
+        if let Some(optional_account_id) = self.read_cache(public_name) {
+            Ok(optional_account_id.to_owned())
+        } else {
+            let mut write_cache = self.cache.write().unwrap();
+            match get_user(&self.client, public_name) {
+                Ok(Some(user)) => {
+                    write_cache.insert(public_name.to_owned(), Some(user.account_id.clone()));
+                    Ok(Some(user.account_id))
                 }
+                Ok(None) => {
+                    write_cache.insert(String::from(public_name), None);
+                    print_warning(&format!("Unknown user \"{}\"", public_name));
+                    Ok(None)
+                }
+
+                Err(err) => Err(tera::Error::msg(err.to_string())),
             }
         }
     }
