@@ -2,13 +2,10 @@ use std::{collections::HashMap, sync::RwLock};
 
 use crate::{
     confluence_client::ConfluenceClient, confluence_paginator::ConfluencePaginator,
-    console::print_warning, responses,
+    console::print_warning, error::Result, responses,
 };
 
-fn get_user(
-    client: &ConfluenceClient,
-    public_name: &str,
-) -> Result<Option<responses::User>, anyhow::Error> {
+fn get_user(client: &ConfluenceClient, public_name: &str) -> Result<Option<responses::User>> {
     let response = client.search_users(public_name)?.error_for_status()?;
     let mut results: Vec<responses::User> =
         ConfluencePaginator::<responses::SearchResult>::new(client)
@@ -21,7 +18,7 @@ fn get_user(
 
 pub struct CachedMentions {
     client: ConfluenceClient,
-    cache: RwLock<HashMap<String, String>>,
+    cache: RwLock<HashMap<String, Option<String>>>,
 }
 
 impl CachedMentions {
@@ -29,6 +26,39 @@ impl CachedMentions {
         Self {
             client,
             cache: RwLock::new(HashMap::new()),
+        }
+    }
+
+    fn format_as_user_link(&self, account_id: &str) -> tera::Value {
+        serde_json::to_value(format!(
+            // trailing space prevents the tag being recognized as a markdown link
+            "<ac:link ><ri:user ri:account-id=\"{}\"/></ac:link>",
+            account_id
+        ))
+        .unwrap()
+    }
+
+    fn account_id(&self, public_name: &str) -> tera::Result<Option<String>> {
+        {
+            let read_cache = self.cache.read().unwrap();
+            if let Some(optional_account_id) = read_cache.get(public_name) {
+                Ok(optional_account_id.to_owned())
+            } else {
+                let mut write_cache = self.cache.write().unwrap();
+                match get_user(&self.client, public_name) {
+                    Ok(Some(user)) => {
+                        write_cache.insert(public_name.to_owned(), Some(user.account_id.clone()));
+                        Ok(Some(user.account_id))
+                    }
+                    Ok(None) => {
+                        write_cache.insert(String::from(public_name), None);
+                        print_warning(&format!("Unknown user \"{}\"", public_name));
+                        Ok(None)
+                    }
+
+                    Err(err) => Err(tera::Error::msg(err.to_string())),
+                }
+            }
         }
     }
 }
@@ -42,35 +72,9 @@ impl tera::Function for CachedMentions {
             _ => Err(tera::Error::msg("public_name must be a string")),
         }?;
 
-        {
-            let read_cache = self.cache.read().unwrap();
-            if let Some(account_id) = read_cache.get(public_name_str) {
-                return Ok(serde_json::to_value(format!(
-                    // trailing space prevents the tag being recognized as a markdown link
-                    "<ac:link ><ri:user ri:account-id=\"{}\"/></ac:link>",
-                    account_id
-                ))
-                .unwrap());
-            }
-        }
-
-        let mut write_cache = self.cache.write().unwrap();
-        match get_user(&self.client, public_name_str) {
-            Ok(Some(user)) => {
-                write_cache.insert(public_name_str.to_owned(), user.account_id.clone());
-                Ok(serde_json::to_value(format!(
-                    // trailing space prevents the tag being recognized as a markdown link
-                    "<ac:link ><ri:user ri:account-id=\"{}\"/></ac:link>",
-                    user.account_id
-                ))
-                .unwrap())
-            }
-            Ok(None) => {
-                print_warning(&format!("Unknown user \"{}\"", public_name_str));
-                Ok(public_name.to_owned())
-            }
-
-            Err(err) => Err(tera::Error::msg(err.to_string())),
+        match self.account_id(public_name_str)? {
+            Some(account_id) => Ok(self.format_as_user_link(&account_id)),
+            None => Ok(public_name.to_owned()),
         }
     }
 }
@@ -134,32 +138,32 @@ mod tests {
 }
 "###;
 
-    fn mock_user_exists(server: &mut mockito::ServerGuard) -> mockito::Mock {
+    fn mock_user_search(
+        server: &mut mockito::ServerGuard,
+        user_name: &str,
+        response: &str,
+    ) -> mockito::Mock {
         server
             .mock("GET", "/wiki/rest/api/search/user")
             .match_query(mockito::Matcher::UrlEncoded(
                 "cql".into(),
-                "user.fullname~\"John Doe\"".into(),
+                format!("user.fullname~\"{}\"", user_name),
             ))
-            .with_status(201)
+            .with_status(200)
             .with_header("authorization", "Basic Og==")
             .with_header("content-type", "application/json")
             .with_header("X-Atlassian-Token", "no-check")
-            .with_body(TEST_USER)
+            .with_body(response)
+            .expect(1) // only called once
             .create()
     }
 
     #[test]
     fn it_searches_users() -> TestResult {
-        // Request a new server from the pool
         let mut server = mockito::Server::new();
-
-        // Use one of these addresses to configure your client
         let host = server.host_with_port();
-        // let url = server.url();
 
-        // Create a mock
-        let mock = mock_user_exists(&mut server);
+        let mock = mock_user_search(&mut server, "John Doe", TEST_USER);
         let client = confluence_client::ConfluenceClient::new_insecure(&host);
 
         let mut template_renderer = TemplateRenderer::default_with_client(&client)?;
@@ -237,19 +241,31 @@ mod tests {
         let client = confluence_client::ConfluenceClient::new_insecure(&server.host_with_port());
         let mut template_renderer = TemplateRenderer::default_with_client(&client)?;
 
-        let mock = server
-            .mock("GET", "/wiki/rest/api/search/user")
-            .match_query(mockito::Matcher::UrlEncoded(
-                "cql".into(),
-                "user.fullname~\"John Doe\"".into(),
-            ))
-            .with_status(200)
-            .with_header("authorization", "Basic Og==")
-            .with_header("content-type", "application/json")
-            .with_header("X-Atlassian-Token", "no-check")
-            .with_body(TEST_USER)
-            .expect(1) // only called once
-            .create();
+        let mock = mock_user_search(&mut server, "John Doe", TEST_USER);
+
+        template_renderer.render_template_str(
+            "test.md",
+            "{{ mention(public_name=\"John Doe\") }}",
+            &FrontMatter::default(),
+        )?;
+
+        template_renderer.render_template_str(
+            "test2.md",
+            "{{ mention(public_name=\"John Doe\") }}",
+            &FrontMatter::default(),
+        )?;
+
+        mock.assert();
+        Ok(())
+    }
+
+    #[test]
+    fn it_caches_unknown_accounts_too() -> TestResult {
+        let mut server = mockito::Server::new();
+        let client = confluence_client::ConfluenceClient::new_insecure(&server.host_with_port());
+        let mut template_renderer = TemplateRenderer::default_with_client(&client)?;
+
+        let mock = mock_user_search(&mut server, "John Doe", NO_USERS);
 
         template_renderer.render_template_str(
             "test.md",
