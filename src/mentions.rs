@@ -67,7 +67,7 @@ impl tera::Function for CachedMentions {
             }
             Ok(None) => {
                 print_warning(&format!("Unknown user \"{}\"", public_name_str));
-                Ok(serde_json::to_value("@unknown_user").unwrap())
+                Ok(public_name.to_owned())
             }
 
             Err(err) => Err(tera::Error::msg(err.to_string())),
@@ -201,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn it_prints_unknown_user_if_no_matching_user_found() -> TestResult {
+    fn it_prints_mention_name_if_no_matching_user_found() -> TestResult {
         let mut server = mockito::Server::new();
         let client = confluence_client::ConfluenceClient::new_insecure(&server.host_with_port());
         let mut template_renderer = TemplateRenderer::default_with_client(&client)?;
@@ -225,7 +225,7 @@ mod tests {
             &FrontMatter::default(),
         )?;
 
-        assert_eq!(result, "@unknown_user");
+        assert_eq!(result, "John Doe");
 
         mock.assert();
         Ok(())
