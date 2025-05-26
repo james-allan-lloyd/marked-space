@@ -73,6 +73,13 @@ how the formatting works: [Formatting](formatting.md). By and large,
 marked-space is able to directly translate to the Confluence markdown (at some
 point Confluence supported markdown themselves, but apparently outgrew that).
 
+## Checking Content (for branch workflows)
+
+Maybe you want to check that things will render correctly when merging to main,
+without actually changing anything? This can be done with the `--check` option.
+It will still connect to confluence to retrieve the current state, but it won't
+do any actual syncing.
+
 ## Restricting Edits
 
 `marked-space` make pages editable by space members by default. If you want to
