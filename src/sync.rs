@@ -249,40 +249,54 @@ pub fn sync_space<'a>(
         link_generator.register_markdown_page(markdown_page)?;
     }
 
-    print_info(&format!(
-        "Synchronizing space {} on {}...",
-        space_key, confluence_client.hostname
-    ));
-
     if args.single_editor {
         print_info("Using single editor restrictions")
     }
 
-    let current_user: serde_json::Value = confluence_client
-        .current_user()?
-        .error_for_status()?
-        .json()?;
+    if !args.check {
+        print_info(&format!(
+            "Synchronizing space {} on {}...",
+            space_key, confluence_client.hostname
+        ));
+        let current_user: serde_json::Value = confluence_client
+            .current_user()?
+            .error_for_status()?
+            .json()?;
 
-    space.read_all_pages(&confluence_client)?;
-    space.link_pages(&mut link_generator);
-    space.archive_orphans(&link_generator, &space_dir, &confluence_client)?;
-    space.restore_archived_pages(&link_generator, &confluence_client)?;
-    space.create_initial_nodes(&mut link_generator, &confluence_client)?;
-
-    for markdown_page in markdown_pages.iter() {
-        if markdown_page.is_folder() {
-            sync_folder(markdown_page, &link_generator, &space, &confluence_client)?;
-        } else {
-            sync_page(
-                markdown_page,
-                &link_generator,
-                &args,
-                &space,
-                &confluence_client,
-                &current_user,
-            )?;
+        space.read_all_pages(&confluence_client)?;
+        space.link_pages(&mut link_generator);
+        space.archive_orphans(&link_generator, &space_dir, &confluence_client)?;
+        space.restore_archived_pages(&link_generator, &confluence_client)?;
+        space.create_initial_nodes(&mut link_generator, &confluence_client)?;
+        for markdown_page in markdown_pages.iter() {
+            if markdown_page.is_folder() {
+                sync_folder(markdown_page, &link_generator, &space, &confluence_client)?;
+            } else {
+                sync_page(
+                    markdown_page,
+                    &link_generator,
+                    &args,
+                    &space,
+                    &confluence_client,
+                    &current_user,
+                )?;
+            }
+            sync_sort(markdown_page, &link_generator, &mut confluence_client)?;
         }
-        sync_sort(markdown_page, &link_generator, &mut confluence_client)?;
+    } else {
+        print_info(&format!(
+            "Checking space {} on {}...",
+            space_key, confluence_client.hostname
+        ));
+        space.read_all_pages(&confluence_client)?;
+        space.link_pages(&mut link_generator);
+        for markdown_page in markdown_pages.iter() {
+            let rendered_page = markdown_page.render(&link_generator)?;
+            if let Some(ref d) = args.output {
+                output_content(d, &rendered_page)?;
+            }
+        }
+        print_info("Check complete");
     }
 
     Ok(())

@@ -73,6 +73,11 @@ pub struct Args {
     /// space editable to anyone who has access to the space.
     #[arg(long)]
     single_editor: bool,
+
+    /// Set the user identified by the token to the sole editor of pages. Default is to make the
+    /// space editable to anyone who has access to the space.
+    #[arg(long)]
+    check: bool,
 }
 
 fn main() -> Result<ExitCode> {
