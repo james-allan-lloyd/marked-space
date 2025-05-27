@@ -1,8 +1,20 @@
+use std::collections::{HashMap, HashSet};
+
 use serde_json::json;
 
 use crate::{console::print_warning, markdown_page::MarkdownPage, responses::ContentProperty};
 
 static EMOJI_TITLE_PUBLISHED_PROP: &str = "emoji-title-published";
+
+fn get_page_property_values(page: &MarkdownPage) -> HashMap<String, serde_json::Value> {
+    let mut result = HashMap::new();
+    result.insert(
+        String::from(EMOJI_TITLE_PUBLISHED_PROP),
+        json!(parse_emoji(page)),
+    );
+
+    result
+}
 
 pub(crate) fn get_property_updates(
     page: &MarkdownPage<'_>,
@@ -10,32 +22,67 @@ pub(crate) fn get_property_updates(
 ) -> Vec<ContentProperty> {
     let mut result = Vec::new();
 
-    let emoji = parse_emoji(page);
-
-    if let Some(prop) = existing_properties
+    let existing_property_keys = existing_properties
         .iter()
-        .find(|prop| prop.key == EMOJI_TITLE_PUBLISHED_PROP)
-    {
-        let new_value = json!(emoji);
-        if prop.value != new_value {
-            let mut prop_update = prop.clone();
-            prop_update.value = new_value;
-            if emoji.is_some() {
-                prop_update.version.number += 1;
+        .map(|x| x.key.clone())
+        .collect::<HashSet<String>>();
+
+    let page_properties = get_page_property_values(page);
+    let mut page_property_keys: HashSet<String> = page_properties.keys().cloned().collect();
+
+    for prop in existing_properties {
+        if let Some(new_value) = page_properties.get(&prop.key) {
+            if *new_value != prop.value {
+                let mut prop_update = prop.clone();
+                prop_update.value = new_value.to_owned();
+                if !prop_update.value.is_null() {
+                    prop_update.version.number += 1;
+                }
+                result.push(prop_update);
             }
-            result.push(prop_update);
+            page_property_keys.remove(&prop.key);
         }
-    } else if emoji.is_some() {
-        result.push(ContentProperty {
-            id: String::from(""),
-            key: String::from(EMOJI_TITLE_PUBLISHED_PROP),
-            value: json!(emoji),
-            version: crate::responses::Version {
-                message: String::from(""),
-                number: 0,
-            },
-        });
     }
+
+    for prop_to_add in page_property_keys {
+        let value_to_add = page_properties.get(&prop_to_add).unwrap();
+        if !value_to_add.is_null() {
+            result.push(ContentProperty {
+                id: String::from(""),
+                key: prop_to_add,
+                value: value_to_add.clone(),
+                version: crate::responses::Version {
+                    message: String::from(""),
+                    number: 0,
+                },
+            });
+        }
+    }
+
+    // if let Some(prop) = existing_properties
+    //     .iter()
+    //     .find(|prop| prop.key == EMOJI_TITLE_PUBLISHED_PROP)
+    // {
+    //     let new_value = json!(emoji);
+    //     if prop.value != new_value {
+    //         let mut prop_update = prop.clone();
+    //         prop_update.value = new_value;
+    //         if emoji.is_some() {
+    //             prop_update.version.number += 1;
+    //         }
+    //         result.push(prop_update);
+    //     }
+    // } else if emoji.is_some() {
+    //     result.push(ContentProperty {
+    //         id: String::from(""),
+    //         key: String::from(EMOJI_TITLE_PUBLISHED_PROP),
+    //         value: json!(emoji),
+    //         version: crate::responses::Version {
+    //             message: String::from(""),
+    //             number: 0,
+    //         },
+    //     });
+    // }
 
     result
 }
