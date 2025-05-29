@@ -126,8 +126,8 @@ impl<'a> MarkdownPage<'a> {
 
         let mut attachments = Vec::<ImageAttachment>::default();
         if let Some(cover) = &fm.cover {
-            if MarkdownPage::is_local_link(cover) {
-                attachments.push(ImageAttachment::new(cover, parent));
+            if MarkdownPage::is_local_link(&cover.source) {
+                attachments.push(ImageAttachment::new(&cover.source, parent));
             }
         }
         let mut local_links = Vec::<LocalLink>::default();

@@ -4,6 +4,7 @@ use serde_json::json;
 
 use crate::console::{print_status, Status};
 use crate::error::Result;
+use crate::page_covers::parse_cover;
 use crate::page_emojis::parse_emoji;
 use crate::responses::{self, ContentProperty, MultiEntityResult};
 use crate::{
@@ -25,18 +26,7 @@ fn get_page_property_values(
 
     result.insert(
         String::from(COVER_PICTURE_ID_PUBLISHED_PROP),
-        if let Some(cover) = &page.front_matter.cover {
-            if MarkdownPage::is_local_link(cover) {
-                json!(
-                    json!({"id": link_generator.attachment_id(cover, page), "position":50})
-                        .to_string()
-                )
-            } else {
-                json!(json!({"id":cover.clone(), "position": 50}).to_string())
-            }
-        } else {
-            serde_json::Value::Null
-        },
+        json!(parse_cover(page, link_generator)),
     );
 
     result
