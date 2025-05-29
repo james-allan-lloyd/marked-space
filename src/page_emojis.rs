@@ -1,87 +1,4 @@
-use std::collections::{HashMap, HashSet};
-
-use serde_json::json;
-
-use crate::{
-    console::print_warning, link_generator::LinkGenerator, markdown_page::MarkdownPage,
-    responses::ContentProperty,
-};
-
-pub static EMOJI_TITLE_PUBLISHED_PROP: &str = "emoji-title-published";
-pub static EMOJI_COVER_PICTURE_PUBLISHED_PROP: &str = "cover-picture-id-published";
-
-// todo: "value": "{\"id\":\"a27ac7fd-5b79-4185-b5a2-c32afe0e84c6\",\"position\":50}",
-// "value": "{\"id\":\"https://images.unsplash.com/photo-1541701494587-cb58502866ab?crop=entropy&cs=srgb&fm=jpg&ixid=M3wyMDQ0MDF8MHwxfHNlYXJjaHwzfHxjb2xvcnxlbnwwfDB8fHwxNzQ4Mjk2MDg0fDA&ixlib=rb-4.1.0&q=85\",\"position\":50}",
-fn get_page_property_values(
-    page: &MarkdownPage,
-    link_generator: &LinkGenerator,
-) -> HashMap<String, serde_json::Value> {
-    let mut result = HashMap::new();
-    result.insert(
-        String::from(EMOJI_TITLE_PUBLISHED_PROP),
-        json!(parse_emoji(page)),
-    );
-
-    result.insert(
-        String::from(EMOJI_COVER_PICTURE_PUBLISHED_PROP),
-        if let Some(cover) = &page.front_matter.cover {
-            if MarkdownPage::is_local_link(cover) {
-                json!(
-                    json!({"id": link_generator.attachment_id(cover, page), "position":50})
-                        .to_string()
-                )
-            } else {
-                json!(json!({"id":cover.clone(), "position": 50}).to_string())
-            }
-        } else {
-            serde_json::Value::Null
-        },
-    );
-
-    result
-}
-
-pub(crate) fn get_property_updates(
-    page: &MarkdownPage<'_>,
-    existing_properties: &[ContentProperty],
-    link_generator: &LinkGenerator,
-) -> Vec<ContentProperty> {
-    let mut result = Vec::new();
-
-    let page_properties = get_page_property_values(page, link_generator);
-    let mut page_property_keys: HashSet<String> = page_properties.keys().cloned().collect();
-
-    for prop in existing_properties {
-        if let Some(new_value) = page_properties.get(&prop.key) {
-            if *new_value != prop.value {
-                let mut prop_update = prop.clone();
-                prop_update.value = new_value.to_owned();
-                if !prop_update.value.is_null() {
-                    prop_update.version.number += 1;
-                }
-                result.push(prop_update);
-            }
-            page_property_keys.remove(&prop.key);
-        }
-    }
-
-    for prop_to_add in page_property_keys {
-        let value_to_add = page_properties.get(&prop_to_add).unwrap();
-        if !value_to_add.is_null() {
-            result.push(ContentProperty {
-                id: String::from(""),
-                key: prop_to_add,
-                value: value_to_add.clone(),
-                version: crate::responses::Version {
-                    message: String::from(""),
-                    number: 0,
-                },
-            });
-        }
-    }
-
-    result
-}
+use crate::{console::print_warning, markdown_page::MarkdownPage};
 
 pub(crate) fn parse_emoji(page: &MarkdownPage) -> Option<String> {
     let emoji_string = &page.front_matter.emoji;
@@ -107,7 +24,9 @@ mod tests {
     use serde_json::json;
 
     use crate::{
+        link_generator::LinkGenerator,
         markdown_page::page_from_str,
+        page_properties::{get_property_updates, EMOJI_TITLE_PUBLISHED_PROP},
         responses::{ContentProperty, Version},
     };
 

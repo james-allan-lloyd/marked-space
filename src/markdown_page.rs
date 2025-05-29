@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    attachment::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePageData,
+    attachments::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePageData,
     confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
     helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
     parent::get_parent_file, template_renderer::TemplateRenderer,

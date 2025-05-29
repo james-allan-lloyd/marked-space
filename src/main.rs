@@ -10,7 +10,7 @@ use markdown_space::MarkdownSpace;
 
 mod alerts;
 mod archive;
-mod attachment;
+mod attachments;
 mod builtins;
 mod checksum;
 mod confluence_client;
@@ -31,6 +31,7 @@ mod markdown_space;
 mod mentions;
 mod page_covers;
 mod page_emojis;
+mod page_properties;
 mod parent;
 mod responses;
 mod restrictions;

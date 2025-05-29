@@ -1,3 +1,6 @@
+// todo: "value": "{\"id\":\"a27ac7fd-5b79-4185-b5a2-c32afe0e84c6\",\"position\":50}",
+// "value": "{\"id\":\"https://images.unsplash.com/photo-1541701494587-cb58502866ab?crop=entropy&cs=srgb&fm=jpg&ixid=M3wyMDQ0MDF8MHwxfHNlYXJjaHwzfHxjb2xvcnxlbnwwfDB8fHwxNzQ4Mjk2MDg0fDA&ixlib=rb-4.1.0&q=85\",\"position\":50}",
+
 #[cfg(test)]
 mod test {
     use std::str::FromStr;
@@ -8,7 +11,7 @@ mod test {
     use crate::{
         error::TestResult,
         link_generator::LinkGenerator,
-        page_emojis::{get_property_updates, EMOJI_COVER_PICTURE_PUBLISHED_PROP},
+        page_properties::{get_property_updates, COVER_PICTURE_ID_PUBLISHED_PROP},
         responses::ContentProperty,
         test_helpers::markdown_page_from_str,
     };
@@ -43,7 +46,7 @@ cover: image.png
         let expected_value = json!({"id": "https://example.com/image.png", "position": 50});
 
         assert_eq!(property_updates.len(), 1);
-        assert_eq!(property_updates[0].key, EMOJI_COVER_PICTURE_PUBLISHED_PROP);
+        assert_eq!(property_updates[0].key, COVER_PICTURE_ID_PUBLISHED_PROP);
         assert_eq!(unwrap_value(&property_updates[0].value)?, expected_value);
 
         Ok(())
@@ -65,7 +68,7 @@ cover: image.png
         let expected_value = json!({"id": "some_other_id", "position": 50});
 
         assert_eq!(property_updates.len(), 1);
-        assert_eq!(property_updates[0].key, EMOJI_COVER_PICTURE_PUBLISHED_PROP);
+        assert_eq!(property_updates[0].key, COVER_PICTURE_ID_PUBLISHED_PROP);
         assert_eq!(unwrap_value(&property_updates[0].value)?, expected_value);
 
         Ok(())

@@ -1,179 +1,32 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fs::{create_dir_all, File},
-    io::{BufReader, Write},
+    io::Write,
     path::PathBuf,
 };
 
-use anyhow::{Context, Ok};
-use reqwest::blocking::multipart::Part;
+use anyhow::Ok;
 use serde_json::json;
 
 use crate::{
-    attachment::ImageAttachment,
-    checksum::sha256_digest,
+    attachments::sync_page_attachments,
     confluence_client::ConfluenceClient,
     confluence_page::ConfluenceNode,
     confluence_space::ConfluenceSpace,
     console::{print_error, print_info, print_status, Status},
     error::ConfluenceError,
     folders::sync_folder,
-    link_generator::{self, LinkGenerator},
+    link_generator::LinkGenerator,
     markdown_page::{MarkdownPage, RenderedPage},
     markdown_space::MarkdownSpace,
-    page_emojis::get_property_updates,
-    responses::{self, Attachment, MultiEntityResult},
+    page_properties::sync_page_properties,
+    responses::{self, MultiEntityResult},
     restrictions::{sync_restrictions, RestrictionType},
     sort::sync_sort,
     sync_operation::SyncOperation,
     template_renderer::TemplateRenderer,
     Args, Result,
 };
-
-fn sync_page_attachments(
-    confluence_client: &ConfluenceClient,
-    page_id: &str,
-    page_source: &str,
-    attachments: &[ImageAttachment],
-    link_generator: &mut LinkGenerator,
-) -> Result<()> {
-    let existing_attachments: MultiEntityResult<Attachment> = confluence_client
-        .get_attachments(page_id)?
-        .error_for_status()?
-        .json()?;
-
-    let mut hashes = HashMap::<String, String>::new();
-    let mut remove_titles_to_id = HashMap::<String, String>::new();
-    let mut title_to_fileid = HashMap::<String, String>::new();
-    for existing_attachment in existing_attachments.results.iter() {
-        if existing_attachment.comment.starts_with("hash:") {
-            hashes.insert(
-                existing_attachment.title.clone(),
-                existing_attachment
-                    .comment
-                    .strip_prefix("hash:")
-                    .unwrap()
-                    .into(),
-            );
-        }
-        remove_titles_to_id.insert(
-            existing_attachment.title.clone(),
-            existing_attachment.id.clone(),
-        );
-        title_to_fileid.insert(
-            existing_attachment.title.clone(),
-            existing_attachment.file_id.clone(),
-        );
-    }
-
-    for attachment in attachments.iter() {
-        let attachment_name = attachment.name.clone();
-
-        let id = title_to_fileid[&attachment_name].clone();
-        link_generator.register_attachment_id(page_source, &attachment.url, &id);
-
-        remove_titles_to_id.remove(&attachment_name);
-
-        let op = SyncOperation::start(format!("[{}] attachment", attachment.path.display()), true);
-        let input = File::open(&attachment.path)
-            .with_context(|| format!("Opening attachment for {}", attachment_name))?;
-        let reader = BufReader::new(input);
-        let hashstring = sha256_digest(reader)?;
-        if hashes.contains_key(&attachment_name)
-            && hashstring == *hashes.get(&attachment_name).unwrap()
-        {
-            op.end(Status::Skipped);
-            return Ok(());
-        }
-
-        let file_part = Part::file(&attachment.path)?.file_name(attachment.name.clone());
-
-        let response =
-            confluence_client.create_or_update_attachment(page_id, file_part, &hashstring)?;
-
-        if !response.status().is_success() {
-            // Handle non-2xx responses (e.g., 400 Bad Request)
-            let status = response.status();
-            let error_body = response.text()?;
-            print_error(&format!(
-                "error updating attachment: Status: {}, Body: {}",
-                status, error_body
-            ));
-        }
-
-        op.end(Status::Updated);
-    }
-
-    let _remove_results: Vec<crate::confluence_client::Result> = remove_titles_to_id
-        .iter()
-        .map(|(title, id)| {
-            let op = SyncOperation::start(format!("[{}] attachment", title), false);
-            let result = confluence_client.remove_attachment(id);
-            if result.is_ok() {
-                op.end(Status::Deleted);
-            } else {
-                op.end(Status::Error);
-            }
-            result
-        })
-        .collect();
-
-    Ok(())
-}
-
-fn sync_page_properties(
-    confluence_client: &ConfluenceClient,
-    page: &MarkdownPage,
-    page_id: &str,
-    link_generator: &LinkGenerator,
-) -> Result<()> {
-    let prop_json = confluence_client
-        .get_properties(page_id)?
-        .error_for_status()?
-        .json::<MultiEntityResult<responses::ContentProperty>>()?;
-
-    let property_updates = get_property_updates(page, &prop_json.results, link_generator);
-
-    for property_update in property_updates.iter() {
-        let update_response = if property_update.value.is_null() {
-            print_status(
-                Status::Deleted,
-                &format!("property {}", &property_update.key),
-            );
-            confluence_client.delete_property(page_id, &property_update.id)
-        } else if property_update.id.is_empty() {
-            print_status(
-                Status::Created,
-                &format!("property {}", &property_update.key),
-            );
-            confluence_client.create_property(
-                page_id,
-                json!({"key": property_update.key, "value": property_update.value}),
-            )
-        } else {
-            print_status(
-                Status::Updated,
-                &format!("property {}", &property_update.key),
-            );
-            confluence_client.set_property(
-                page_id,
-                &property_update.id,
-                json!({
-                    "key": property_update.key,
-                    "value": property_update.value,
-                    "version": {
-                        "message": property_update.version.message,
-                        "number": property_update.version.number,
-                    }
-                }),
-            )
-        };
-
-        update_response?.error_for_status()?;
-    }
-
-    Ok(())
-}
 
 // Returns the ID of the page that the content was synced to.
 fn sync_page_content(

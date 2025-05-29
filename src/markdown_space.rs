@@ -219,7 +219,7 @@ mod tests {
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
     use crate::{
-        attachment::ImageAttachment, error::TestResult, markdown_page::MarkdownPage,
+        attachments::ImageAttachment, error::TestResult, markdown_page::MarkdownPage,
         template_renderer::TemplateRenderer,
     };
 
