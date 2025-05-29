@@ -5,12 +5,24 @@ use serde_json::json;
 use crate::{console::print_warning, markdown_page::MarkdownPage, responses::ContentProperty};
 
 static EMOJI_TITLE_PUBLISHED_PROP: &str = "emoji-title-published";
+static EMOJI_COVER_PICTURE_PUBLISHED_PROP: &str = "cover-picture-id-published";
 
+// todo: "value": "{\"id\":\"a27ac7fd-5b79-4185-b5a2-c32afe0e84c6\",\"position\":50}",
+// "value": "{\"id\":\"https://images.unsplash.com/photo-1541701494587-cb58502866ab?crop=entropy&cs=srgb&fm=jpg&ixid=M3wyMDQ0MDF8MHwxfHNlYXJjaHwzfHxjb2xvcnxlbnwwfDB8fHwxNzQ4Mjk2MDg0fDA&ixlib=rb-4.1.0&q=85\",\"position\":50}",
 fn get_page_property_values(page: &MarkdownPage) -> HashMap<String, serde_json::Value> {
     let mut result = HashMap::new();
     result.insert(
         String::from(EMOJI_TITLE_PUBLISHED_PROP),
         json!(parse_emoji(page)),
+    );
+
+    result.insert(
+        String::from(EMOJI_COVER_PICTURE_PUBLISHED_PROP),
+        if let Some(cover) = &page.front_matter.cover {
+            json!(json!({"id":cover.clone(), "position": "50"}).to_string())
+        } else {
+            serde_json::Value::Null
+        },
     );
 
     result
@@ -21,11 +33,6 @@ pub(crate) fn get_property_updates(
     existing_properties: &[ContentProperty],
 ) -> Vec<ContentProperty> {
     let mut result = Vec::new();
-
-    let existing_property_keys = existing_properties
-        .iter()
-        .map(|x| x.key.clone())
-        .collect::<HashSet<String>>();
 
     let page_properties = get_page_property_values(page);
     let mut page_property_keys: HashSet<String> = page_properties.keys().cloned().collect();
@@ -58,31 +65,6 @@ pub(crate) fn get_property_updates(
             });
         }
     }
-
-    // if let Some(prop) = existing_properties
-    //     .iter()
-    //     .find(|prop| prop.key == EMOJI_TITLE_PUBLISHED_PROP)
-    // {
-    //     let new_value = json!(emoji);
-    //     if prop.value != new_value {
-    //         let mut prop_update = prop.clone();
-    //         prop_update.value = new_value;
-    //         if emoji.is_some() {
-    //             prop_update.version.number += 1;
-    //         }
-    //         result.push(prop_update);
-    //     }
-    // } else if emoji.is_some() {
-    //     result.push(ContentProperty {
-    //         id: String::from(""),
-    //         key: String::from(EMOJI_TITLE_PUBLISHED_PROP),
-    //         value: json!(emoji),
-    //         version: crate::responses::Version {
-    //             message: String::from(""),
-    //             number: 0,
-    //         },
-    //     });
-    // }
 
     result
 }

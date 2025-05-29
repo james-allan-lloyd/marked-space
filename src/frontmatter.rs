@@ -19,6 +19,7 @@ pub enum FrontMatterError {
 pub struct FrontMatter {
     pub labels: Vec<String>,
     pub emoji: String,
+    pub cover: Option<String>,
     pub metadata: Yaml,
     pub unknown_keys: Vec<String>,
     pub imports: Vec<String>,
@@ -42,6 +43,7 @@ impl Default for FrontMatter {
             imports: Vec::default(),
             folder: false,
             sort: Sort::Unsorted,
+            cover: None,
         }
     }
 }
@@ -146,6 +148,8 @@ impl FrontMatter {
 
         let sort = Sort::from_str(yaml_fm["sort"].as_str())?;
 
+        let cover = yaml_fm["cover"].as_str().map(String::from);
+
         Ok((
             FrontMatter {
                 labels,
@@ -155,6 +159,7 @@ impl FrontMatter {
                 imports,
                 folder,
                 sort,
+                cover,
             },
             content_str,
         ))
