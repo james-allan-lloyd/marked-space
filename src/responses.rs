@@ -122,6 +122,7 @@ pub struct Attachment {
     pub title: String,
     pub page_id: String,
     pub comment: String,
+    pub file_id: String, // File ID of the attachment. This is the ID referenced in atlas_doc_format bodies and is distinct from the attachment ID.
 }
 
 #[derive(Deserialize, Debug)]

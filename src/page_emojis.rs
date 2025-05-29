@@ -1,44 +1,4 @@
-use serde_json::json;
-
-use crate::{console::print_warning, markdown_page::MarkdownPage, responses::ContentProperty};
-
-static EMOJI_TITLE_PUBLISHED_PROP: &str = "emoji-title-published";
-
-pub(crate) fn get_property_updates(
-    page: &MarkdownPage<'_>,
-    existing_properties: &[ContentProperty],
-) -> Vec<ContentProperty> {
-    let mut result = Vec::new();
-
-    let emoji = parse_emoji(page);
-
-    if let Some(prop) = existing_properties
-        .iter()
-        .find(|prop| prop.key == EMOJI_TITLE_PUBLISHED_PROP)
-    {
-        let new_value = json!(emoji);
-        if prop.value != new_value {
-            let mut prop_update = prop.clone();
-            prop_update.value = new_value;
-            if emoji.is_some() {
-                prop_update.version.number += 1;
-            }
-            result.push(prop_update);
-        }
-    } else if emoji.is_some() {
-        result.push(ContentProperty {
-            id: String::from(""),
-            key: String::from(EMOJI_TITLE_PUBLISHED_PROP),
-            value: json!(emoji),
-            version: crate::responses::Version {
-                message: String::from(""),
-                number: 0,
-            },
-        });
-    }
-
-    result
-}
+use crate::{console::print_warning, markdown_page::MarkdownPage};
 
 pub(crate) fn parse_emoji(page: &MarkdownPage) -> Option<String> {
     let emoji_string = &page.front_matter.emoji;
@@ -64,7 +24,9 @@ mod tests {
     use serde_json::json;
 
     use crate::{
+        link_generator::LinkGenerator,
         markdown_page::page_from_str,
+        page_properties::{get_property_updates, EMOJI_TITLE_PUBLISHED_PROP},
         responses::{ContentProperty, Version},
     };
 
@@ -142,7 +104,8 @@ emoji:  not_a_short_code
 
         let existing_properties: Vec<ContentProperty> = Vec::new();
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates = vec![ContentProperty {
             id: String::from(""),
@@ -178,7 +141,8 @@ emoji:  not_a_short_code
             },
         }];
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates = vec![ContentProperty {
             id: String::from("123456"),
@@ -208,7 +172,8 @@ emoji:  not_a_short_code
             },
         }];
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates = vec![ContentProperty {
             id: String::from("123456"),
@@ -238,7 +203,8 @@ emoji:  not_a_short_code
             },
         }];
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates: Vec<ContentProperty> = Vec::new();
 
@@ -252,7 +218,8 @@ emoji:  not_a_short_code
 
         let existing_properties: Vec<ContentProperty> = Vec::new();
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates: Vec<ContentProperty> = Vec::new();
 

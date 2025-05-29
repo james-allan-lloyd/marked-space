@@ -1,6 +1,6 @@
 use saphyr::Yaml;
 
-use crate::{sort::Sort, Result};
+use crate::{page_covers::Cover, sort::Sort, Result};
 use std::{
     collections::HashSet,
     io::{self, BufRead},
@@ -19,6 +19,7 @@ pub enum FrontMatterError {
 pub struct FrontMatter {
     pub labels: Vec<String>,
     pub emoji: String,
+    pub cover: Option<Cover>,
     pub metadata: Yaml,
     pub unknown_keys: Vec<String>,
     pub imports: Vec<String>,
@@ -42,6 +43,7 @@ impl Default for FrontMatter {
             imports: Vec::default(),
             folder: false,
             sort: Sort::Unsorted,
+            cover: None,
         }
     }
 }
@@ -101,8 +103,9 @@ impl FrontMatter {
             .into());
         }
 
-        static VALID_TOP_LEVEL_KEYS: [&str; 6] =
-            ["emoji", "labels", "metadata", "imports", "folder", "sort"];
+        static VALID_TOP_LEVEL_KEYS: [&str; 7] = [
+            "emoji", "labels", "metadata", "imports", "folder", "sort", "cover",
+        ];
         let string_keys: HashSet<&str> = yaml_fm
             .as_hash()
             .unwrap()
@@ -146,6 +149,8 @@ impl FrontMatter {
 
         let sort = Sort::from_str(yaml_fm["sort"].as_str())?;
 
+        let cover = Cover::from_yaml(&yaml_fm["cover"])?;
+
         Ok((
             FrontMatter {
                 labels,
@@ -155,6 +160,7 @@ impl FrontMatter {
                 imports,
                 folder,
                 sort,
+                cover,
             },
             content_str,
         ))

@@ -12,7 +12,7 @@ use std::str;
 use once_cell::sync::Lazy;
 
 use crate::alerts::{render_basic_alert, render_expand};
-use crate::attachment::{render_link_enter, render_link_leave};
+use crate::attachments::{render_link_enter, render_link_leave};
 use crate::link_generator::LinkGenerator;
 
 #[rustfmt::skip]

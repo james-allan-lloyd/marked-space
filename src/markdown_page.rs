@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    attachment::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePageData,
+    attachments::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePageData,
     confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
     helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
     parent::get_parent_file, template_renderer::TemplateRenderer,
@@ -125,6 +125,11 @@ impl<'a> MarkdownPage<'a> {
         }
 
         let mut attachments = Vec::<ImageAttachment>::default();
+        if let Some(cover) = &fm.cover {
+            if MarkdownPage::is_local_link(&cover.source) {
+                attachments.push(ImageAttachment::new(&cover.source, parent));
+            }
+        }
         let mut local_links = Vec::<LocalLink>::default();
         let mut first_heading: Option<&AstNode> = None;
         iter_nodes(root, &mut |node| match &mut node.data.borrow_mut().value {
@@ -139,7 +144,7 @@ impl<'a> MarkdownPage<'a> {
                 }
             }
             NodeValue::Image(image) => {
-                if !image.url.starts_with("http") {
+                if MarkdownPage::is_local_link(&image.url) {
                     attachments.push(ImageAttachment::new(&image.url, parent));
                 }
             }
@@ -233,6 +238,10 @@ impl<'a> MarkdownPage<'a> {
 
     pub(crate) fn is_folder(&self) -> bool {
         self.front_matter.folder
+    }
+
+    pub fn is_local_link(link: &str) -> bool {
+        !link.starts_with("http")
     }
 }
 

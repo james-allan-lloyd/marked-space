@@ -26,6 +26,7 @@ pub struct LinkGenerator {
     title_to_file: HashMap<String, String>,
     title_to_id: HashMap<String, String>,
     folders: HashSet<String>,
+    page_attachment_pair_to_id: HashMap<(String, String), String>,
 }
 
 impl LinkGenerator {
@@ -39,21 +40,13 @@ impl LinkGenerator {
             title_to_file: HashMap::default(),
             title_to_id: HashMap::default(),
             folders: HashSet::default(),
+            page_attachment_pair_to_id: HashMap::default(),
         }
     }
 
     #[cfg(test)]
     pub fn default_test() -> Self {
-        LinkGenerator {
-            host: "example.atlassian.net".into(),
-            space_key: "TEST".into(),
-            homepage_id: "999".into(),
-            filename_to_id: HashMap::default(),
-            filename_to_title: HashMap::default(),
-            title_to_file: HashMap::default(),
-            title_to_id: HashMap::default(),
-            folders: HashSet::default(),
-        }
+        Self::new("example.atlassian.net", "TEST", "999")
     }
 
     pub fn register_markdown_page(&mut self, markdown_page: &MarkdownPage) -> Result<()> {
@@ -234,6 +227,25 @@ impl LinkGenerator {
             .message
             .starts_with(ConfluencePageData::version_message_prefix())
             && !self.has_title(node.title.as_str())
+    }
+
+    pub fn attachment_id(&self, _relative_path: &str, _page: &MarkdownPage) -> Option<String> {
+        let pair = &(_page.source.clone(), _relative_path.to_string());
+        self.page_attachment_pair_to_id.get(pair).cloned()
+    }
+
+    // TODO: make the pair part of the attachment struct
+    pub(crate) fn register_attachment_id(
+        &mut self,
+        page_source: &str,
+        attachment_path: &str,
+        id: &str,
+    ) {
+        let result = self.page_attachment_pair_to_id.insert(
+            (String::from(page_source), String::from(attachment_path)),
+            String::from(id),
+        );
+        assert!(result.is_none(), "Should only register an attachment once")
     }
 }
 
