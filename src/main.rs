@@ -29,6 +29,7 @@ mod local_link;
 mod markdown_page;
 mod markdown_space;
 mod mentions;
+mod page_covers;
 mod page_emojis;
 mod parent;
 mod responses;

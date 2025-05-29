@@ -2,14 +2,20 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::json;
 
-use crate::{console::print_warning, markdown_page::MarkdownPage, responses::ContentProperty};
+use crate::{
+    console::print_warning, link_generator::LinkGenerator, markdown_page::MarkdownPage,
+    responses::ContentProperty,
+};
 
-static EMOJI_TITLE_PUBLISHED_PROP: &str = "emoji-title-published";
-static EMOJI_COVER_PICTURE_PUBLISHED_PROP: &str = "cover-picture-id-published";
+pub static EMOJI_TITLE_PUBLISHED_PROP: &str = "emoji-title-published";
+pub static EMOJI_COVER_PICTURE_PUBLISHED_PROP: &str = "cover-picture-id-published";
 
 // todo: "value": "{\"id\":\"a27ac7fd-5b79-4185-b5a2-c32afe0e84c6\",\"position\":50}",
 // "value": "{\"id\":\"https://images.unsplash.com/photo-1541701494587-cb58502866ab?crop=entropy&cs=srgb&fm=jpg&ixid=M3wyMDQ0MDF8MHwxfHNlYXJjaHwzfHxjb2xvcnxlbnwwfDB8fHwxNzQ4Mjk2MDg0fDA&ixlib=rb-4.1.0&q=85\",\"position\":50}",
-fn get_page_property_values(page: &MarkdownPage) -> HashMap<String, serde_json::Value> {
+fn get_page_property_values(
+    page: &MarkdownPage,
+    link_generator: &LinkGenerator,
+) -> HashMap<String, serde_json::Value> {
     let mut result = HashMap::new();
     result.insert(
         String::from(EMOJI_TITLE_PUBLISHED_PROP),
@@ -19,7 +25,14 @@ fn get_page_property_values(page: &MarkdownPage) -> HashMap<String, serde_json::
     result.insert(
         String::from(EMOJI_COVER_PICTURE_PUBLISHED_PROP),
         if let Some(cover) = &page.front_matter.cover {
-            json!(json!({"id":cover.clone(), "position": "50"}).to_string())
+            if MarkdownPage::is_local_link(cover) {
+                json!(
+                    json!({"id": link_generator.attachment_id(cover, page), "position":50})
+                        .to_string()
+                )
+            } else {
+                json!(json!({"id":cover.clone(), "position": 50}).to_string())
+            }
         } else {
             serde_json::Value::Null
         },
@@ -31,10 +44,11 @@ fn get_page_property_values(page: &MarkdownPage) -> HashMap<String, serde_json::
 pub(crate) fn get_property_updates(
     page: &MarkdownPage<'_>,
     existing_properties: &[ContentProperty],
+    link_generator: &LinkGenerator,
 ) -> Vec<ContentProperty> {
     let mut result = Vec::new();
 
-    let page_properties = get_page_property_values(page);
+    let page_properties = get_page_property_values(page, link_generator);
     let mut page_property_keys: HashSet<String> = page_properties.keys().cloned().collect();
 
     for prop in existing_properties {
@@ -171,7 +185,8 @@ emoji:  not_a_short_code
 
         let existing_properties: Vec<ContentProperty> = Vec::new();
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates = vec![ContentProperty {
             id: String::from(""),
@@ -207,7 +222,8 @@ emoji:  not_a_short_code
             },
         }];
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates = vec![ContentProperty {
             id: String::from("123456"),
@@ -237,7 +253,8 @@ emoji:  not_a_short_code
             },
         }];
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates = vec![ContentProperty {
             id: String::from("123456"),
@@ -267,7 +284,8 @@ emoji:  not_a_short_code
             },
         }];
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates: Vec<ContentProperty> = Vec::new();
 
@@ -281,7 +299,8 @@ emoji:  not_a_short_code
 
         let existing_properties: Vec<ContentProperty> = Vec::new();
 
-        let property_updates = get_property_updates(&page, &existing_properties);
+        let property_updates =
+            get_property_updates(&page, &existing_properties, &LinkGenerator::default_test());
 
         let expected_updates: Vec<ContentProperty> = Vec::new();
 

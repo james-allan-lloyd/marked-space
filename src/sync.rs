@@ -18,7 +18,7 @@ use crate::{
     console::{print_error, print_info, print_status, Status},
     error::ConfluenceError,
     folders::sync_folder,
-    link_generator::LinkGenerator,
+    link_generator::{self, LinkGenerator},
     markdown_page::{MarkdownPage, RenderedPage},
     markdown_space::MarkdownSpace,
     page_emojis::get_property_updates,
@@ -33,7 +33,9 @@ use crate::{
 fn sync_page_attachments(
     confluence_client: &ConfluenceClient,
     page_id: &str,
+    page_source: &str,
     attachments: &[ImageAttachment],
+    link_generator: &mut LinkGenerator,
 ) -> Result<()> {
     let existing_attachments: MultiEntityResult<Attachment> = confluence_client
         .get_attachments(page_id)?
@@ -42,6 +44,7 @@ fn sync_page_attachments(
 
     let mut hashes = HashMap::<String, String>::new();
     let mut remove_titles_to_id = HashMap::<String, String>::new();
+    let mut title_to_fileid = HashMap::<String, String>::new();
     for existing_attachment in existing_attachments.results.iter() {
         if existing_attachment.comment.starts_with("hash:") {
             hashes.insert(
@@ -57,11 +60,17 @@ fn sync_page_attachments(
             existing_attachment.title.clone(),
             existing_attachment.id.clone(),
         );
+        title_to_fileid.insert(
+            existing_attachment.title.clone(),
+            existing_attachment.file_id.clone(),
+        );
     }
 
     for attachment in attachments.iter() {
-        // let filename: String = attachment.file_name().unwrap().to_str().unwrap().into();
         let attachment_name = attachment.name.clone();
+
+        let id = title_to_fileid[&attachment_name].clone();
+        link_generator.register_attachment_id(page_source, &attachment.url, &id);
 
         remove_titles_to_id.remove(&attachment_name);
 
@@ -116,13 +125,14 @@ fn sync_page_properties(
     confluence_client: &ConfluenceClient,
     page: &MarkdownPage,
     page_id: &str,
+    link_generator: &LinkGenerator,
 ) -> Result<()> {
     let prop_json = confluence_client
         .get_properties(page_id)?
         .error_for_status()?
         .json::<MultiEntityResult<responses::ContentProperty>>()?;
 
-    let property_updates = get_property_updates(page, &prop_json.results);
+    let property_updates = get_property_updates(page, &prop_json.results, link_generator);
 
     for property_update in property_updates.iter() {
         let update_response = if property_update.value.is_null() {
@@ -274,7 +284,7 @@ pub fn sync_space<'a>(
             } else {
                 sync_page(
                     markdown_page,
-                    &link_generator,
+                    &mut link_generator,
                     &args,
                     &space,
                     &confluence_client,
@@ -304,7 +314,7 @@ pub fn sync_space<'a>(
 
 fn sync_page(
     markdown_page: &MarkdownPage,
-    link_generator: &LinkGenerator,
+    link_generator: &mut LinkGenerator,
     args: &Args,
     space: &ConfluenceSpace,
     confluence_client: &ConfluenceClient,
@@ -327,14 +337,21 @@ fn sync_page(
     sync_page_attachments(
         confluence_client,
         &existing_page.id,
+        &markdown_page.source,
         &markdown_page.attachments,
+        link_generator,
     )?;
     sync_page_labels(
         confluence_client,
         &existing_page.id,
         &markdown_page.front_matter.labels,
     )?;
-    sync_page_properties(confluence_client, markdown_page, &existing_page.id)?;
+    sync_page_properties(
+        confluence_client,
+        markdown_page,
+        &existing_page.id,
+        link_generator,
+    )?;
     let restrictions_type = if args.single_editor {
         RestrictionType::SingleEditor(current_user)
     } else {
