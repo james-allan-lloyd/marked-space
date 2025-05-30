@@ -121,6 +121,37 @@ docker run --rm -ti --env-file .env -v $PWD/TEAM:/TEAM \
   --space /TEAM
 ```
 
+## Using a Makefile and the Docker Image
+
+Create an `.env` file with the following structure:
+
+```
+API_USER=...
+API_TOKEN=...
+CONFLUENCE_HOST=my-tenent.atlassian.net
+```
+
+Create a `Makefile`:
+
+```shell
+IMAGE=jamesallanlloyd/marked-space:latest
+SPACE=TEAM
+
+.DEFAULT_GOAL:=lint
+
+.PHONY: lint
+lint:  ## Lint all markdown files
+	markdownlint-cli2 "**/*md"
+
+.PHONY: sync
+sync: lint  ## Directly sync with confluence
+	docker run --rm -ti --env-file .env -v $(PWD)/$(SPACE):/$(SPACE) $(IMAGE) --space /$(SPACE)
+
+$(VERBOSE).SILENT:
+```
+
+And run `make sync` to sync your local Markdown with the Confluence space.
+
 ## Using Prebuilt Binaries
 
 See <https://github.com/james-allan-lloyd/marked-space/releases>. Currently
