@@ -174,6 +174,17 @@ pub struct Descendant {
     // pub child_position: i32,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Content {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub _type: String,
+    pub status: String,
+    pub title: String,
+    pub extensions: serde_json::Value,
+}
+
 #[cfg(test)]
 mod test {
     use serde_json::json;

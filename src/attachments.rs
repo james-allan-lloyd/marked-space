@@ -1,8 +1,9 @@
 use crate::{
     checksum::sha256_digest,
+    confluence_paginator::ConfluencePaginator,
     console::{print_error, Status},
     error::Result,
-    responses::Attachment,
+    responses::{Attachment, Content},
     sync_operation::SyncOperation,
 };
 use std::{
@@ -113,9 +114,6 @@ pub fn sync_page_attachments(
     for attachment in attachments.iter() {
         let attachment_name = attachment.name.clone();
 
-        let id = title_to_fileid[&attachment_name].clone();
-        link_generator.register_attachment_id(page_source, &attachment.url, &id);
-
         remove_titles_to_id.remove(&attachment_name);
 
         let op = SyncOperation::start(format!("[{}] attachment", attachment.path.display()), true);
@@ -126,6 +124,9 @@ pub fn sync_page_attachments(
         if hashes.contains_key(&attachment_name)
             && hashstring == *hashes.get(&attachment_name).unwrap()
         {
+            // still add the existing attachment to lookup for covers
+            let id = title_to_fileid[&attachment_name].clone();
+            link_generator.register_attachment_id(page_source, &attachment.url, &id);
             op.end(Status::Skipped);
             return Ok(());
         }
@@ -143,6 +144,17 @@ pub fn sync_page_attachments(
                 "error updating attachment: Status: {}, Body: {}",
                 status, error_body
             ));
+        } else {
+            let results: Vec<Content> = ConfluencePaginator::<Content>::new(confluence_client)
+                .start(response)?
+                .filter_map(|f| f.ok())
+                .collect();
+
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0].title, attachment_name);
+            let id = results[0].extensions["fileId"].as_str().unwrap();
+            // add new attachment to lookup
+            link_generator.register_attachment_id(page_source, &attachment.url, id);
         }
 
         op.end(Status::Updated);
