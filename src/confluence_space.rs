@@ -10,6 +10,7 @@ use crate::console::{print_status, Status};
 use crate::error::{self, ConfluenceError};
 use crate::link_generator::LinkGenerator;
 
+use crate::page_statuses::PageStatus;
 use crate::responses::{self, ContentStatus, PageSingleWithoutBody, Version};
 use crate::sync_operation::SyncOperation;
 
@@ -37,6 +38,12 @@ impl ConfluenceSpace {
         }
 
         let parsed_space = serde_json::from_value::<responses::Space>(json["results"][0].clone())?;
+
+        let parsed_content_states = confluence_client
+            .get_space_suggested_content_states(space_key)?
+            .error_for_status()?
+            .json::<Vec<responses::ContentState>>()?;
+        PageStatus::set_space_content_states(&parsed_content_states);
 
         Ok(ConfluenceSpace {
             id: parsed_space.id,

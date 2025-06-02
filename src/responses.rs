@@ -38,6 +38,13 @@ pub enum ContentStatus {
     Any,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ContentState {
+    pub id: u64,
+    pub name: String,
+    pub color: String,
+}
+
 // TODO: might be a better way to express this...
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
