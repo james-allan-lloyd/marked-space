@@ -1,6 +1,6 @@
 use saphyr::Yaml;
 
-use crate::{page_covers::Cover, sort::Sort, Result};
+use crate::{page_covers::Cover, page_statuses::PageStatus, sort::Sort, Result};
 use std::{
     collections::HashSet,
     io::{self, BufRead},
@@ -25,6 +25,7 @@ pub struct FrontMatter {
     pub imports: Vec<String>,
     pub folder: bool,
     pub sort: Sort,
+    pub status: PageStatus,
 }
 
 enum FrontMatterParseState {
@@ -44,6 +45,7 @@ impl Default for FrontMatter {
             folder: false,
             sort: Sort::Unsorted,
             cover: None,
+            status: PageStatus::default(),
         }
     }
 }
@@ -151,6 +153,8 @@ impl FrontMatter {
 
         let cover = Cover::from_yaml(&yaml_fm["cover"])?;
 
+        let status = PageStatus::from_yaml(&yaml_fm["status"])?;
+
         Ok((
             FrontMatter {
                 labels,
@@ -161,6 +165,7 @@ impl FrontMatter {
                 folder,
                 sort,
                 cover,
+                status,
             },
             content_str,
         ))
