@@ -182,3 +182,9 @@ cargo watch -x test
 Checkout the user guide in the [example space](example/team/index.md)... this
 also serves as a test marked-space that is all deployable to your test instance
 (provided you've created the TEAM space).
+
+## Frequently Asked Questions
+
+### Marked-space failed to update the permissions on a page
+
+In order to restrict the page from being edited. The user who performs the synchronization needs to be the sole contributor to the page. The `Home content` could also fail due to this when the space is created by someone else. By setting the user who performs the synchronization as the space **Owner** would resolve this issue.
