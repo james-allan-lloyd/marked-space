@@ -25,7 +25,7 @@ pub struct FrontMatter {
     pub imports: Vec<String>,
     pub folder: bool,
     pub sort: Sort,
-    pub status: PageStatus,
+    pub status: Option<PageStatus>,
 }
 
 enum FrontMatterParseState {
@@ -45,7 +45,7 @@ impl Default for FrontMatter {
             folder: false,
             sort: Sort::Unsorted,
             cover: None,
-            status: PageStatus::default(),
+            status: None,
         }
     }
 }

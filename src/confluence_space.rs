@@ -10,7 +10,7 @@ use crate::console::{print_status, Status};
 use crate::error::{self, ConfluenceError};
 use crate::link_generator::LinkGenerator;
 
-use crate::page_statuses::PageStatus;
+use crate::page_statuses::ContentStates;
 use crate::responses::{self, ContentStatus, PageSingleWithoutBody, Version};
 use crate::sync_operation::SyncOperation;
 
@@ -19,6 +19,7 @@ pub struct ConfluenceSpace {
     pub id: String,
     pub homepage_id: String,
     nodes: Vec<ConfluenceNode>,
+    pub content_states: ContentStates,
 }
 
 impl ConfluenceSpace {
@@ -43,12 +44,14 @@ impl ConfluenceSpace {
             .get_space_suggested_content_states(space_key)?
             .error_for_status()?
             .json::<Vec<responses::ContentState>>()?;
-        PageStatus::set_space_content_states(&parsed_content_states);
+
+        let content_states = ContentStates::new(&parsed_content_states);
 
         Ok(ConfluenceSpace {
             id: parsed_space.id,
             homepage_id: parsed_space.homepage_id,
             nodes: Vec::default(),
+            content_states,
         })
     }
 

@@ -442,4 +442,16 @@ impl ConfluenceClient {
             .header("X-Atlassian-Token", "no-check")
             .send()
     }
+
+    pub(crate) fn set_content_state(&self, id: &str, status: &str, body: Value) -> Result {
+        let url = self.rest_api(&format!("content/{}/state", id));
+        self.client
+            .put(url)
+            .query(&[("status", status)])
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .json(&body)
+            .send()
+    }
 }

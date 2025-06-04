@@ -13,7 +13,6 @@ use crate::{
 
 pub static EMOJI_TITLE_PUBLISHED_PROP: &str = "emoji-title-published";
 pub static COVER_PICTURE_ID_PUBLISHED_PROP: &str = "cover-picture-id-published";
-pub static CONTENT_STATE_PUBLISHED_PROP: &str = "content-state-published";
 
 fn get_page_property_values(
     page: &MarkdownPage,
@@ -28,11 +27,6 @@ fn get_page_property_values(
     result.insert(
         String::from(COVER_PICTURE_ID_PUBLISHED_PROP),
         json!(parse_cover(page, link_generator)),
-    );
-
-    result.insert(
-        String::from(CONTENT_STATE_PUBLISHED_PROP),
-        json!(page.front_matter.status.to_property()),
     );
 
     result

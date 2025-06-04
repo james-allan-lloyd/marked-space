@@ -20,6 +20,7 @@ use crate::{
     markdown_page::{MarkdownPage, RenderedPage},
     markdown_space::MarkdownSpace,
     page_properties::sync_page_properties,
+    page_statuses::sync_page_status,
     responses::{self, MultiEntityResult},
     restrictions::{sync_restrictions, RestrictionType},
     sort::sync_sort,
@@ -211,6 +212,13 @@ fn sync_page(
         RestrictionType::OpenSpace
     };
     sync_restrictions(restrictions_type, confluence_client, &existing_page)?;
+
+    sync_page_status(
+        confluence_client,
+        markdown_page,
+        link_generator,
+        &space.content_states,
+    )?;
     Ok(())
 }
 
