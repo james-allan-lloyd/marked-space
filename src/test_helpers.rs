@@ -4,8 +4,9 @@ use comrak::{nodes::AstNode, Arena};
 
 use crate::{
     confluence_page::{self, ConfluenceNode, ConfluencePageData},
+    error::Result,
     link_generator::LinkGenerator,
-    markdown_page::MarkdownPage,
+    markdown_page::{MarkdownPage, RenderedPage},
     responses::{self, ContentStatus},
 };
 
@@ -27,11 +28,17 @@ pub fn markdown_page_from_str<'a>(
     )
 }
 
+pub fn test_render(markdown_content: &str) -> Result<RenderedPage> {
+    let arena = Arena::<AstNode>::new();
+    let page = markdown_page_from_str("page.md", markdown_content, &arena)?;
+    page.render(&LinkGenerator::default_test())
+}
+
 pub fn register_mark_and_conf_page<'a>(
     page_id: &str,
     link_generator: &mut LinkGenerator,
     markdown_page: crate::markdown_page::MarkdownPage<'a>,
-) -> Result<crate::markdown_page::MarkdownPage<'a>, anyhow::Error> {
+) -> Result<crate::markdown_page::MarkdownPage<'a>> {
     link_generator.register_markdown_page(&markdown_page)?;
     link_generator.register_confluence_node(&ConfluenceNode {
         id: page_id.into(),

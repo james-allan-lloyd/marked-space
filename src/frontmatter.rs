@@ -112,15 +112,8 @@ metadata:
 "##;
 
     static EMPTY_MD: &str = "# compulsory title\n";
-    //     static NOT_YAML_FRONT_MATTER_MD: &str = r##"---
-    // something = foo
-    // [section]
-    // gah = bar
-    // ---
-    // # compulsory title
-    // "##;
 
-    use crate::error::TestResult;
+    use crate::{error::TestResult, test_helpers::test_render};
 
     use super::*;
 
@@ -158,23 +151,6 @@ metadata:
         Ok(())
     }
 
-    // FIXME: #[test]
-    // fn it_errors_if_not_yaml() -> TestResult {
-    //     let fm_result = FrontMatter::from_str(NOT_YAML_FRONT_MATTER_MD);
-    //
-    //     println!("{:?}", fm_result);
-    //
-    //     assert!(fm_result.is_err());
-    //     if let Err(err) = fm_result {
-    //         assert_eq!(
-    //             err.to_string(),
-    //             "Unable to parse front matter: Expected YAML hash map for front matter"
-    //         );
-    //     }
-    //
-    //     Ok(())
-    // }
-
     #[test]
     fn it_parses_yes_as_true() -> TestResult {
         let (fm, _content) =
@@ -191,5 +167,24 @@ metadata:
             FrontMatter::from_str("---\n#comment\n---\n# title").expect("Should pass");
 
         assert_eq!(fm, FrontMatter::default());
+    }
+
+    #[test]
+    fn it_renders_front_matter_variable() -> TestResult {
+        let rendered_page = test_render(
+            r###"---
+metadata:
+    owner: James
+    status: complete
+---
+# Title
+
+{{ fm.metadata.owner }}: {{ fm.metadata.status }}
+"###,
+        )?;
+
+        assert_eq!(rendered_page.content.trim(), "<p>James: complete</p>");
+
+        Ok(())
     }
 }
