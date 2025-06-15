@@ -125,9 +125,9 @@ impl<'a> MarkdownPage<'a> {
         }
 
         let mut attachments = Vec::<ImageAttachment>::default();
-        if let Some(cover) = &fm.cover {
-            if MarkdownPage::is_local_link(&cover.source) {
-                attachments.push(ImageAttachment::new(&cover.source, parent));
+        if let Some(source) = &fm.cover.source {
+            if MarkdownPage::is_local_link(source) {
+                attachments.push(ImageAttachment::new(source, parent));
             }
         }
         let mut local_links = Vec::<LocalLink>::default();
@@ -582,92 +582,6 @@ labels:
         let expected_labels = vec!["foo", "bar"];
 
         assert_eq!(page.front_matter.labels, expected_labels);
-
-        Ok(())
-    }
-
-    #[test]
-    fn it_warns_about_unknown_keys() -> TestResult {
-        let arena = Arena::<AstNode>::new();
-        let markdown_content = r##"---
-unknown_top_level_key: "foo"
-page_emoji: "and typos"
----
-# compulsory title
-"##;
-
-        let page = page_from_str("page.md", markdown_content, &arena)?;
-
-        assert_eq!(
-            page.warnings,
-            vec!["Unknown top level front matter keys: page_emoji, unknown_top_level_key"]
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn it_fails_if_front_matter_is_invalid_yaml() -> TestResult {
-        let arena = Arena::<AstNode>::new();
-        let markdown_content = r##"---
-[some section]
-foo=bar
----
-# compulsory title
-"##;
-
-        let result = page_from_str("page.md", markdown_content, &arena);
-
-        assert!(result.is_err());
-
-        if let Err(err) = result {
-            assert!(
-                format!("{:?}", err).contains("Failed to parse front matter as YAML"),
-                "Error did not contain expected error message, actual mesage: {:?}",
-                err
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn it_allows_metadata() -> TestResult {
-        let arena = Arena::<AstNode>::new();
-        let markdown_content = r##"---
-metadata:
-    some:
-        arbitrary: "value"
----
-# compulsory title
-"##;
-
-        let page = page_from_str("page.md", markdown_content, &arena)?;
-
-        assert_eq!(
-            page.front_matter.metadata["some"]["arbitrary"].as_str(),
-            Some("value")
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn it_has_metadata_as_variables() -> TestResult {
-        let arena = Arena::<AstNode>::new();
-        let markdown_content = r##"---
-metadata:
-    some:
-        arbitrary: "value"
----
-# compulsory title
-{{ metadata(path="some.arbitrary") }}
-"##;
-        let page = page_from_str("page.md", markdown_content, &arena)?;
-
-        let rendered_page = page.render(&LinkGenerator::default_test())?;
-
-        assert_eq!(rendered_page.content.trim(), "<p>value</p>");
 
         Ok(())
     }

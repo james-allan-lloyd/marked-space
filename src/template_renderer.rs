@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::bail;
-use saphyr::Yaml;
 use tera::{self, Tera, Value};
 
 use crate::builtins::add_builtins;
@@ -17,7 +16,7 @@ pub struct TemplateRenderer {
     space_key: String,
 }
 
-fn make_metadata_lookup(metadata: Yaml) -> impl tera::Function {
+fn make_metadata_lookup(metadata: serde_json::Value) -> impl tera::Function {
     Box::new(
         move |args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
             let mut current_yml = &metadata;
@@ -80,6 +79,7 @@ impl TemplateRenderer {
         let mut context = tera::Context::new();
         context.insert("filename", &source);
         context.insert("default_space_key", &self.space_key);
+        context.insert("fm", fm);
         self.tera
             .register_function("metadata", make_metadata_lookup(fm.metadata.clone()));
 
@@ -113,8 +113,6 @@ impl TemplateRenderer {
 
 #[cfg(test)]
 mod test {
-    use saphyr::Yaml;
-
     use crate::{error::TestResult, frontmatter::FrontMatter};
 
     use super::TemplateRenderer;
@@ -138,7 +136,7 @@ mod test {
     #[test]
     fn it_handles_different_metadata_across_files() -> TestResult {
         let fm1 = FrontMatter {
-            metadata: Yaml::load_from_str("key: value").unwrap()[0].clone(),
+            metadata: saphyr_serde::de::from_str("key: value").expect("should deserialize"),
             ..Default::default()
         };
 
@@ -152,7 +150,9 @@ mod test {
         assert_eq!(result, "value");
 
         let fm2 = FrontMatter {
-            metadata: Yaml::load_from_str("other_key: other_value").unwrap()[0].clone(),
+            // metadata: Yaml::load_from_str("other_key: other_value").unwrap()[0].clone(),
+            metadata: saphyr_serde::de::from_str("other_key: other_value")
+                .expect("should deserialize"),
             ..Default::default()
         };
 

@@ -2,6 +2,8 @@ use std::collections::VecDeque;
 
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 use crate::confluence_client::ConfluenceClient;
 use crate::confluence_paginator::ConfluencePaginator;
 use crate::console::print_status;
@@ -12,24 +14,12 @@ use crate::responses::Descendant;
 
 use crate::error::Result;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub enum Sort {
+    #[serde(rename = "inc")]
     Incrementing,
+    #[serde(rename = "none")]
     Unsorted, // or manual
-}
-
-impl Sort {
-    pub fn from_str(sort_string: Option<&str>) -> Result<Sort> {
-        if sort_string.is_none() {
-            Ok(Sort::Unsorted)
-        } else {
-            let s = sort_string.unwrap();
-            match s.to_ascii_lowercase().as_str() {
-                "inc" => Ok(Sort::Incrementing),
-                _ => Err(anyhow::anyhow!("invalid value")),
-            }
-        }
-    }
 }
 
 trait MoveContent {

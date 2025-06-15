@@ -108,18 +108,9 @@ mod test {
     use scraper::{Html, Selector};
 
     use crate::{
-        builtins::labellist,
-        error::Result,
-        error::TestResult,
-        link_generator::LinkGenerator,
-        markdown_page::{page_from_str, RenderedPage},
+        builtins::labellist, error::TestResult, link_generator::LinkGenerator,
+        markdown_page::page_from_str, test_helpers::test_render,
     };
-
-    fn test_render(markdown_content: &str) -> Result<RenderedPage> {
-        let arena = Arena::<AstNode>::new();
-        let page = page_from_str("page.md", markdown_content, &arena)?;
-        page.render(&LinkGenerator::default_test())
-    }
 
     fn extract_properties_table(parsed_html: Html) -> Vec<(String, String)> {
         let parsed_table: Vec<(String, String)> = parsed_html
@@ -256,41 +247,6 @@ metadata:
             vec![
                 (String::from("Owner"), String::from("James")),
                 (String::from("Status"), String::from("Complete"))
-            ]
-        );
-
-        Ok(())
-    }
-
-    // TODO: would be nice to enable this, but tera functions stop recursive macro evaluation...
-    #[allow(dead_code)]
-    fn properties_renders_from_metadata_passing_through_templates() -> TestResult {
-        let rendered_page = test_render(
-            r###"---
-metadata:
-    owner: James
-    status: "{{ Self::status(value=Complete) }}"
----
-# compulsory title
-{% macro status(value) -%}
-Status: {{value}}
-{%- endmacro %}
-
-{{ builtins::properties(metadata=["owner", "status"]) }}
-"###,
-        )?;
-
-        // assert_eq!(rendered_page.content.trim(), "");
-        println!("{}", rendered_page.content.trim());
-
-        let parsed_html = Html::parse_fragment(rendered_page.content.trim());
-        let parsed_table = extract_properties_table(parsed_html);
-
-        assert_eq!(
-            parsed_table,
-            vec![
-                (String::from("Owner"), String::from("James")),
-                (String::from("Status"), String::from("Status: Complete"))
             ]
         );
 

@@ -1,26 +1,19 @@
-use saphyr::Yaml;
+use crate::page_covers::string_or_struct;
+use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 
 use crate::{page_covers::Cover, page_statuses::PageStatus, sort::Sort, Result};
-use std::{
-    collections::HashSet,
-    io::{self, BufRead},
-};
-use thiserror::Error;
+use std::io::{self, BufRead};
 
-use anyhow::Context;
-
-#[derive(Error, Debug)]
-pub enum FrontMatterError {
-    #[error("Unable to parse front matter: {0}")]
-    ParseError(String),
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
+#[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct FrontMatter {
     pub labels: Vec<String>,
     pub emoji: String,
-    pub cover: Option<Cover>,
-    pub metadata: Yaml,
+    #[serde(deserialize_with = "string_or_struct")]
+    pub cover: Cover,
+    pub metadata: tera::Value,
     pub unknown_keys: Vec<String>,
     pub imports: Vec<String>,
     pub folder: bool,
@@ -39,12 +32,12 @@ impl Default for FrontMatter {
         FrontMatter {
             labels: Vec::default(),
             emoji: String::default(),
-            metadata: Yaml::Null,
+            metadata: tera::Value::Null,
             unknown_keys: Vec::default(),
             imports: Vec::default(),
             folder: false,
             sort: Sort::Unsorted,
-            cover: None,
+            cover: Cover::default(),
             status: None,
         }
     }
@@ -92,83 +85,13 @@ impl FrontMatter {
             }
         }
 
-        let yaml_fm_docs = Yaml::load_from_str(&front_matter_str)
-            .context("Failed to parse front matter as YAML")?;
-        if yaml_fm_docs.is_empty() {
-            return Ok((FrontMatter::default(), content_str));
-        }
-        let yaml_fm = &yaml_fm_docs[0];
-        if !yaml_fm.is_hash() {
-            return Err(FrontMatterError::ParseError(String::from(
-                "Expected YAML hash map for front matter",
-            ))
-            .into());
-        }
+        let front_matter: FrontMatter =
+            match saphyr_serde::de::from_str::<Option<FrontMatter>>(&front_matter_str) {
+                Ok(optional_fm) => optional_fm.unwrap_or_default(),
+                Err(err) => Err(anyhow!("Failed to parse: {:?}", err))?,
+            };
 
-        static VALID_TOP_LEVEL_KEYS: [&str; 7] = [
-            "emoji", "labels", "metadata", "imports", "folder", "sort", "cover",
-        ];
-        let string_keys: HashSet<&str> = yaml_fm
-            .as_hash()
-            .unwrap()
-            .iter()
-            .map(|(key, _value)| key.as_str().unwrap())
-            .collect();
-
-        let mut unknown_keys: Vec<String> = string_keys
-            .difference(&HashSet::from(VALID_TOP_LEVEL_KEYS))
-            .map(|s| s.to_string())
-            .collect();
-
-        unknown_keys.sort();
-
-        let labels = yaml_fm["labels"]
-            .as_vec()
-            .map(|v| {
-                v.iter()
-                    .map(|l| String::from(l.as_str().unwrap()))
-                    .collect::<Vec<String>>()
-            })
-            .unwrap_or_default();
-
-        let imports = yaml_fm["imports"]
-            .as_vec()
-            .map(|v| {
-                v.iter()
-                    .map(|l| String::from(l.as_str().unwrap()))
-                    .collect::<Vec<String>>()
-            })
-            .unwrap_or_default();
-
-        let folder = yaml_fm["folder"]
-            .borrowed_or(&Yaml::Boolean(false))
-            .as_bool()
-            .ok_or(anyhow::anyhow!(
-                "Failed to parse \"folder\" key (should be true/false)"
-            ))?;
-
-        let emoji = String::from(yaml_fm["emoji"].as_str().unwrap_or_default());
-
-        let sort = Sort::from_str(yaml_fm["sort"].as_str())?;
-
-        let cover = Cover::from_yaml(&yaml_fm["cover"])?;
-
-        let status = PageStatus::from_yaml(&yaml_fm["status"])?;
-
-        Ok((
-            FrontMatter {
-                labels,
-                emoji,
-                metadata: yaml_fm["metadata"].clone(),
-                unknown_keys,
-                imports,
-                folder,
-                sort,
-                cover,
-                status,
-            },
-            content_str,
-        ))
+        Ok((front_matter, content_str))
     }
 }
 
@@ -189,15 +112,8 @@ metadata:
 "##;
 
     static EMPTY_MD: &str = "# compulsory title\n";
-    static NOT_YAML_FRONT_MATTER_MD: &str = r##"---
-something = foo
-[section]
-gah = bar
----
-# compulsory title
-"##;
 
-    use crate::error::TestResult;
+    use crate::{error::TestResult, test_helpers::test_render};
 
     use super::*;
 
@@ -236,42 +152,39 @@ gah = bar
     }
 
     #[test]
-    fn it_errors_if_not_yaml() -> TestResult {
-        let fm_result = FrontMatter::from_str(NOT_YAML_FRONT_MATTER_MD);
-
-        println!("{:?}", fm_result);
-
-        assert!(fm_result.is_err());
-        if let Err(err) = fm_result {
-            assert_eq!(
-                err.to_string(),
-                "Unable to parse front matter: Expected YAML hash map for front matter"
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
     fn it_parses_yes_as_true() -> TestResult {
-        let fm_result = FrontMatter::from_str("---\nfolder: yes\n---\n# title");
+        let (fm, _content) =
+            FrontMatter::from_str("---\nfolder: yes\n---\n# title").expect("Should parse");
 
-        assert!(fm_result.is_err());
-        assert_eq!(
-            fm_result.err().unwrap().to_string(),
-            "Failed to parse \"folder\" key (should be true/false)"
-        );
+        assert!(fm.folder);
 
         Ok(())
     }
 
     #[test]
     fn it_parses_front_matter_that_is_only_a_comment() {
-        let fm_result = FrontMatter::from_str("---\n#comment\n---\n# title");
+        let (fm, _content) =
+            FrontMatter::from_str("---\n#comment\n---\n# title").expect("Should pass");
 
-        assert!(fm_result.is_ok());
-
-        let (fm, _content) = fm_result.unwrap();
         assert_eq!(fm, FrontMatter::default());
+    }
+
+    #[test]
+    fn it_renders_front_matter_variable() -> TestResult {
+        let rendered_page = test_render(
+            r###"---
+metadata:
+    owner: James
+    status: complete
+---
+# Title
+
+{{ fm.metadata.owner }}: {{ fm.metadata.status }}
+"###,
+        )?;
+
+        assert_eq!(rendered_page.content.trim(), "<p>James: complete</p>");
+
+        Ok(())
     }
 }

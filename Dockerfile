@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM rust:1.84-bullseye AS builder
+FROM --platform=$BUILDPLATFORM rust:1.87-bullseye AS builder
 WORKDIR /usr/src/marked-space
 
 # Install any required system dependencies for cross-compilation

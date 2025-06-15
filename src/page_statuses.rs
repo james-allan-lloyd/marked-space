@@ -1,35 +1,23 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::anyhow;
-use saphyr::Yaml;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     confluence_client::ConfluenceClient, error::Result, link_generator::LinkGenerator,
     markdown_page::MarkdownPage, responses,
 };
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Hash)]
 pub enum PageStatus {
+    #[serde(rename = "draft")]
     RoughDraft,
+    #[serde(rename = "in-progress")]
     InProgress,
+    #[serde(rename = "ready")]
     ReadyForReview,
+    #[serde(rename = "verified")]
     Verified,
-}
-
-impl PageStatus {
-    pub fn from_yaml(_yaml_fm: &Yaml) -> Result<Option<Self>> {
-        match _yaml_fm {
-            Yaml::String(s) => match s.as_str() {
-                "draft" => Ok(Some(PageStatus::RoughDraft)),
-                "in-progress" => Ok(Some(PageStatus::InProgress)),
-                "ready" => Ok(Some(PageStatus::ReadyForReview)),
-                "verified" => Ok(Some(PageStatus::Verified)),
-                _ => Err(anyhow!("Unknown status \"{}\"", s)),
-            },
-            Yaml::BadValue => Ok(None),
-            _ => todo!(),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -87,21 +75,20 @@ pub fn sync_page_status(
 mod test {
     use std::path::PathBuf;
 
-    use saphyr::Yaml;
     use serde_json::json;
 
     use crate::{
-        confluence_client::ConfluenceClient, error::TestResult, link_generator::LinkGenerator,
-        markdown_space::MarkdownSpace, page_statuses::ContentStates, responses,
-        test_helpers::register_mark_and_conf_page,
+        confluence_client::ConfluenceClient, error::TestResult, frontmatter::FrontMatter,
+        link_generator::LinkGenerator, markdown_space::MarkdownSpace, page_statuses::ContentStates,
+        responses, test_helpers::register_mark_and_conf_page,
     };
 
     use super::{sync_page_status, PageStatus};
 
     #[test]
     fn it_returns_none_with_no_status() -> TestResult {
-        let page_status = PageStatus::from_yaml(&Yaml::BadValue)?;
-        assert_eq!(page_status, None);
+        let fm = saphyr_serde::de::from_str::<FrontMatter>("").expect("Should Deserialize");
+        assert_eq!(fm.status, None);
         Ok(())
     }
 
@@ -115,11 +102,10 @@ mod test {
         )
         .unwrap();
         let content_states = ContentStates::new(&states);
-        let status = PageStatus::from_yaml(&Yaml::String(String::from(front_matter_string)))?
-            .expect("Status should be some");
-        assert_eq!(status, expected_status);
+        let fm = saphyr_serde::de::from_str::<FrontMatter>(front_matter_string)?;
+        assert_eq!(fm.status, Some(expected_status));
 
-        let prop = content_states.to_confluence_json(&status)?;
+        let prop = content_states.to_confluence_json(&fm.status.unwrap())?;
         assert_eq!(prop["name"], states[0].name);
         assert_eq!(prop["id"], states[0].id);
         assert_eq!(prop["color"], states[0].color);
@@ -128,29 +114,40 @@ mod test {
 
     #[test]
     fn it_returns_rough_draft() -> TestResult {
-        it_returns_status("draft", PageStatus::RoughDraft, "Rough draft")
+        it_returns_status("status: draft", PageStatus::RoughDraft, "Rough draft")
     }
 
     #[test]
     fn it_returns_in_progress() -> TestResult {
-        it_returns_status("in-progress", PageStatus::InProgress, "In progress")
+        it_returns_status("status: in-progress", PageStatus::InProgress, "In progress")
     }
 
     #[test]
     fn it_returns_ready() -> TestResult {
-        it_returns_status("ready", PageStatus::ReadyForReview, "Ready for review")
+        it_returns_status(
+            "status: ready",
+            PageStatus::ReadyForReview,
+            "Ready for review",
+        )
     }
 
     #[test]
     fn it_returns_verified() -> TestResult {
-        it_returns_status("verified", PageStatus::Verified, "Verified")
+        it_returns_status("status: verified", PageStatus::Verified, "Verified")
     }
 
     #[test]
     fn it_raises_error_if_unknown_status() {
-        let result = it_returns_status("foobarbaz", PageStatus::InProgress, "In progress");
+        let result = it_returns_status("status: foobarbaz", PageStatus::InProgress, "In progress");
         let error = result.expect_err("Should return error for unknown error, but didn't fail");
-        assert_eq!(format!("{}", error), "Unknown status \"foobarbaz\"");
+        let expected = "unknown variant `foobarbaz`, expected one of";
+        let actual = format!("{}", error);
+        assert!(
+            actual.contains(expected),
+            "\nExpected\n\n  {}\n\nto contain\n\n  {}\n",
+            actual,
+            expected
+        );
     }
 
     #[test]

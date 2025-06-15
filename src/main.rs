@@ -31,6 +31,7 @@ mod markdown_space;
 mod mentions;
 mod page_covers;
 mod page_emojis;
+mod page_metadata;
 mod page_properties;
 mod page_statuses;
 mod parent;
