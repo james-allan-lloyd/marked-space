@@ -141,11 +141,11 @@ SPACE=TEAM
 
 .PHONY: lint
 lint:  ## Lint all markdown files
-	markdownlint-cli2 "**/*md"
+ markdownlint-cli2 "**/*md"
 
 .PHONY: sync
 sync: lint  ## Directly sync with confluence
-	docker run --rm -ti --env-file .env -v $(PWD)/$(SPACE):/$(SPACE) $(IMAGE) --space /$(SPACE)
+ docker run --rm -ti --env-file .env -v $(PWD)/$(SPACE):/$(SPACE) $(IMAGE) --space /$(SPACE)
 
 $(VERBOSE).SILENT:
 ```
@@ -187,4 +187,8 @@ also serves as a test marked-space that is all deployable to your test instance
 
 ### Marked-space failed to update the permissions on a page
 
-In order to restrict the page from being edited. The user who performs the synchronization needs to be the sole contributor to the page. The `Home content` could also fail due to this when the space is created by someone else. By setting the user who performs the synchronization as the space **Owner** would resolve this issue.
+In order to restrict the page from being edited, the user who performs the
+synchronization needs to be the sole contributor to the page. The `Home
+content` could also fail due to this when the space is created by someone else.
+By setting the user who performs the synchronization as the space **Owner**
+would resolve this issue.
