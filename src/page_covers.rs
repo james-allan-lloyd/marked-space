@@ -81,42 +81,6 @@ impl FromStr for Cover {
     }
 }
 
-// fn position_checked(value: i64) -> Result<u32> {
-//     if value < 0 {
-//         Err(anyhow!("cover.position must not be negative"))
-//     } else if value > u32::MAX as i64 {
-//         Err(anyhow!("cover.position is too large"))
-//     } else {
-//         Ok(value as u32)
-//     }
-// }
-
-// impl Cover {
-//     pub fn from_yaml(yaml: &Yaml) -> Result<Option<Self>> {
-//         match yaml {
-//             Yaml::String(source) => Ok(Some(Cover {
-//                 source: source.clone(),
-//                 position: 50,
-//             })),
-//             Yaml::Hash(_hash) => {
-//                 let source = yaml["source"]
-//                     .as_str()
-//                     .ok_or(anyhow!("cover.source is missing or not a string"))?;
-//                 let position = position_checked(yaml["position"].as_i64().unwrap_or(50))?;
-//
-//                 Ok(Some(Cover {
-//                     source: String::from(source),
-//                     position,
-//                 }))
-//             }
-//             Yaml::BadValue => Ok(None),
-//             _ => Err(anyhow!("Invalid type for cover: {:?}", yaml)),
-//         }
-//     }
-// }
-
-// todo: "value": "{\"id\":\"a27ac7fd-5b79-4185-b5a2-c32afe0e84c6\",\"position\":50}",
-// "value": "{\"id\":\"https://images.unsplash.com/photo-1541701494587-cb58502866ab?crop=entropy&cs=srgb&fm=jpg&ixid=M3wyMDQ0MDF8MHwxfHNlYXJjaHwzfHxjb2xvcnxlbnwwfDB8fHwxNzQ4Mjk2MDg0fDA&ixlib=rb-4.1.0&q=85\",\"position\":50}",
 pub fn parse_cover(page: &MarkdownPage<'_>, link_generator: &LinkGenerator) -> serde_json::Value {
     if let Some(source) = &page.front_matter.cover.source {
         let position = page.front_matter.cover.position;
