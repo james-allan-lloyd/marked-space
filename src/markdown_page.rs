@@ -11,6 +11,7 @@ use crate::{
     parent::get_parent_file, template_renderer::TemplateRenderer,
 };
 use anyhow::Context;
+use clap::builder::OsStr;
 use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options,
@@ -157,10 +158,19 @@ impl<'a> MarkdownPage<'a> {
                         &node_link.url,
                         PathBuf::from(source.as_str()).parent().unwrap(),
                     ) {
-                        local_links.push(local_link);
+                        if local_link.path.extension() == Some(&OsStr::from("md")) {
+                            local_links.push(local_link);
+                        } else {
+                            errors.push(format!(
+                                "Can only link .md files locally: {}",
+                                local_link.path.display()
+                            ));
+                        }
                     } else {
                         errors.push(format!("Failed to parse local link: {}", node_link.url));
                     }
+                } else {
+                    // remote link
                 }
             }
             _ => (),

@@ -414,4 +414,35 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn it_links_non_image_attachments() -> TestResult {
+        let temp = assert_fs::TempDir::new()?;
+        let test_markdown = temp.child("test/index.md");
+        test_markdown
+            .write_str("# Page 1\nLink to text file : [Some Text File](./some-text-file.txt)\n")?;
+        temp.child("test/some-text-file.txt").touch()?;
+
+        let mut space =
+            MarkdownSpace::from_directory(temp.child("test").path()).expect("Space loads");
+
+        let result = parse_default(&mut space)?;
+
+        let page = &result
+            .iter()
+            .find(|x| x.title == "Page 1")
+            .ok_or(anyhow!("Expected our page to parse, but didn't find it"))?;
+
+        assert_eq!(page.warnings, Vec::<String>::default());
+
+        assert_eq!(
+            page.attachments,
+            vec![ImageAttachment::new(
+                "assets/image.png",
+                test_markdown.path().parent().unwrap()
+            )]
+        );
+
+        Ok(())
+    }
 }
