@@ -296,4 +296,23 @@ Status: {{value}}
 
         Ok(())
     }
+
+    #[test]
+    fn it_renders_front_matter_variable() -> TestResult {
+        let rendered_page = test_render(
+            r###"---
+metadata:
+    owner: James
+    status: complete
+---
+# Title
+
+{{ fm.metadata.owner }}: {{ fm.metadata.status }}
+"###,
+        )?;
+
+        assert_eq!(rendered_page.content.trim(), "<p>James: complete</p>");
+
+        Ok(())
+    }
 }
