@@ -135,3 +135,6 @@ tables on Confluence which can then be used by the Properties Report macro to
 create tables.
 
 [Page Covers](./covers.md) allow you to set page covers.
+
+[Page Statuses](./statuses.md) allow you to display the status of a given page
+using Confluence's "Content Status" labels.

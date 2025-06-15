@@ -155,38 +155,12 @@ mod test {
     use serde_json::json;
 
     use crate::{
-        confluence_client,
-        confluence_page::{self, ConfluenceNode, ConfluencePageData},
-        error::TestResult,
-        link_generator::LinkGenerator,
-        markdown_space::MarkdownSpace,
-        responses::{self, ContentStatus, Descendant},
-        sort::Sort,
+        confluence_client, error::TestResult, link_generator::LinkGenerator,
+        markdown_space::MarkdownSpace, responses::Descendant, sort::Sort,
+        test_helpers::register_mark_and_conf_page,
     };
 
     use super::{sort_descendants, sync_sort, MoveContent};
-
-    fn register_mark_and_conf_page<'a>(
-        page_id: &str,
-        link_generator: &mut LinkGenerator,
-        markdown_page: crate::markdown_page::MarkdownPage<'a>,
-    ) -> Result<crate::markdown_page::MarkdownPage<'a>, anyhow::Error> {
-        link_generator.register_markdown_page(&markdown_page)?;
-        link_generator.register_confluence_node(&ConfluenceNode {
-            id: page_id.into(),
-            title: markdown_page.title.clone(),
-            parent_id: Some("99".into()),
-            data: <confluence_page::ConfluenceNodeType>::from(ConfluencePageData {
-                version: responses::Version {
-                    number: 1,
-                    message: ConfluencePageData::version_message_prefix().into(),
-                },
-                path: Some(PathBuf::from(&markdown_page.source)),
-                status: ContentStatus::Current,
-            }),
-        });
-        Ok(markdown_page)
-    }
 
     struct TestServer {
         server: mockito::ServerGuard,
