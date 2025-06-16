@@ -34,32 +34,33 @@ pub enum AttachmentKind {
 
 #[derive(Debug, PartialEq)]
 pub struct Attachment {
-    pub url: String,   // how this was specified in the markdown
+    // pub url: String,   // how this was specified in the markdown
     pub path: PathBuf, // the full path to the file
     pub name: String,  // a simple name
     pub kind: AttachmentKind,
 }
 
 impl Attachment {
+    // TODO: use local link here too?
     pub(crate) fn image(source: &str, parent: &Path) -> Attachment {
         let mut path = PathBuf::from(parent);
         path.push(source);
         Attachment {
             path,
-            url: String::from(source),
+            // url: String::from(source),
             name: link_to_name(source),
             kind: AttachmentKind::Image,
         }
     }
 
-    pub(crate) fn file(local_link: &LocalLink, parent: &Path) -> Attachment {
+    pub(crate) fn file(local_link: &LocalLink) -> Attachment {
         // let mut path = PathBuf::from(parent);
         // path.push(local_link.path.clone());
 
         Attachment {
-            path: local_link.path.clone(),
-            url: local_link.path.display().to_string(),
-            name: link_to_name(&local_link.path.display().to_string()),
+            path: local_link.target.clone(),
+            // url: local_link.path.display().to_string(),
+            name: local_link.attachment_name(),
             kind: AttachmentKind::File,
         }
     }
@@ -146,7 +147,7 @@ pub fn sync_page_attachments(
         {
             // still add the existing attachment to lookup for covers
             let id = title_to_fileid[&attachment_name].clone();
-            link_generator.register_attachment_id(page_source, &attachment.url, &id);
+            link_generator.register_attachment_id(page_source, &attachment.name, &id);
             op.end(Status::Skipped);
             return Ok(());
         }
@@ -175,7 +176,7 @@ pub fn sync_page_attachments(
             assert_eq!(results[0].title, attachment_name);
             let id = results[0].extensions["fileId"].as_str().unwrap();
             // add new attachment to lookup
-            link_generator.register_attachment_id(page_source, &attachment.url, id);
+            link_generator.register_attachment_id(page_source, &attachment.name, id);
         }
 
         op.end(Status::Updated);
@@ -205,9 +206,7 @@ mod test {
     use comrak::nodes::NodeLink;
 
     use crate::{
-        confluence_storage_renderer::{self, ConfluenceStorageRenderer, WriteWithLast},
-        error::TestResult,
-        test_helpers::test_render,
+        confluence_storage_renderer::WriteWithLast, error::TestResult, test_helpers::test_render,
     };
 
     use super::*;
@@ -252,11 +251,11 @@ mod test {
 
     #[test]
     fn it_renders_file_link() -> TestResult {
-        let rendered_page = test_render("# Title\n\n[file link](./test-file.xls)")?;
+        let rendered_page = test_render("# Title\n\n[file link](test-file.xls)")?;
 
         assert_eq!(
             rendered_page.content.trim(),
-            r#"<p><ac:structured-macro ac:name="view-file"><ac:parameter ac:name="name"><ri:attachment ri:filename="test-file.xls"/></ac:parameter></ac:structured-macro></p>"#
+            r#"<p><ac:structured-macro ac:name="view-file"><ac:parameter ac:name="name"><ri:attachment ri:filename="test-file.xls"/></ac:parameter></ac:structured-macro>file link</p>"#
         );
 
         Ok(())

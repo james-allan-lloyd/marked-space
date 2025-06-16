@@ -1,4 +1,7 @@
-use crate::error::{ConfluenceError, Result};
+use crate::{
+    attachments::link_to_name,
+    error::{ConfluenceError, Result},
+};
 use std::{
     fmt::{Display, Write},
     path::{Path, PathBuf},
@@ -7,8 +10,10 @@ use std::{
 
 #[derive(Debug, PartialEq)]
 pub struct LocalLink {
-    pub path: PathBuf,
-    pub anchor: Option<String>,
+    pub page_path: PathBuf,     // the file the link was defined in
+    pub text: String,           // the original text of the link
+    pub target: PathBuf,        // the full path to the linked file
+    pub anchor: Option<String>, // an optional anchor within the file
 }
 
 pub fn simplify_path(p: &Path) -> Result<PathBuf> {
@@ -33,29 +38,47 @@ pub fn simplify_path(p: &Path) -> Result<PathBuf> {
 }
 
 impl LocalLink {
-    pub fn from_str(s: &str, relative_path: &Path) -> Result<Self> {
-        let result = if let Some(hash_pos) = s.find('#') {
-            let (p, a) = s.split_at(hash_pos);
+    pub fn from_str(text: &str, page_path: &Path) -> Result<Self> {
+        let (target, anchor) = if let Some(hash_pos) = text.find('#') {
+            let (p, a) = text.split_at(hash_pos);
             if a.len() <= 1 {
                 return Err(ConfluenceError::generic_error("Cannot have empty anchors"));
             }
-            LocalLink {
-                path: simplify_path(&relative_path.join(PathBuf::from_str(p)?))?,
-                anchor: Some(String::from(&a[1..])),
-            }
+            (
+                simplify_path(&page_path.join(PathBuf::from_str(p)?))?,
+                Some(String::from(&a[1..])),
+            )
         } else {
-            LocalLink {
-                path: simplify_path(&relative_path.join(PathBuf::from_str(s)?))?,
-                anchor: None,
-            }
+            (
+                simplify_path(&page_path.join(PathBuf::from_str(text)?))?,
+                None,
+            )
         };
-        Ok(result)
+
+        Ok(LocalLink {
+            text: text.to_owned(),
+            page_path: page_path.to_owned(),
+            target,
+            anchor,
+        })
+    }
+
+    pub fn attachment_name(&self) -> String {
+        link_to_name(&self.text)
+    }
+
+    pub fn is_page(&self) -> bool {
+        if let Some(ext) = self.target.extension() {
+            ext == "md"
+        } else {
+            false
+        }
     }
 }
 
 impl Display for LocalLink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.path.to_str().unwrap().replace('\\', "/").as_str())?;
+        f.write_str(self.target.to_str().unwrap().replace('\\', "/").as_str())?;
         if let Some(anchor) = &self.anchor {
             f.write_char('#')?;
             f.write_str(anchor.as_str())?;
@@ -75,7 +98,7 @@ mod test {
     #[test]
     fn it_parses_local_links_without_anchor() -> TestResult {
         let local_link = LocalLink::from_str("test.md", &PathBuf::default())?;
-        assert_eq!(local_link.path, PathBuf::from_str("test.md")?);
+        assert_eq!(local_link.target, PathBuf::from_str("test.md")?);
         assert_eq!(local_link.anchor, None);
 
         Ok(())
@@ -84,7 +107,7 @@ mod test {
     #[test]
     fn it_parses_local_links_with_anchor() -> TestResult {
         let local_link = LocalLink::from_str("test.md#anchor", &PathBuf::default())?;
-        assert_eq!(local_link.path, PathBuf::from_str("test.md")?);
+        assert_eq!(local_link.target, PathBuf::from_str("test.md")?);
         assert_eq!(local_link.anchor, Some(String::from("anchor")));
 
         Ok(())
@@ -103,7 +126,7 @@ mod test {
     #[test]
     fn it_simplifies_relative_links() -> TestResult {
         let local_link = LocalLink::from_str("../test.md#a", &PathBuf::from("subdir"))?;
-        assert_eq!(local_link.path, PathBuf::from_str("test.md")?);
+        assert_eq!(local_link.target, PathBuf::from_str("test.md")?);
 
         Ok(())
     }
@@ -119,7 +142,6 @@ mod test {
     #[test]
     fn it_parses_local_links() -> TestResult {
         let result = LocalLink::from_str("#anchor", &PathBuf::default());
-        println!("{:#?}", result);
         assert!(result.is_ok());
 
         Ok(())
@@ -129,6 +151,15 @@ mod test {
     fn it_converts_to_string_with_platform_independent_separator() -> TestResult {
         let local_link = LocalLink::from_str("foo/bar#baz", &PathBuf::default())?;
         assert_eq!(local_link.to_string(), "foo/bar#baz");
+        Ok(())
+    }
+
+    #[test]
+    fn it_keeps_relative_part_for_name() -> TestResult {
+        let local_link = LocalLink::from_str("./test.xls", &PathBuf::default())?;
+        assert_eq!(local_link.target, PathBuf::from_str("test.xls")?);
+        assert_eq!(local_link.attachment_name(), "._test.xls");
+
         Ok(())
     }
 }

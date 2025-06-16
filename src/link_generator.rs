@@ -1,4 +1,3 @@
-use clap::builder::OsStr;
 use path_clean::PathClean;
 use std::{
     collections::{HashMap, HashSet},
@@ -9,7 +8,6 @@ use std::{
 use comrak::nodes::NodeLink;
 
 use crate::{
-    attachments::link_to_name,
     confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData},
     confluence_storage_renderer::ConfluenceStorageRenderer,
     console::print_warning,
@@ -131,7 +129,7 @@ impl LinkGenerator {
         )
     }
 
-    fn get_file_url(&self, filename: &Path) -> Option<String> {
+    fn get_page_url(&self, filename: &Path) -> Option<String> {
         if filename == PathBuf::from("index.md") {
             return Some(self.id_to_url(&self.homepage_id));
         }
@@ -154,8 +152,6 @@ impl LinkGenerator {
         confluence_formatter: &mut ConfluenceStorageRenderer,
         no_children: bool,
     ) -> io::Result<()> {
-        dbg!(&nl.url);
-
         if nl.url.contains("://") {
             confluence_formatter.output.write_all(b"<a href=\"")?;
             confluence_formatter.output.write_all(nl.url.as_bytes())?;
@@ -164,12 +160,12 @@ impl LinkGenerator {
         }
 
         let local_link = relative_local_link(nl, confluence_formatter);
-        if local_link.path.extension() == Some(&OsStr::from("md")) {
+        if local_link.is_page() {
             confluence_formatter.output.write_all(b"<a href=\"")?;
 
             let mut link_empty = true;
 
-            if let Some(url) = self.get_file_url(&local_link.path) {
+            if let Some(url) = self.get_page_url(&local_link.target) {
                 link_empty = false;
                 confluence_formatter.output.write_all(url.as_bytes())?;
             }
@@ -183,7 +179,7 @@ impl LinkGenerator {
             if link_empty {
                 print_warning(&format!(
                     "file link {} in {} couldn't be resolved",
-                    &local_link.path.display(),
+                    &local_link.text,
                     &confluence_formatter.source.display(),
                 ));
             }
@@ -192,14 +188,13 @@ impl LinkGenerator {
             if no_children {
                 confluence_formatter
                     .output
-                    .write_all(self.get_file_title(&local_link.path).unwrap().as_bytes())?;
+                    .write_all(self.get_file_title(&local_link.target).unwrap().as_bytes())?;
             }
         } else {
             confluence_formatter.output.write_all(b"<ac:structured-macro ac:name=\"view-file\"><ac:parameter ac:name=\"name\"><ri:attachment ri:filename=\"")?;
-            confluence_formatter.output.write_all(
-                link_to_name(&local_link.path.file_name().unwrap().display().to_string())
-                    .as_bytes(),
-            )?;
+            confluence_formatter
+                .output
+                .write_all(local_link.attachment_name().as_bytes())?;
             confluence_formatter
                 .output
                 .write_all(b"\"/></ac:parameter></ac:structured-macro>")?;
@@ -213,9 +208,13 @@ impl LinkGenerator {
         nl: &NodeLink,
         confluence_formatter: &mut ConfluenceStorageRenderer,
     ) -> io::Result<()> {
-        let local_link = relative_local_link(nl, confluence_formatter);
-        if local_link.path.extension() == Some(&OsStr::from("md")) {
+        if nl.url.contains("://") {
             confluence_formatter.output.write_all(b"</a>")?;
+        } else {
+            let local_link = relative_local_link(nl, confluence_formatter);
+            if local_link.is_page() {
+                confluence_formatter.output.write_all(b"</a>")?;
+            }
         }
 
         Ok(())
@@ -292,7 +291,7 @@ mod test {
     fn it_returns_homepage_link_for_root_index_md() -> TestResult {
         let link_generator = LinkGenerator::new("example.atlassian.net", "Test", "999");
 
-        let url_for_file = link_generator.get_file_url(&PathBuf::from("index.md"));
+        let url_for_file = link_generator.get_page_url(&PathBuf::from("index.md"));
         assert_eq!(
             url_for_file,
             Some("https://example.atlassian.net/wiki/spaces/Test/pages/999".into())
@@ -330,7 +329,7 @@ mod test {
 
         assert!(link_generator.get_nodes_to_create().is_empty());
 
-        let url_for_file = link_generator.get_file_url(&PathBuf::from(&source));
+        let url_for_file = link_generator.get_page_url(&PathBuf::from(&source));
         assert!(url_for_file.is_some());
 
         Ok(())
@@ -366,7 +365,7 @@ mod test {
 
         assert!(link_generator.get_nodes_to_create().is_empty());
 
-        let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
+        let url_for_file = link_generator.get_page_url(&PathBuf::from(&new_source));
         let expected_url =
             String::from("https://example.atlassian.net/wiki/spaces/TEST/pages/9991");
         assert_eq!(url_for_file, Some(expected_url));
@@ -403,7 +402,7 @@ mod test {
             }),
         });
 
-        let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
+        let url_for_file = link_generator.get_page_url(&PathBuf::from(&new_source));
         assert_eq!(url_for_file, None);
 
         Ok(())

@@ -11,7 +11,6 @@ use crate::{
     parent::get_parent_file, template_renderer::TemplateRenderer,
 };
 use anyhow::Context;
-use clap::builder::OsStr;
 use comrak::{
     nodes::{AstNode, NodeValue},
     parse_document, Arena, Options,
@@ -104,7 +103,6 @@ impl<'a> MarkdownPage<'a> {
         fm: FrontMatter,
     ) -> Result<MarkdownPage<'a>> {
         let parent = markdown_page.parent().unwrap();
-        println!("parent {:?}", parent);
         let root: &AstNode<'_> = parse_document(arena, content, &Self::options());
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
@@ -156,10 +154,10 @@ impl<'a> MarkdownPage<'a> {
                     || node_link.url.starts_with("ac:"))
                 {
                     if let Ok(local_link) = LocalLink::from_str(&node_link.url, parent) {
-                        if local_link.path.extension() == Some(&OsStr::from("md")) {
+                        if local_link.is_page() {
                             local_links.push(local_link);
                         } else {
-                            attachments.push(Attachment::file(&local_link, parent));
+                            attachments.push(Attachment::file(&local_link));
                         }
                     } else {
                         errors.push(format!("Failed to parse local link: {}", node_link.url));
@@ -370,7 +368,9 @@ mod tests {
         assert_eq!(
             page.local_links,
             vec![LocalLink {
-                path: link_filename,
+                text: format!("{:#}#some-anchor", link_filename.display().to_string()),
+                target: link_filename,
+                page_path: PathBuf::default(), // from("some-page.md"),
                 anchor: Some(String::from("some-anchor"))
             }]
         );
@@ -419,9 +419,7 @@ mod tests {
         link_generator.register_confluence_node(&dummy_confluence_page("A Linked Page", "47"));
 
         let content = page.to_html_string(&link_generator)?;
-        println!("actual {:#?}", content);
         let expected = format!("<a href=\"{}\">{}</a>", link_url, "A Linked Page");
-        println!("expect {:#?}", expected);
         assert!(content.contains(expected.as_str()));
 
         Ok(())
@@ -452,9 +450,7 @@ mod tests {
         link_generator.register_confluence_node(&dummy_confluence_page("A Linked Page", "47"));
 
         let content = page.to_html_string(&link_generator)?;
-        println!("actual {:#?}", content);
         let expected = format!("<a href=\"{}\">{}</a>", link_url, link_text);
-        println!("expect {:#?}", expected);
         assert!(content.contains(expected.as_str()));
 
         Ok(())
@@ -486,9 +482,7 @@ mod tests {
         link_generator.register_confluence_node(&dummy_confluence_page("A Linked Page", "47"));
 
         let content = page.to_html_string(&link_generator)?;
-        println!("actual {:#?}", content);
         let expected = format!("<a href=\"{}\">{}</a>", link_url, link_text);
-        println!("expect {:#?}", expected);
         assert!(content.contains(expected.as_str()));
 
         Ok(())
@@ -525,8 +519,6 @@ mod tests {
         assert_eq!(page.attachments.len(), 0); // should not view the external link as an attachment
         let html_content = page.to_html_string(&LinkGenerator::default_test())?;
 
-        println!("Got content: {:#}", html_content);
-
         assert!(html_content.contains(
             format!(
                 r#"<ac:image ac:align="center"><ri:url ri:value="{}"/>myimage</ac:image>"#,
@@ -549,10 +541,13 @@ mod tests {
         let page = page_from_str("page.md", markdown_content.as_str(), &arena)?;
         let html_content = page.to_html_string(&LinkGenerator::default_test())?;
 
-        println!("Got content: {:#}", html_content);
+        let expected = format!(r#"<a href="{}">example</a>"#, external_url);
 
         assert!(
-            html_content.contains(format!(r#"<a href="{}">example</a>"#, external_url).as_str())
+            html_content.contains(&expected),
+            "expected {} to contain {}",
+            html_content,
+            expected
         );
 
         Ok(())

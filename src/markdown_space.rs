@@ -154,7 +154,7 @@ impl<'a> MarkdownSpace<'a> {
                     .local_links
                     .iter()
                     .filter_map(|local_link| {
-                        if !local_link.path.exists() {
+                        if !local_link.target.exists() {
                             Some(local_link.to_string())
                         } else {
                             None
@@ -178,7 +178,6 @@ impl<'a> MarkdownSpace<'a> {
                     .attachments
                     .iter()
                     .filter_map(|attachment| {
-                        println!("Attchment {:?}", attachment.path);
                         if !attachment.path.exists() {
                             Some(self.space_relative_path_string(&attachment.path).unwrap())
                         } else {
@@ -317,7 +316,6 @@ mod tests {
 
         assert!(result.is_err());
         let error = result.err().unwrap();
-        println!("Actual error: {:#?}", error);
         assert!(format!("{:#}", error).contains("Duplicate title 'The Same Heading' in [markdown"))
     }
 
@@ -379,7 +377,6 @@ mod tests {
 
         let result = parse_default(&mut space);
         let acutal_error = format!("{:#}", result.err().unwrap());
-        println!("Actual error: {:#}", acutal_error);
         assert!(acutal_error.contains(
             "Missing file for attachment link in [subpage/image.md] to [subpage/image_does_not_exist.png]"
         ));
@@ -441,16 +438,12 @@ mod tests {
 
         assert_eq!(page.warnings, Vec::<String>::default());
 
-        let local_link =
-            LocalLink::from_str("some-text-file.txt", test_markdown.path().parent().unwrap())?;
+        let local_link = LocalLink::from_str(
+            "./some-text-file.txt",
+            test_markdown.path().parent().unwrap(),
+        )?;
 
-        assert_eq!(
-            page.attachments,
-            vec![Attachment::file(
-                &local_link,
-                test_markdown.path().parent().unwrap()
-            )]
-        );
+        assert_eq!(page.attachments, vec![Attachment::file(&local_link,)]);
 
         Ok(())
     }
