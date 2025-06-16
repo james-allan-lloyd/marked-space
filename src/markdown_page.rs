@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    attachments::ImageAttachment, checksum::sha256_digest, confluence_page::ConfluencePageData,
+    attachments::Attachment, checksum::sha256_digest, confluence_page::ConfluencePageData,
     confluence_storage_renderer::render_confluence_storage, frontmatter::FrontMatter,
     helpers::collect_text, link_generator::LinkGenerator, local_link::LocalLink,
     parent::get_parent_file, template_renderer::TemplateRenderer,
@@ -23,7 +23,7 @@ pub struct MarkdownPage<'a> {
     pub title: String,
     pub source: String,
     root: &'a AstNode<'a>,
-    pub attachments: Vec<ImageAttachment>,
+    pub attachments: Vec<Attachment>,
     pub local_links: Vec<LocalLink>,
     pub front_matter: FrontMatter,
     pub warnings: Vec<String>,
@@ -104,6 +104,7 @@ impl<'a> MarkdownPage<'a> {
         fm: FrontMatter,
     ) -> Result<MarkdownPage<'a>> {
         let parent = markdown_page.parent().unwrap();
+        println!("parent {:?}", parent);
         let root: &AstNode<'_> = parse_document(arena, content, &Self::options());
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
@@ -125,10 +126,10 @@ impl<'a> MarkdownPage<'a> {
             ));
         }
 
-        let mut attachments = Vec::<ImageAttachment>::default();
+        let mut attachments = Vec::<Attachment>::default();
         if let Some(source) = &fm.cover.source {
             if MarkdownPage::is_local_link(source) {
-                attachments.push(ImageAttachment::new(source, parent));
+                attachments.push(Attachment::image(source, parent));
             }
         }
         let mut local_links = Vec::<LocalLink>::default();
@@ -146,7 +147,7 @@ impl<'a> MarkdownPage<'a> {
             }
             NodeValue::Image(image) => {
                 if MarkdownPage::is_local_link(&image.url) {
-                    attachments.push(ImageAttachment::new(&image.url, parent));
+                    attachments.push(Attachment::image(&image.url, parent));
                 }
             }
             NodeValue::Link(node_link) => {
@@ -154,17 +155,11 @@ impl<'a> MarkdownPage<'a> {
                     || node_link.url.starts_with("https://")
                     || node_link.url.starts_with("ac:"))
                 {
-                    if let Ok(local_link) = LocalLink::from_str(
-                        &node_link.url,
-                        PathBuf::from(source.as_str()).parent().unwrap(),
-                    ) {
+                    if let Ok(local_link) = LocalLink::from_str(&node_link.url, parent) {
                         if local_link.path.extension() == Some(&OsStr::from("md")) {
                             local_links.push(local_link);
                         } else {
-                            errors.push(format!(
-                                "Can only link .md files locally: {}",
-                                local_link.path.display()
-                            ));
+                            attachments.push(Attachment::file(&local_link, parent));
                         }
                     } else {
                         errors.push(format!("Failed to parse local link: {}", node_link.url));

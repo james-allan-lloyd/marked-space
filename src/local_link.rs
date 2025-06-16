@@ -11,7 +11,7 @@ pub struct LocalLink {
     pub anchor: Option<String>,
 }
 
-fn simplify_path(p: &Path) -> Result<PathBuf> {
+pub fn simplify_path(p: &Path) -> Result<PathBuf> {
     let mut result = PathBuf::new();
 
     for c in p.components() {
@@ -45,7 +45,7 @@ impl LocalLink {
             }
         } else {
             LocalLink {
-                path: relative_path.join(PathBuf::from_str(s)?),
+                path: simplify_path(&relative_path.join(PathBuf::from_str(s)?))?,
                 anchor: None,
             }
         };

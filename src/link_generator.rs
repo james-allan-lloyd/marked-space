@@ -1,3 +1,4 @@
+use clap::builder::OsStr;
 use path_clean::PathClean;
 use std::{
     collections::{HashMap, HashSet},
@@ -8,6 +9,7 @@ use std::{
 use comrak::nodes::NodeLink;
 
 use crate::{
+    attachments::link_to_name,
     confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData},
     confluence_storage_renderer::ConfluenceStorageRenderer,
     console::print_warning,
@@ -152,6 +154,8 @@ impl LinkGenerator {
         confluence_formatter: &mut ConfluenceStorageRenderer,
         no_children: bool,
     ) -> io::Result<()> {
+        dbg!(&nl.url);
+
         if nl.url.contains("://") {
             confluence_formatter.output.write_all(b"<a href=\"")?;
             confluence_formatter.output.write_all(nl.url.as_bytes())?;
@@ -160,35 +164,45 @@ impl LinkGenerator {
         }
 
         let local_link = relative_local_link(nl, confluence_formatter);
-        confluence_formatter.output.write_all(b"<a href=\"")?;
+        if local_link.path.extension() == Some(&OsStr::from("md")) {
+            confluence_formatter.output.write_all(b"<a href=\"")?;
 
-        let mut link_empty = true;
+            let mut link_empty = true;
 
-        if let Some(url) = self.get_file_url(&local_link.path) {
-            link_empty = false;
-            confluence_formatter.output.write_all(url.as_bytes())?;
-        }
+            if let Some(url) = self.get_file_url(&local_link.path) {
+                link_empty = false;
+                confluence_formatter.output.write_all(url.as_bytes())?;
+            }
 
-        if let Some(anchor) = local_link.anchor {
-            link_empty = false;
-            confluence_formatter.output.write_all(b"#")?;
-            confluence_formatter.output.write_all(anchor.as_bytes())?;
-        }
+            if let Some(anchor) = local_link.anchor {
+                link_empty = false;
+                confluence_formatter.output.write_all(b"#")?;
+                confluence_formatter.output.write_all(anchor.as_bytes())?;
+            }
 
-        if link_empty {
-            print_warning(&format!(
-                "file link {} in {} couldn't be resolved",
-                &local_link.path.display(),
-                &confluence_formatter.source.display(),
-            ));
-        }
+            if link_empty {
+                print_warning(&format!(
+                    "file link {} in {} couldn't be resolved",
+                    &local_link.path.display(),
+                    &confluence_formatter.source.display(),
+                ));
+            }
 
-        confluence_formatter.output.write_all(b"\">")?;
-
-        if no_children {
+            confluence_formatter.output.write_all(b"\">")?;
+            if no_children {
+                confluence_formatter
+                    .output
+                    .write_all(self.get_file_title(&local_link.path).unwrap().as_bytes())?;
+            }
+        } else {
+            confluence_formatter.output.write_all(b"<ac:structured-macro ac:name=\"view-file\"><ac:parameter ac:name=\"name\"><ri:attachment ri:filename=\"")?;
+            confluence_formatter.output.write_all(
+                link_to_name(&local_link.path.file_name().unwrap().display().to_string())
+                    .as_bytes(),
+            )?;
             confluence_formatter
                 .output
-                .write_all(self.get_file_title(&local_link.path).unwrap().as_bytes())?;
+                .write_all(b"\"/></ac:parameter></ac:structured-macro>")?;
         }
 
         Ok(())
@@ -196,10 +210,13 @@ impl LinkGenerator {
 
     pub fn exit(
         &self,
-        _nl: &NodeLink,
+        nl: &NodeLink,
         confluence_formatter: &mut ConfluenceStorageRenderer,
     ) -> io::Result<()> {
-        confluence_formatter.output.write_all(b"</a>")?;
+        let local_link = relative_local_link(nl, confluence_formatter);
+        if local_link.path.extension() == Some(&OsStr::from("md")) {
+            confluence_formatter.output.write_all(b"</a>")?;
+        }
 
         Ok(())
     }
