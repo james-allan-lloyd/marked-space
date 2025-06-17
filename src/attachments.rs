@@ -3,14 +3,14 @@ use crate::{
     confluence_paginator::ConfluencePaginator,
     console::{print_error, Status},
     error::Result,
-    responses::{Attachment, Content},
+    local_link::LocalLink,
+    responses,
     sync_operation::SyncOperation,
 };
 use std::{
     collections::HashMap,
     fs::File,
     io::{self, BufReader, Write},
-    path::{Path, PathBuf},
 };
 
 use anyhow::Context;
@@ -26,26 +26,35 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub struct ImageAttachment {
-    pub url: String,   // how this was specified in the markdown
-    pub path: PathBuf, // the full path to the file
-    pub name: String,  // a simple name
+pub enum AttachmentKind {
+    File,
+    Image,
 }
 
-impl ImageAttachment {
-    pub fn new(url: &str, page_path: &Path) -> Self {
-        let mut path = PathBuf::from(page_path);
-        path.push(url);
+#[derive(Debug, PartialEq)]
+pub struct Attachment {
+    pub link: LocalLink,
+    pub kind: AttachmentKind,
+}
 
-        ImageAttachment {
-            path,
-            url: String::from(url),
-            name: link_to_name(url),
+impl Attachment {
+    // TODO: use local link here too?
+    pub(crate) fn image(link: LocalLink) -> Attachment {
+        Attachment {
+            link,
+            kind: AttachmentKind::Image,
+        }
+    }
+
+    pub(crate) fn file(link: LocalLink) -> Attachment {
+        Attachment {
+            link,
+            kind: AttachmentKind::File,
         }
     }
 }
 
-fn link_to_name(url: &str) -> String {
+pub fn link_to_name(url: &str) -> String {
     let re = Regex::new(r"[/\\]").unwrap();
     re.replace_all(url, "_").into()
 }
@@ -79,10 +88,10 @@ pub fn sync_page_attachments(
     confluence_client: &ConfluenceClient,
     page_id: &str,
     page_source: &str,
-    attachments: &[ImageAttachment],
+    attachments: &[Attachment],
     link_generator: &mut LinkGenerator,
 ) -> Result<()> {
-    let existing_attachments: MultiEntityResult<Attachment> = confluence_client
+    let existing_attachments: MultiEntityResult<responses::Attachment> = confluence_client
         .get_attachments(page_id)?
         .error_for_status()?
         .json()?;
@@ -112,12 +121,15 @@ pub fn sync_page_attachments(
     }
 
     for attachment in attachments.iter() {
-        let attachment_name = attachment.name.clone();
+        let attachment_name = attachment.link.attachment_name();
 
         remove_titles_to_id.remove(&attachment_name);
 
-        let op = SyncOperation::start(format!("[{}] attachment", attachment.path.display()), true);
-        let input = File::open(&attachment.path)
+        let op = SyncOperation::start(
+            format!("[{}] attachment", attachment.link.target.display()),
+            true,
+        );
+        let input = File::open(&attachment.link.target)
             .with_context(|| format!("Opening attachment for {}", attachment_name))?;
         let reader = BufReader::new(input);
         let hashstring = sha256_digest(reader)?;
@@ -126,12 +138,18 @@ pub fn sync_page_attachments(
         {
             // still add the existing attachment to lookup for covers
             let id = title_to_fileid[&attachment_name].clone();
-            link_generator.register_attachment_id(page_source, &attachment.url, &id);
+            link_generator.register_attachment_id(
+                page_source,
+                &attachment.link.attachment_name(),
+                &id,
+            );
             op.end(Status::Skipped);
             return Ok(());
         }
 
-        let file_part = Part::file(&attachment.path)?.file_name(attachment.name.clone());
+        let file_part = Part::file(&attachment.link.target)
+            .context(format!("Opening {}", attachment.link.target.display()))?
+            .file_name(attachment.link.attachment_name());
 
         let response =
             confluence_client.create_or_update_attachment(page_id, file_part, &hashstring)?;
@@ -145,16 +163,21 @@ pub fn sync_page_attachments(
                 status, error_body
             ));
         } else {
-            let results: Vec<Content> = ConfluencePaginator::<Content>::new(confluence_client)
-                .start(response)?
-                .filter_map(|f| f.ok())
-                .collect();
+            let results: Vec<responses::Content> =
+                ConfluencePaginator::<responses::Content>::new(confluence_client)
+                    .start(response)?
+                    .filter_map(|f| f.ok())
+                    .collect();
 
             assert_eq!(results.len(), 1);
             assert_eq!(results[0].title, attachment_name);
             let id = results[0].extensions["fileId"].as_str().unwrap();
             // add new attachment to lookup
-            link_generator.register_attachment_id(page_source, &attachment.url, id);
+            link_generator.register_attachment_id(
+                page_source,
+                &attachment.link.attachment_name(),
+                id,
+            );
         }
 
         op.end(Status::Updated);
@@ -183,7 +206,9 @@ mod test {
 
     use comrak::nodes::NodeLink;
 
-    use crate::{confluence_storage_renderer::WriteWithLast, error::TestResult};
+    use crate::{
+        confluence_storage_renderer::WriteWithLast, error::TestResult, test_helpers::test_render,
+    };
 
     use super::*;
 
@@ -226,6 +251,18 @@ mod test {
     }
 
     #[test]
+    fn it_renders_file_link() -> TestResult {
+        let rendered_page = test_render("# Title\n\n[file link](test-file.xls)")?;
+
+        assert_eq!(
+            rendered_page.content.trim(),
+            r#"<p><ac:structured-macro ac:name="view-file"><ac:parameter ac:name="name"><ri:attachment ri:filename="test-file.xls"/></ac:parameter></ac:structured-macro>file link</p>"#
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn it_renders_image_link_in_subdirectories() {
         // Cannot upload files with names that contain slashes... confluence will strip the
         // directories and you'll end up with a broken link in the confluence page. Instead we
@@ -238,11 +275,11 @@ mod test {
     #[test]
     fn it_makes_absolute_path() -> TestResult {
         let image_url = String::from("./assets/image.png");
-        let page_path = PathBuf::from("/tmp/foo/bar");
-        let attachment = ImageAttachment::new(&image_url, &page_path);
+        let page_path = PathBuf::from("/tmp/foo/bar/index.md");
+        let attachment = Attachment::image(LocalLink::from_str(&image_url, &page_path)?);
 
         assert_eq!(
-            attachment.path,
+            attachment.link.target,
             PathBuf::from("/tmp/foo/bar/assets/image.png")
         );
 

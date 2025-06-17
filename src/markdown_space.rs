@@ -99,9 +99,10 @@ impl<'a> MarkdownSpace<'a> {
     pub fn space_relative_path_string(&self, page_path: &Path) -> Result<String> {
         let space_relative_path = page_path.strip_prefix(&self.dir).map_err(|_e| {
             ConfluenceError::generic_error(format!(
-                "Page is not in space directory {}: {}",
+                "Page is not in space directory {}: {} - {}",
                 self.dir.display(),
-                page_path.display()
+                page_path.display(),
+                _e
             ))
         })?;
 
@@ -153,7 +154,7 @@ impl<'a> MarkdownSpace<'a> {
                     .local_links
                     .iter()
                     .filter_map(|local_link| {
-                        if !self.dir.join(&local_link.path).exists() {
+                        if !local_link.target.exists() {
                             Some(local_link.to_string())
                         } else {
                             None
@@ -164,7 +165,11 @@ impl<'a> MarkdownSpace<'a> {
                 if !missing_files.is_empty() {
                     return Err(ConfluenceError::MissingFileLink {
                         source_file: markdown_page.source.clone(),
-                        local_links: missing_files.join(","),
+                        local_links: missing_files
+                            .iter()
+                            .map(|l| self.space_relative_path_string(&PathBuf::from(l)).unwrap())
+                            .collect::<Vec<String>>()
+                            .join(","),
                     }
                     .into());
                 };
@@ -173,8 +178,11 @@ impl<'a> MarkdownSpace<'a> {
                     .attachments
                     .iter()
                     .filter_map(|attachment| {
-                        if !attachment.path.exists() {
-                            Some(self.space_relative_path_string(&attachment.path).unwrap())
+                        if !attachment.link.target.exists() {
+                            Some(
+                                self.space_relative_path_string(&attachment.link.target)
+                                    .unwrap(),
+                            )
                         } else {
                             None
                         }
@@ -219,8 +227,8 @@ mod tests {
     use assert_fs::fixture::{FileTouch, FileWriteStr as _, PathChild};
 
     use crate::{
-        attachments::ImageAttachment, error::TestResult, markdown_page::MarkdownPage,
-        template_renderer::TemplateRenderer,
+        attachments::Attachment, error::TestResult, local_link::LocalLink,
+        markdown_page::MarkdownPage, template_renderer::TemplateRenderer,
     };
 
     use super::MarkdownSpace;
@@ -311,7 +319,6 @@ mod tests {
 
         assert!(result.is_err());
         let error = result.err().unwrap();
-        println!("Actual error: {:#?}", error);
         assert!(format!("{:#}", error).contains("Duplicate title 'The Same Heading' in [markdown"))
     }
 
@@ -373,7 +380,6 @@ mod tests {
 
         let result = parse_default(&mut space);
         let acutal_error = format!("{:#}", result.err().unwrap());
-        println!("Actual error: {:#}", acutal_error);
         assert!(acutal_error.contains(
             "Missing file for attachment link in [subpage/image.md] to [subpage/image_does_not_exist.png]"
         ));
@@ -406,11 +412,38 @@ mod tests {
 
         assert_eq!(
             page.attachments,
-            vec![ImageAttachment::new(
+            vec![Attachment::image(LocalLink::from_str(
                 "assets/image.png",
-                temp_markdown.path().parent().unwrap()
-            )]
+                temp_markdown.path()
+            )?)]
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_links_non_image_attachments() -> TestResult {
+        let temp = assert_fs::TempDir::new()?;
+        let test_markdown = temp.child("test/index.md");
+        test_markdown
+            .write_str("# Page 1\nLink to text file : [Some Text File](./some-text-file.txt)\n")?;
+        temp.child("test/some-text-file.txt").touch()?;
+
+        let mut space =
+            MarkdownSpace::from_directory(temp.child("test").path()).expect("Space loads");
+
+        let result = parse_default(&mut space)?;
+
+        let page = &result
+            .iter()
+            .find(|x| x.title == "Page 1")
+            .ok_or(anyhow!("Expected our page to parse, but didn't find it"))?;
+
+        assert_eq!(page.warnings, Vec::<String>::default());
+
+        let local_link = LocalLink::from_str("./some-text-file.txt", test_markdown.path())?;
+
+        assert_eq!(page.attachments, vec![Attachment::file(local_link)]);
 
         Ok(())
     }

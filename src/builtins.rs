@@ -175,7 +175,6 @@ mod test {
 
         assert!(result.is_ok());
         let s = result.unwrap();
-        println!("s: {:#}", s);
         assert!(s.to_string().contains(r#"label in (\"foo\",\"bar\")"#));
 
         Ok(())
@@ -206,7 +205,6 @@ metadata:
         )?;
 
         // assert_eq!(rendered_page.content.trim(), "");
-        println!("{}", rendered_page.content.trim());
 
         let parsed_html = Html::parse_fragment(rendered_page.content.trim());
         let parsed_table = extract_properties_table(parsed_html);
@@ -237,7 +235,6 @@ metadata:
         )?;
 
         // assert_eq!(rendered_page.content.trim(), "");
-        println!("{}", rendered_page.content.trim());
 
         let parsed_html = Html::parse_fragment(rendered_page.content.trim());
         let parsed_table = extract_properties_table(parsed_html);

@@ -74,7 +74,7 @@ Entering `---` should result in a horizontal rule in Confluence like this:
 
 Check out the home page here: [Home Page](./index.md)
 
-And a link to a section in this page: [Code](#code)
+And a link to a section in this page: [Code](#Code)
 
 And a link to a section in another page: [Sub page section](subpages/subpage1.md#Sub-Page-Section)
 

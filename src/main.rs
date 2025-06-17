@@ -107,7 +107,7 @@ fn main() -> Result<ExitCode> {
     match sync_space(confluence_client, &mut markdown_space, args) {
         Ok(_) => Ok(ExitCode::SUCCESS),
         Err(err) => {
-            eprintln!("Error: {:#}", err);
+            eprintln!("Error: {:#?}", err);
             Ok(ExitCode::FAILURE)
         }
     }

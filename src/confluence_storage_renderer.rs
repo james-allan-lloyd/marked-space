@@ -336,7 +336,6 @@ impl<'o> ConfluenceStorageRenderer<'o> {
         // opening tags, then push the node back onto the stack for the
         // post-order traversal phase, then push the children in reverse order
         // onto the stack and begin rendering first child.
-
         enum Phase {
             Pre,
             Post,

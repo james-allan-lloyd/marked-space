@@ -129,7 +129,7 @@ impl LinkGenerator {
         )
     }
 
-    fn get_file_url(&self, filename: &Path) -> Option<String> {
+    fn get_page_url(&self, filename: &Path) -> Option<String> {
         if filename == PathBuf::from("index.md") {
             return Some(self.id_to_url(&self.homepage_id));
         }
@@ -159,36 +159,48 @@ impl LinkGenerator {
             return Ok(());
         }
 
+        // TODO: really should just look this up based on the url text
         let local_link = relative_local_link(nl, confluence_formatter);
-        confluence_formatter.output.write_all(b"<a href=\"")?;
+        if local_link.is_page() {
+            confluence_formatter.output.write_all(b"<a href=\"")?;
 
-        let mut link_empty = true;
+            let mut link_empty = true;
 
-        if let Some(url) = self.get_file_url(&local_link.path) {
-            link_empty = false;
-            confluence_formatter.output.write_all(url.as_bytes())?;
-        }
+            if let Some(url) = self.get_page_url(&local_link.target) {
+                link_empty = false;
+                confluence_formatter.output.write_all(url.as_bytes())?;
+            }
 
-        if let Some(anchor) = local_link.anchor {
-            link_empty = false;
-            confluence_formatter.output.write_all(b"#")?;
-            confluence_formatter.output.write_all(anchor.as_bytes())?;
-        }
+            if let Some(anchor) = local_link.anchor {
+                link_empty = false;
+                confluence_formatter.output.write_all(b"#")?;
+                confluence_formatter.output.write_all(anchor.as_bytes())?;
+            }
 
-        if link_empty {
-            print_warning(&format!(
-                "file link {} in {} couldn't be resolved",
-                &local_link.path.display(),
-                &confluence_formatter.source.display(),
-            ));
-        }
+            if link_empty {
+                print_warning(&format!(
+                    "file link {} in {} couldn't be resolved",
+                    &local_link.text,
+                    &confluence_formatter.source.display(),
+                ));
+            }
 
-        confluence_formatter.output.write_all(b"\">")?;
-
-        if no_children {
+            confluence_formatter.output.write_all(b"\">")?;
+            if no_children {
+                confluence_formatter.output.write_all(
+                    self.get_file_title(&local_link.target)
+                        .expect("Link should be registered")
+                        .as_bytes(),
+                )?;
+            }
+        } else {
+            confluence_formatter.output.write_all(b"<ac:structured-macro ac:name=\"view-file\"><ac:parameter ac:name=\"name\"><ri:attachment ri:filename=\"")?;
             confluence_formatter
                 .output
-                .write_all(self.get_file_title(&local_link.path).unwrap().as_bytes())?;
+                .write_all(local_link.attachment_name().as_bytes())?;
+            confluence_formatter
+                .output
+                .write_all(b"\"/></ac:parameter></ac:structured-macro>")?;
         }
 
         Ok(())
@@ -196,10 +208,17 @@ impl LinkGenerator {
 
     pub fn exit(
         &self,
-        _nl: &NodeLink,
+        nl: &NodeLink,
         confluence_formatter: &mut ConfluenceStorageRenderer,
     ) -> io::Result<()> {
-        confluence_formatter.output.write_all(b"</a>")?;
+        if nl.url.contains("://") {
+            confluence_formatter.output.write_all(b"</a>")?;
+        } else {
+            let local_link = relative_local_link(nl, confluence_formatter);
+            if local_link.is_page() {
+                confluence_formatter.output.write_all(b"</a>")?;
+            }
+        }
 
         Ok(())
     }
@@ -241,10 +260,10 @@ impl LinkGenerator {
         attachment_path: &str,
         id: &str,
     ) {
-        let result = self.page_attachment_pair_to_id.insert(
-            (String::from(page_source), String::from(attachment_path)),
-            String::from(id),
-        );
+        let key = (String::from(page_source), String::from(attachment_path));
+        let result = self
+            .page_attachment_pair_to_id
+            .insert(key, String::from(id));
         assert!(result.is_none(), "Should only register an attachment once")
     }
 }
@@ -253,7 +272,7 @@ fn relative_local_link(
     nl: &NodeLink,
     confluence_formatter: &mut ConfluenceStorageRenderer<'_>,
 ) -> LocalLink {
-    LocalLink::from_str(&nl.url, confluence_formatter.source.parent().unwrap()).unwrap()
+    LocalLink::from_str(&nl.url, &confluence_formatter.source).unwrap()
 }
 
 #[cfg(test)]
@@ -275,7 +294,7 @@ mod test {
     fn it_returns_homepage_link_for_root_index_md() -> TestResult {
         let link_generator = LinkGenerator::new("example.atlassian.net", "Test", "999");
 
-        let url_for_file = link_generator.get_file_url(&PathBuf::from("index.md"));
+        let url_for_file = link_generator.get_page_url(&PathBuf::from("index.md"));
         assert_eq!(
             url_for_file,
             Some("https://example.atlassian.net/wiki/spaces/Test/pages/999".into())
@@ -313,7 +332,7 @@ mod test {
 
         assert!(link_generator.get_nodes_to_create().is_empty());
 
-        let url_for_file = link_generator.get_file_url(&PathBuf::from(&source));
+        let url_for_file = link_generator.get_page_url(&PathBuf::from(&source));
         assert!(url_for_file.is_some());
 
         Ok(())
@@ -349,7 +368,7 @@ mod test {
 
         assert!(link_generator.get_nodes_to_create().is_empty());
 
-        let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
+        let url_for_file = link_generator.get_page_url(&PathBuf::from(&new_source));
         let expected_url =
             String::from("https://example.atlassian.net/wiki/spaces/TEST/pages/9991");
         assert_eq!(url_for_file, Some(expected_url));
@@ -386,7 +405,7 @@ mod test {
             }),
         });
 
-        let url_for_file = link_generator.get_file_url(&PathBuf::from(&new_source));
+        let url_for_file = link_generator.get_page_url(&PathBuf::from(&new_source));
         assert_eq!(url_for_file, None);
 
         Ok(())

@@ -47,7 +47,7 @@ impl ConfluenceError {
                     Ok(j) => j,
                     Err(_) => todo!(),
                 };
-                json["errors"][0]["title"].to_string()
+                json["errors"][0].to_string()
             }
         };
         ConfluenceError::FailedRequest {
