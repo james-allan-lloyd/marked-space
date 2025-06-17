@@ -275,7 +275,7 @@ mod test {
     #[test]
     fn it_makes_absolute_path() -> TestResult {
         let image_url = String::from("./assets/image.png");
-        let page_path = PathBuf::from("/tmp/foo/bar");
+        let page_path = PathBuf::from("/tmp/foo/bar/index.md");
         let attachment = Attachment::image(LocalLink::from_str(&image_url, &page_path)?);
 
         assert_eq!(

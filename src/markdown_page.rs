@@ -102,7 +102,6 @@ impl<'a> MarkdownPage<'a> {
         content: &str,
         fm: FrontMatter,
     ) -> Result<MarkdownPage<'a>> {
-        let parent = markdown_page.parent().unwrap();
         let root: &AstNode<'_> = parse_document(arena, content, &Self::options());
 
         fn iter_nodes<'a, F>(node: &'a AstNode<'a>, f: &mut F)
@@ -127,7 +126,10 @@ impl<'a> MarkdownPage<'a> {
         let mut attachments = Vec::<Attachment>::default();
         if let Some(source) = &fm.cover.source {
             if LocalLink::is_local_link(source) {
-                attachments.push(Attachment::image(LocalLink::from_str(source, parent)?));
+                attachments.push(Attachment::image(LocalLink::from_str(
+                    source,
+                    markdown_page,
+                )?));
             }
         }
         let mut local_links = Vec::<LocalLink>::default();
@@ -146,13 +148,13 @@ impl<'a> MarkdownPage<'a> {
             NodeValue::Image(image) => {
                 if LocalLink::is_local_link(&image.url) {
                     attachments.push(Attachment::image(
-                        LocalLink::from_str(&image.url, parent).unwrap(),
+                        LocalLink::from_str(&image.url, markdown_page).unwrap(),
                     ));
                 }
             }
             NodeValue::Link(node_link) => {
                 if LocalLink::is_local_link(&node_link.url) {
-                    if let Ok(local_link) = LocalLink::from_str(&node_link.url, parent) {
+                    if let Ok(local_link) = LocalLink::from_str(&node_link.url, markdown_page) {
                         if local_link.is_page() {
                             local_links.push(local_link);
                         } else {
@@ -288,6 +290,7 @@ mod tests {
 
     use std::path::PathBuf;
 
+    use assert_fs::prelude::{FileTouch, PathChild};
     use comrak::{nodes::AstNode, Arena};
 
     use crate::confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData};
@@ -365,7 +368,7 @@ mod tests {
             vec![LocalLink {
                 text: format!("{:#}#some-anchor", link_filename.display().to_string()),
                 target: link_filename,
-                page_path: PathBuf::default(), // from("some-page.md"),
+                page_path: PathBuf::from("page.md"),
                 anchor: Some(String::from("some-anchor"))
             }]
         );
@@ -416,6 +419,47 @@ mod tests {
         let content = page.to_html_string(&link_generator)?;
         let expected = format!("<a href=\"{}\">{}</a>", link_url, "A Linked Page");
         assert!(content.contains(expected.as_str()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_links_to_anchors() -> TestResult {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let test_link_target = temp.child("testdir/index.md");
+        test_link_target.touch().unwrap();
+        let link_filename = PathBuf::from("testdir");
+        let link_text = String::from("");
+        let link_url = String::from("https://example.atlassian.net/wiki/spaces/TEST/pages/47");
+        let arena = Arena::<AstNode>::new();
+        let markdown_content = &format!(
+            "# My Page Title\n\nMy page content: [{}]({}#anchor)",
+            link_text,
+            link_filename.display()
+        );
+        let temp_page = temp.child("page.md");
+        let page_path = temp_page.path();
+        let page = page_from_str(&page_path.display().to_string(), markdown_content, &arena)?;
+        let linked_page = page_from_str(
+            &test_link_target.path().display().to_string(),
+            "# A Linked Page\n",
+            &arena,
+        )?;
+
+        let mut link_generator = LinkGenerator::default_test();
+
+        link_generator.register_markdown_page(&page)?;
+        link_generator.register_markdown_page(&linked_page)?;
+        link_generator.register_confluence_node(&dummy_confluence_page("A Linked Page", "47"));
+
+        let content = page.to_html_string(&link_generator)?;
+        let expected = format!("<a href=\"{}#anchor\">{}</a>", link_url, "A Linked Page");
+        assert!(
+            content.contains(expected.as_str()),
+            "Expected \"{}\" to contain \"{}\"",
+            content.trim(),
+            expected
+        );
 
         Ok(())
     }

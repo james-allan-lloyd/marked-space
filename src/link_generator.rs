@@ -159,6 +159,7 @@ impl LinkGenerator {
             return Ok(());
         }
 
+        // TODO: really should just look this up based on the url text
         let local_link = relative_local_link(nl, confluence_formatter);
         if local_link.is_page() {
             confluence_formatter.output.write_all(b"<a href=\"")?;
@@ -186,9 +187,11 @@ impl LinkGenerator {
 
             confluence_formatter.output.write_all(b"\">")?;
             if no_children {
-                confluence_formatter
-                    .output
-                    .write_all(self.get_file_title(&local_link.target).unwrap().as_bytes())?;
+                confluence_formatter.output.write_all(
+                    self.get_file_title(&local_link.target)
+                        .expect("Link should be registered")
+                        .as_bytes(),
+                )?;
             }
         } else {
             confluence_formatter.output.write_all(b"<ac:structured-macro ac:name=\"view-file\"><ac:parameter ac:name=\"name\"><ri:attachment ri:filename=\"")?;
@@ -269,7 +272,7 @@ fn relative_local_link(
     nl: &NodeLink,
     confluence_formatter: &mut ConfluenceStorageRenderer<'_>,
 ) -> LocalLink {
-    LocalLink::from_str(&nl.url, confluence_formatter.source.parent().unwrap()).unwrap()
+    LocalLink::from_str(&nl.url, &confluence_formatter.source).unwrap()
 }
 
 #[cfg(test)]

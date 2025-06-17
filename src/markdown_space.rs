@@ -414,7 +414,7 @@ mod tests {
             page.attachments,
             vec![Attachment::image(LocalLink::from_str(
                 "assets/image.png",
-                temp_markdown.path().parent().unwrap()
+                temp_markdown.path()
             )?)]
         );
 
@@ -441,10 +441,7 @@ mod tests {
 
         assert_eq!(page.warnings, Vec::<String>::default());
 
-        let local_link = LocalLink::from_str(
-            "./some-text-file.txt",
-            test_markdown.path().parent().unwrap(),
-        )?;
+        let local_link = LocalLink::from_str("./some-text-file.txt", test_markdown.path())?;
 
         assert_eq!(page.attachments, vec![Attachment::file(local_link)]);
 
