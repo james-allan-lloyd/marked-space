@@ -126,7 +126,7 @@ impl<'a> MarkdownPage<'a> {
 
         let mut attachments = Vec::<Attachment>::default();
         if let Some(source) = &fm.cover.source {
-            if MarkdownPage::is_local_link(source) {
+            if LocalLink::is_local_link(source) {
                 attachments.push(Attachment::image(source, parent));
             }
         }
@@ -144,15 +144,12 @@ impl<'a> MarkdownPage<'a> {
                 }
             }
             NodeValue::Image(image) => {
-                if MarkdownPage::is_local_link(&image.url) {
+                if LocalLink::is_local_link(&image.url) {
                     attachments.push(Attachment::image(&image.url, parent));
                 }
             }
             NodeValue::Link(node_link) => {
-                if !(node_link.url.starts_with("http://")
-                    || node_link.url.starts_with("https://")
-                    || node_link.url.starts_with("ac:"))
-                {
+                if LocalLink::is_local_link(&node_link.url) {
                     if let Ok(local_link) = LocalLink::from_str(&node_link.url, parent) {
                         if local_link.is_page() {
                             local_links.push(local_link);
@@ -241,10 +238,6 @@ impl<'a> MarkdownPage<'a> {
 
     pub(crate) fn is_folder(&self) -> bool {
         self.front_matter.folder
-    }
-
-    pub fn is_local_link(link: &str) -> bool {
-        !link.starts_with("http")
     }
 }
 

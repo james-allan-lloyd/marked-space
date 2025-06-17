@@ -1,6 +1,6 @@
 use std::fmt;
 use std::marker::PhantomData;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use serde::de::{Deserializer, MapAccess, Visitor};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use void::Void;
 
-use crate::local_link::{self, LocalLink};
+use crate::local_link::LocalLink;
 use crate::{link_generator::LinkGenerator, markdown_page::MarkdownPage};
 
 pub fn string_or_struct<'de, T, D>(deserializer: D) -> std::result::Result<T, D::Error>
@@ -87,7 +87,7 @@ pub fn parse_cover(page: &MarkdownPage<'_>, link_generator: &LinkGenerator) -> s
     if let Some(source) = &page.front_matter.cover.source {
         dbg!((source, &page.source));
         let position = page.front_matter.cover.position;
-        let result = if MarkdownPage::is_local_link(source) {
+        let result = if LocalLink::is_local_link(source) {
             let local_link =
                 LocalLink::from_str(source, &PathBuf::from(&page.source)).expect("Should be link");
             json!({"id": link_generator.attachment_id(&local_link.attachment_name(), page).expect("should have attachment id"), "position": position})

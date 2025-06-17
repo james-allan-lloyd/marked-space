@@ -38,6 +38,11 @@ pub fn simplify_path(p: &Path) -> Result<PathBuf> {
 }
 
 impl LocalLink {
+    // TODO: make from_str return an optional local link?
+    pub fn is_local_link(text: &str) -> bool {
+        !(text.starts_with("http://") || text.starts_with("https://") || text.starts_with("ac:"))
+    }
+
     fn split_anchor(text: &str, page_path: &Path) -> Result<(PathBuf, Option<String>)> {
         if let Some(hash_pos) = text.find('#') {
             let (p, a) = text.split_at(hash_pos);
@@ -96,6 +101,8 @@ impl Display for LocalLink {
 #[cfg(test)]
 mod test {
     use std::{path::PathBuf, str::FromStr};
+
+    use assert_fs::prelude::{FileTouch, PathChild};
 
     use crate::error::TestResult;
 
@@ -165,6 +172,19 @@ mod test {
         let local_link = LocalLink::from_str("./test.xls", &PathBuf::default())?;
         assert_eq!(local_link.target, PathBuf::from_str("test.xls")?);
         assert_eq!(local_link.attachment_name(), "._test.xls");
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_resolves_links_to_directories_to_index_md() -> TestResult {
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.child("testdir/index.md").touch().unwrap();
+        let local_link = LocalLink::from_str("testdir", temp.path())?;
+        let mut expected_taget = temp.to_path_buf();
+        expected_taget.push(PathBuf::from("testdir/index.md"));
+        assert_eq!(local_link.target, expected_taget);
+        assert!(local_link.is_page());
 
         Ok(())
     }
