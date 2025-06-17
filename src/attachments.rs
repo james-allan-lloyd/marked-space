@@ -11,7 +11,6 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{self, BufReader, Write},
-    path::{Path, PathBuf},
 };
 
 use anyhow::Context;
@@ -34,33 +33,22 @@ pub enum AttachmentKind {
 
 #[derive(Debug, PartialEq)]
 pub struct Attachment {
-    // pub url: String,   // how this was specified in the markdown
-    pub path: PathBuf, // the full path to the file
-    pub name: String,  // a simple name
+    pub link: LocalLink,
     pub kind: AttachmentKind,
 }
 
 impl Attachment {
     // TODO: use local link here too?
-    pub(crate) fn image(source: &str, parent: &Path) -> Attachment {
-        let mut path = PathBuf::from(parent);
-        path.push(source);
+    pub(crate) fn image(link: LocalLink) -> Attachment {
         Attachment {
-            path,
-            // url: String::from(source),
-            name: link_to_name(source),
+            link,
             kind: AttachmentKind::Image,
         }
     }
 
-    pub(crate) fn file(local_link: &LocalLink) -> Attachment {
-        // let mut path = PathBuf::from(parent);
-        // path.push(local_link.path.clone());
-
+    pub(crate) fn file(link: LocalLink) -> Attachment {
         Attachment {
-            path: local_link.target.clone(),
-            // url: local_link.path.display().to_string(),
-            name: local_link.attachment_name(),
+            link,
             kind: AttachmentKind::File,
         }
     }
@@ -133,13 +121,15 @@ pub fn sync_page_attachments(
     }
 
     for attachment in attachments.iter() {
-        let attachment_name = attachment.name.clone();
+        let attachment_name = attachment.link.attachment_name();
 
         remove_titles_to_id.remove(&attachment_name);
 
-        dbg!(&attachment);
-        let op = SyncOperation::start(format!("[{}] attachment", attachment.path.display()), true);
-        let input = File::open(&attachment.path)
+        let op = SyncOperation::start(
+            format!("[{}] attachment", attachment.link.target.display()),
+            true,
+        );
+        let input = File::open(&attachment.link.target)
             .with_context(|| format!("Opening attachment for {}", attachment_name))?;
         let reader = BufReader::new(input);
         let hashstring = sha256_digest(reader)?;
@@ -148,16 +138,19 @@ pub fn sync_page_attachments(
         {
             // still add the existing attachment to lookup for covers
             let id = title_to_fileid[&attachment_name].clone();
-            link_generator.register_attachment_id(page_source, &attachment.name, &id);
+            link_generator.register_attachment_id(
+                page_source,
+                &attachment.link.attachment_name(),
+                &id,
+            );
             op.end(Status::Skipped);
             return Ok(());
         }
 
-        let file_part = Part::file(&attachment.path)
-            .context(format!("Opening {}", attachment.path.display()))?
-            .file_name(attachment.name.clone());
+        let file_part = Part::file(&attachment.link.target)
+            .context(format!("Opening {}", attachment.link.target.display()))?
+            .file_name(attachment.link.attachment_name());
 
-        dbg!("opened");
         let response =
             confluence_client.create_or_update_attachment(page_id, file_part, &hashstring)?;
 
@@ -180,7 +173,11 @@ pub fn sync_page_attachments(
             assert_eq!(results[0].title, attachment_name);
             let id = results[0].extensions["fileId"].as_str().unwrap();
             // add new attachment to lookup
-            link_generator.register_attachment_id(page_source, &attachment.name, id);
+            link_generator.register_attachment_id(
+                page_source,
+                &attachment.link.attachment_name(),
+                id,
+            );
         }
 
         op.end(Status::Updated);
@@ -279,10 +276,10 @@ mod test {
     fn it_makes_absolute_path() -> TestResult {
         let image_url = String::from("./assets/image.png");
         let page_path = PathBuf::from("/tmp/foo/bar");
-        let attachment = Attachment::image(&image_url, &page_path);
+        let attachment = Attachment::image(LocalLink::from_str(&image_url, &page_path)?);
 
         assert_eq!(
-            attachment.path,
+            attachment.link.target,
             PathBuf::from("/tmp/foo/bar/assets/image.png")
         );
 

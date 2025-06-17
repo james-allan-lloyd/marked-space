@@ -258,7 +258,6 @@ impl LinkGenerator {
         id: &str,
     ) {
         let key = (String::from(page_source), String::from(attachment_path));
-        dbg!(&key);
         let result = self
             .page_attachment_pair_to_id
             .insert(key, String::from(id));

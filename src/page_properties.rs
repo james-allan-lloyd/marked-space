@@ -104,7 +104,6 @@ pub fn sync_page_properties(
                 json!({"key": property_update.key, "value": property_update.value}),
             )
         } else {
-            dbg!(property_update);
             print_status(
                 Status::Updated,
                 &format!("property {}", &property_update.key),

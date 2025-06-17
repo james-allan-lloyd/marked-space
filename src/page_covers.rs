@@ -85,7 +85,6 @@ impl FromStr for Cover {
 
 pub fn parse_cover(page: &MarkdownPage<'_>, link_generator: &LinkGenerator) -> serde_json::Value {
     if let Some(source) = &page.front_matter.cover.source {
-        dbg!((source, &page.source));
         let position = page.front_matter.cover.position;
         let result = if LocalLink::is_local_link(source) {
             let local_link =

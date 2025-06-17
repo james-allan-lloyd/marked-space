@@ -178,8 +178,11 @@ impl<'a> MarkdownSpace<'a> {
                     .attachments
                     .iter()
                     .filter_map(|attachment| {
-                        if !attachment.path.exists() {
-                            Some(self.space_relative_path_string(&attachment.path).unwrap())
+                        if !attachment.link.target.exists() {
+                            Some(
+                                self.space_relative_path_string(&attachment.link.target)
+                                    .unwrap(),
+                            )
                         } else {
                             None
                         }
@@ -409,10 +412,10 @@ mod tests {
 
         assert_eq!(
             page.attachments,
-            vec![Attachment::image(
+            vec![Attachment::image(LocalLink::from_str(
                 "assets/image.png",
                 temp_markdown.path().parent().unwrap()
-            )]
+            )?)]
         );
 
         Ok(())
@@ -443,7 +446,7 @@ mod tests {
             test_markdown.path().parent().unwrap(),
         )?;
 
-        assert_eq!(page.attachments, vec![Attachment::file(&local_link,)]);
+        assert_eq!(page.attachments, vec![Attachment::file(local_link)]);
 
         Ok(())
     }

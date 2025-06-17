@@ -127,7 +127,7 @@ impl<'a> MarkdownPage<'a> {
         let mut attachments = Vec::<Attachment>::default();
         if let Some(source) = &fm.cover.source {
             if LocalLink::is_local_link(source) {
-                attachments.push(Attachment::image(source, parent));
+                attachments.push(Attachment::image(LocalLink::from_str(source, parent)?));
             }
         }
         let mut local_links = Vec::<LocalLink>::default();
@@ -145,7 +145,9 @@ impl<'a> MarkdownPage<'a> {
             }
             NodeValue::Image(image) => {
                 if LocalLink::is_local_link(&image.url) {
-                    attachments.push(Attachment::image(&image.url, parent));
+                    attachments.push(Attachment::image(
+                        LocalLink::from_str(&image.url, parent).unwrap(),
+                    ));
                 }
             }
             NodeValue::Link(node_link) => {
@@ -154,7 +156,7 @@ impl<'a> MarkdownPage<'a> {
                         if local_link.is_page() {
                             local_links.push(local_link);
                         } else {
-                            attachments.push(Attachment::file(&local_link));
+                            attachments.push(Attachment::file(local_link));
                         }
                     } else {
                         errors.push(format!("Failed to parse local link: {}", node_link.url));
