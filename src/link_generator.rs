@@ -257,10 +257,11 @@ impl LinkGenerator {
         attachment_path: &str,
         id: &str,
     ) {
-        let result = self.page_attachment_pair_to_id.insert(
-            (String::from(page_source), String::from(attachment_path)),
-            String::from(id),
-        );
+        let key = (String::from(page_source), String::from(attachment_path));
+        dbg!(&key);
+        let result = self
+            .page_attachment_pair_to_id
+            .insert(key, String::from(id));
         assert!(result.is_none(), "Should only register an attachment once")
     }
 }

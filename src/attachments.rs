@@ -137,6 +137,7 @@ pub fn sync_page_attachments(
 
         remove_titles_to_id.remove(&attachment_name);
 
+        dbg!(&attachment);
         let op = SyncOperation::start(format!("[{}] attachment", attachment.path.display()), true);
         let input = File::open(&attachment.path)
             .with_context(|| format!("Opening attachment for {}", attachment_name))?;
@@ -152,8 +153,11 @@ pub fn sync_page_attachments(
             return Ok(());
         }
 
-        let file_part = Part::file(&attachment.path)?.file_name(attachment.name.clone());
+        let file_part = Part::file(&attachment.path)
+            .context(format!("Opening {}", attachment.path.display()))?
+            .file_name(attachment.name.clone());
 
+        dbg!("opened");
         let response =
             confluence_client.create_or_update_attachment(page_id, file_part, &hashstring)?;
 

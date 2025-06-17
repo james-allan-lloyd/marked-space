@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde_json::json;
 
 use crate::console::{print_status, Status};
-use crate::error::Result;
+use crate::error::{ConfluenceError, Result};
 use crate::page_covers::parse_cover;
 use crate::page_emojis::parse_emoji;
 use crate::responses::{self, ContentProperty, MultiEntityResult};
@@ -104,6 +104,7 @@ pub fn sync_page_properties(
                 json!({"key": property_update.key, "value": property_update.value}),
             )
         } else {
+            dbg!(property_update);
             print_status(
                 Status::Updated,
                 &format!("property {}", &property_update.key),
@@ -122,7 +123,10 @@ pub fn sync_page_properties(
             )
         };
 
-        update_response?.error_for_status()?;
+        let response = update_response?;
+        if !response.status().is_success() {
+            return Err(ConfluenceError::failed_request(response));
+        }
     }
 
     Ok(())

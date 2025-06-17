@@ -38,23 +38,29 @@ pub fn simplify_path(p: &Path) -> Result<PathBuf> {
 }
 
 impl LocalLink {
-    pub fn from_str(text: &str, page_path: &Path) -> Result<Self> {
-        let (target, anchor) = if let Some(hash_pos) = text.find('#') {
+    fn split_anchor(text: &str, page_path: &Path) -> Result<(PathBuf, Option<String>)> {
+        if let Some(hash_pos) = text.find('#') {
             let (p, a) = text.split_at(hash_pos);
             if a.len() <= 1 {
                 return Err(ConfluenceError::generic_error("Cannot have empty anchors"));
             }
-            (
+            Ok((
                 simplify_path(&page_path.join(PathBuf::from_str(p)?))?,
                 Some(String::from(&a[1..])),
-            )
+            ))
         } else {
-            (
+            Ok((
                 simplify_path(&page_path.join(PathBuf::from_str(text)?))?,
                 None,
-            )
-        };
+            ))
+        }
+    }
 
+    pub fn from_str(text: &str, page_path: &Path) -> Result<Self> {
+        let (mut target, anchor) = Self::split_anchor(text, page_path)?;
+        if target.is_dir() {
+            target.push("index.md");
+        }
         Ok(LocalLink {
             text: text.to_owned(),
             page_path: page_path.to_owned(),

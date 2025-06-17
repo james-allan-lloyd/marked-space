@@ -1,3 +1,3 @@
 # Attachments
 
-[some file](./data/example-text.txt)
+[some file](data/example-text.txt)
