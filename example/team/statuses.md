@@ -4,7 +4,8 @@ status: draft
 
 # Content Statuses
 
-There should be a draft indicator above. This is enabled with the `status` key in the front matter:
+There should be a draft indicator above. This is enabled with the `status` key
+in the front matter:
 
 ```markdown
 ---

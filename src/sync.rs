@@ -200,6 +200,12 @@ fn sync_page(
         &existing_page.id,
         &markdown_page.front_matter.labels,
     )?;
+    sync_page_status(
+        confluence_client,
+        markdown_page,
+        link_generator,
+        &space.content_states,
+    )?;
     sync_page_properties(
         confluence_client,
         markdown_page,
@@ -213,12 +219,6 @@ fn sync_page(
     };
     sync_restrictions(restrictions_type, confluence_client, &existing_page)?;
 
-    sync_page_status(
-        confluence_client,
-        markdown_page,
-        link_generator,
-        &space.content_states,
-    )?;
     Ok(())
 }
 

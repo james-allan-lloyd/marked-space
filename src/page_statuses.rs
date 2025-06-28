@@ -4,8 +4,12 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    confluence_client::ConfluenceClient, error::Result, link_generator::LinkGenerator,
-    markdown_page::MarkdownPage, responses,
+    confluence_client::ConfluenceClient,
+    console::{self, print_status},
+    error::Result,
+    link_generator::LinkGenerator,
+    markdown_page::MarkdownPage,
+    responses,
 };
 
 #[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Hash)]
@@ -18,6 +22,17 @@ pub enum PageStatus {
     ReadyForReview,
     #[serde(rename = "verified")]
     Verified,
+}
+
+impl std::fmt::Display for PageStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PageStatus::RoughDraft => f.write_str("draft"),
+            PageStatus::InProgress => f.write_str("in-progress"),
+            PageStatus::ReadyForReview => f.write_str("ready"),
+            PageStatus::Verified => f.write_str("verified"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -56,14 +71,36 @@ pub fn sync_page_status(
     link_generator: &LinkGenerator,
     content_states: &ContentStates,
 ) -> Result<()> {
+    let id = &link_generator
+        .get_file_id(&PathBuf::from(&markdown_page.source))
+        .expect("Should have id for file");
+    let current_state: serde_json::Value =
+        client.get_content_state(id)?.error_for_status()?.json()?;
     if let Some(content_status) = &markdown_page.front_matter.status {
+        let desired_state = content_states.to_confluence_json(content_status)?;
+        if desired_state != current_state["contentState"] {
+            print_status(
+                console::Status::Updated,
+                &format!(
+                    "[{}] status is now {}",
+                    markdown_page.source, content_status
+                ),
+            );
+            client
+                .set_content_state(id, "current", desired_state)?
+                .error_for_status()?;
+        }
+    } else if !current_state["contentState"].is_null() {
+        print_status(
+            console::Status::Deleted,
+            &format!("[{}] removed status", markdown_page.source),
+        );
         client
-            .set_content_state(
+            .remove_content_state(
                 &link_generator
                     .get_file_id(&PathBuf::from(&markdown_page.source))
                     .expect("Should have id for file"),
                 "current",
-                content_states.to_confluence_json(content_status)?,
             )?
             .error_for_status()?;
     }
@@ -157,6 +194,13 @@ mod test {
 
         let mock = mock_set_content_state(&mut server);
 
+        mock_current_content_state(
+            &mut server,
+            json!({
+              "lastUpdated": "<string>"
+            }),
+        );
+
         let response = json!([{"id":13500442,"color":"#ffc400","name":"Rough draft"}]); // ,{"id":13500443,"color":"#2684ff","name":"In progress"},{"id":13500444,"color":"#57d9a3","name":"Ready for review"},{"id":37912577,"color":"#1d7afc","name":"Verified"}]);
         let states = serde_json::from_value::<Vec<responses::ContentState>>(response).unwrap();
         let content_states = ContentStates::new(&states);
@@ -177,6 +221,73 @@ mod test {
         Ok(())
     }
 
+    #[test]
+    fn it_removes_page_status() -> TestResult {
+        let mut server = mockito::Server::new();
+        let host = server.host_with_port();
+
+        let mock = mock_delete_content_state(&mut server);
+        mock_current_content_state(
+            &mut server,
+            json!({
+              "contentState": {
+                "id": 1,
+                "name": "<string>",
+                "color": "<string>"
+              },
+              "lastUpdated": "<string>"
+            }),
+        );
+
+        let response = json!([{"id":13500442,"color":"#ffc400","name":"Rough draft"}]); // ,{"id":13500443,"color":"#2684ff","name":"In progress"},{"id":13500444,"color":"#57d9a3","name":"Ready for review"},{"id":37912577,"color":"#1d7afc","name":"Verified"}]);
+        let states = serde_json::from_value::<Vec<responses::ContentState>>(response).unwrap();
+        let content_states = ContentStates::new(&states);
+
+        let markdown_space = MarkdownSpace::default("test", &PathBuf::from("test"));
+        let mut link_generator = LinkGenerator::default_test();
+        let markdown_page = register_mark_and_conf_page(
+            "1",
+            &mut link_generator,
+            markdown_space.page_from_str("index.md", "---\n\n---\n# Title\nContent")?,
+        )?;
+
+        let client = ConfluenceClient::new_insecure(&host);
+        sync_page_status(&client, &markdown_page, &link_generator, &content_states)?;
+
+        mock.assert();
+        Ok(())
+    }
+
+    fn mock_current_content_state(
+        server: &mut mockito::ServerGuard,
+        body: serde_json::Value,
+    ) -> mockito::Mock {
+        server
+            .mock("GET", "/wiki/rest/api/content/1/state")
+            .with_status(200)
+            .with_header("authorization", "Basic Og==")
+            .with_header("content-type", "application/json")
+            .with_header("X-Atlassian-Token", "no-check")
+            .with_body(body.to_string())
+            .expect(1) // only called once
+            .create()
+    }
+
+    fn mock_delete_content_state(server: &mut mockito::ServerGuard) -> mockito::Mock {
+        server
+            .mock("DELETE", "/wiki/rest/api/content/1/state")
+            .match_query(mockito::Matcher::UrlEncoded(
+                "status".into(),
+                "current".into(),
+            ))
+            .with_status(200)
+            .with_header("authorization", "Basic Og==")
+            .with_header("content-type", "application/json")
+            .with_header("X-Atlassian-Token", "no-check")
+            .expect(1) // only called once
+            .create()
+    }
+
     fn mock_set_content_state(server: &mut mockito::ServerGuard) -> mockito::Mock {
         server
             .mock("PUT", "/wiki/rest/api/content/1/state")
@@ -188,17 +299,7 @@ mod test {
             .with_header("authorization", "Basic Og==")
             .with_header("content-type", "application/json")
             .with_header("X-Atlassian-Token", "no-check")
-            .with_body(
-                json!({
-                  "contentState": {
-                    "id": 1,
-                    "name": "<string>",
-                    "color": "<string>"
-                  },
-                  "lastUpdated": "<string>"
-                })
-                .to_string(),
-            )
+            // .with_body(expected_body.to_string())
             .expect(1) // only called once
             .create()
     }

@@ -454,4 +454,25 @@ impl ConfluenceClient {
             .json(&body)
             .send()
     }
+
+    pub(crate) fn get_content_state(&self, id: &str) -> Result {
+        let url = self.rest_api(&format!("content/{}/state", id));
+        self.client
+            .get(url)
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
+
+    pub(crate) fn remove_content_state(&self, id: &str, status: &str) -> Result {
+        let url = self.rest_api(&format!("content/{}/state", id));
+        self.client
+            .delete(url)
+            .query(&[("status", status)])
+            .basic_auth(self.api_user.clone(), Some(self.api_token.clone()))
+            .header("Accept", "application/json")
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+    }
 }
