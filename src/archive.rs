@@ -109,7 +109,7 @@ mod tests {
                     message: String::from(ConfluencePageData::version_message_prefix()),
                     number: 1,
                 },
-                path: None, // "foo.md".to_string(),
+                path: Some("test.md".into()),
                 status,
             }),
         }
@@ -182,12 +182,32 @@ mod tests {
     fn it_does_not_archive_nonorphans() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let mut link_generator = test_link_generator();
-        let node = nonorphan(ContentStatus::Current);
         link_generator.register_markdown_page(&markdown_page_from_str(
             "test.md",
-            &format!("# {} \n", node.title),
+            &format!("# {} \n", "Not Orphaned Page"),
             &arena,
         )?)?;
+        let node = nonorphan(ContentStatus::Current);
+        link_generator.register_confluence_node(&node);
+
+        assert!(!link_generator.is_orphaned(&node, node.page_data().unwrap()));
+        assert!(!should_archive(&node, &link_generator));
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_does_not_archive_retitled_pages() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let mut link_generator = test_link_generator();
+        let title = "Not Orphaned Page";
+        link_generator.register_markdown_page(&markdown_page_from_str(
+            "test.md",
+            &format!("# {} Retitled\n", title),
+            &arena,
+        )?)?;
+        let node = nonorphan(ContentStatus::Current);
+        link_generator.register_confluence_node(&node);
 
         assert!(!link_generator.is_orphaned(&node, node.page_data().unwrap()));
         assert!(!should_archive(&node, &link_generator));

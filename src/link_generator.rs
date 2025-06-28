@@ -71,6 +71,29 @@ impl LinkGenerator {
         Ok(())
     }
 
+    fn link_page_to_filename(
+        &self,
+        title: &str,
+        confluence_page: &ConfluencePageData,
+    ) -> Option<String> {
+        // Map by title
+        if let Some(file) = self.title_to_file.get(title) {
+            Some(file.to_owned())
+        } else if let Some(version_path) = &confluence_page.path {
+            // Title changed
+            let p = Self::path_to_string(version_path).unwrap();
+            if self.filename_to_title.contains_key(&p) {
+                Some(p)
+            } else {
+                // Orphaned
+                None
+            }
+        } else {
+            // No path and no title match
+            None
+        }
+    }
+
     pub fn register_confluence_node(&mut self, confluence_node: &ConfluenceNode) {
         let title = confluence_node.title.clone();
         let id = confluence_node.id.clone();
@@ -82,22 +105,14 @@ impl LinkGenerator {
         if id == homepage_id {
             self.filename_to_id
                 .insert("index.md".into(), homepage_id.clone());
-            self.title_to_id.insert(title.clone(), homepage_id.clone());
-        } else {
-            self.title_to_id.insert(title.clone(), id.clone());
-            if let ConfluenceNodeType::Page(confluence_page) = &confluence_node.data {
-                if let Some(version_path) = &confluence_page.path {
-                    if let Ok(p) = Self::path_to_string(version_path) {
-                        // this is the move logic: use the path from the version string if there isn't already a mapping to the id through title.
-                        self.filename_to_id.entry(p).or_insert(id);
-                    } else {
-                        print_warning(&format!(
-                            "failed to convert {} to string",
-                            version_path.display()
-                        ));
-                    }
-                }
+        } else if let ConfluenceNodeType::Page(confluence_page) = &confluence_node.data {
+            if let Some(filename) = self.link_page_to_filename(&title, confluence_page) {
+                self.filename_to_id.insert(filename.clone(), id.clone());
+            } else {
+                // orphan
             }
+        } else {
+            // folder
         }
     }
 
@@ -109,10 +124,6 @@ impl LinkGenerator {
                 "Failed to convert path to string",
             ))
         }
-    }
-
-    pub fn has_title(&self, title: &str) -> bool {
-        self.title_to_file.contains_key(title)
     }
 
     pub fn get_file_id(&self, filename: &Path) -> Option<String> {
@@ -245,7 +256,9 @@ impl LinkGenerator {
             .version
             .message
             .starts_with(ConfluencePageData::version_message_prefix())
-            && !self.has_title(node.title.as_str())
+            && self
+                .link_page_to_filename(&node.title, confluence_page)
+                .is_none()
     }
 
     pub fn attachment_id(&self, _relative_path: &str, _page: &MarkdownPage) -> Option<String> {
@@ -282,6 +295,7 @@ mod test {
     use comrak::{nodes::AstNode, Arena};
 
     use crate::{
+        archive::should_archive,
         confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData},
         error::TestResult,
         responses::{self, ContentStatus, Version},
@@ -316,7 +330,8 @@ mod test {
             &format!("# {} \n", new_title),
             &arena,
         )?)?;
-        link_generator.register_confluence_node(&ConfluenceNode {
+
+        let node = ConfluenceNode {
             id: "1".to_string(),
             title: old_title,
             parent_id: None,
@@ -328,12 +343,15 @@ mod test {
                 path: Some(PathBuf::from(&source)),
                 status: ContentStatus::Current,
             }),
-        });
+        };
+        link_generator.register_confluence_node(&node);
 
         assert!(link_generator.get_nodes_to_create().is_empty());
 
         let url_for_file = link_generator.get_page_url(&PathBuf::from(&source));
         assert!(url_for_file.is_some());
+
+        assert!(!should_archive(&node, &link_generator));
 
         Ok(())
     }

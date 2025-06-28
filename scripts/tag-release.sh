@@ -12,7 +12,7 @@ fi
 
 echo $VERSION
 git tag $FORCE v$VERSION
-git tag $FORCE v$MAJOR.$MINOR
-git tag $FORCE v$MAJOR
+git tag -f v$MAJOR.$MINOR # these are always forced
+git tag -f v$MAJOR
 
 git push origin v$VERSION v$MAJOR.$MINOR v$MAJOR $FORCE
