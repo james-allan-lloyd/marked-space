@@ -37,6 +37,7 @@ mod page_statuses;
 mod parent;
 mod responses;
 mod restrictions;
+mod retry;
 mod sort;
 mod sync;
 mod sync_operation;
@@ -45,6 +46,7 @@ mod template_renderer;
 mod test_helpers;
 
 use crate::error::{ConfluenceError, Result};
+use crate::retry::RetryConfig;
 use crate::sync::sync_space;
 
 fn check_environment_vars() -> Result<()> {
@@ -82,6 +84,11 @@ pub struct Args {
     /// space editable to anyone who has access to the space.
     #[arg(long)]
     check: bool,
+
+    /// How many times to retry a request that was rate limited (429) or failed transiently.
+    /// Can also be specified in $MARKED_SPACE_MAX_RETRIES.
+    #[arg(long)]
+    max_retries: Option<u32>,
 }
 
 fn main() -> Result<ExitCode> {
@@ -102,7 +109,11 @@ fn main() -> Result<ExitCode> {
             return Ok(ExitCode::FAILURE);
         }
     };
-    let confluence_client = ConfluenceClient::new(host.as_str());
+    let mut retry_config = RetryConfig::from_env();
+    if let Some(max_retries) = args.max_retries {
+        retry_config.max_retries = max_retries;
+    }
+    let confluence_client = ConfluenceClient::new(host.as_str()).with_retry_config(retry_config);
 
     match sync_space(confluence_client, &mut markdown_space, args) {
         Ok(_) => Ok(ExitCode::SUCCESS),

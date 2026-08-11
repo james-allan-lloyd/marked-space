@@ -177,6 +177,32 @@ cargo run -- --space example/team
 cargo watch -x test
 ```
 
+## Rate Limiting and Retries
+
+Confluence Cloud rate limits its REST API, and a sync of a larger space can run
+into `429 Too Many Requests`. Marked-space retries these automatically: it waits
+for the period the server asks for in the `Retry-After` header, or falls back to
+an exponential backoff with jitter (500ms, then 1s, 2s, 4s..., capped at 60s).
+Transient server errors (5xx) and dropped connections are retried the same way,
+but only for requests that can't be duplicated by repeating them, so a failed
+page creation is never retried blindly.
+
+Retries are reported as they happen, for example:
+
+```text
+warning: GET /wiki/api/v2/pages/12345/properties: rate limited by Confluence (429). Retrying in 2.0s (3/8).
+```
+
+The defaults (8 retries) suit most spaces. If a sync still gives up while rate
+limited, allow more retries or slow the backoff down:
+
+| Setting                                 | Default | Description                                   |
+| --------------------------------------- | ------- | --------------------------------------------- |
+| `--max-retries`                         | 8       | Retries after the initial attempt             |
+| `$MARKED_SPACE_MAX_RETRIES`             | 8       | As above, for when a flag is inconvenient     |
+| `$MARKED_SPACE_RETRY_INITIAL_BACKOFF_MS`| 500     | Wait before the first retry, in milliseconds  |
+| `$MARKED_SPACE_RETRY_MAX_BACKOFF_SECS`  | 60      | Longest single wait, in seconds               |
+
 ## Further Reading
 
 Checkout the user guide in the [example space](example/team/index.md)... this
