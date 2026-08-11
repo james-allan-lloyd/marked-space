@@ -80,7 +80,7 @@ pub fn sync_restrictions(
     };
     if let Some(response) = updated {
         if !response.status().is_success() {
-            println!("{}", &response.text()?);
+            println!("{}", response.text()?);
             return Err(anyhow::anyhow!("Not able to update restrictions"));
         }
     }

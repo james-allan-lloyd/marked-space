@@ -279,7 +279,7 @@ mod test {
         assert!(
             is_sorted(&test_sorter.result),
             "Not sorted: {:?}",
-            &test_sorter.result
+            test_sorter.result
         );
 
         let expected = output_moves
