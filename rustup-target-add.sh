@@ -12,5 +12,7 @@ fi
 
 rustup target add $CARGO_TARGET
 
-# use install here so we don't have to map in the run images
-cargo install --target $CARGO_TARGET --path .
+# use install here so we don't have to map in the run images.
+# --locked builds the versions in Cargo.lock: cargo install otherwise re-resolves
+# dependencies, and picks up releases that need a newer rustc than the image has.
+cargo install --locked --target $CARGO_TARGET --path .

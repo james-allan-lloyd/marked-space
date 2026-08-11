@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
 # Copy the Rust files
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo 'fn main() {}' > src/main.rs  # Dummy file to force dependency resolution
-RUN cargo fetch
+RUN cargo fetch --locked
 
 COPY .cargo ./.cargo
 COPY rustup-target-add.sh ./
