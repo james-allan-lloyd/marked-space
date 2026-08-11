@@ -2,7 +2,7 @@ use path_clean::PathClean;
 use std::{
     collections::{HashMap, HashSet},
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use comrak::nodes::NodeLink;
@@ -141,7 +141,7 @@ impl LinkGenerator {
     }
 
     fn get_page_url(&self, filename: &Path) -> Option<String> {
-        if filename == PathBuf::from("index.md") {
+        if filename == Path::new("index.md") {
             return Some(self.id_to_url(&self.homepage_id));
         }
         if let Ok(s) = Self::path_to_string(filename) {
@@ -191,8 +191,8 @@ impl LinkGenerator {
             if link_empty {
                 print_warning(&format!(
                     "file link {} in {} couldn't be resolved",
-                    &local_link.text,
-                    &confluence_formatter.source.display(),
+                    local_link.text,
+                    confluence_formatter.source.display(),
                 ));
             }
 

@@ -16,7 +16,6 @@ use std::{
 use anyhow::Context;
 use comrak::nodes::NodeLink;
 use regex::Regex;
-use reqwest::blocking::multipart::Part;
 
 use crate::{
     confluence_client::ConfluenceClient,
@@ -147,12 +146,12 @@ pub fn sync_page_attachments(
             return Ok(());
         }
 
-        let file_part = Part::file(&attachment.link.target)
-            .context(format!("Opening {}", attachment.link.target.display()))?
-            .file_name(attachment.link.attachment_name());
-
-        let response =
-            confluence_client.create_or_update_attachment(page_id, file_part, &hashstring)?;
+        let response = confluence_client.create_or_update_attachment(
+            page_id,
+            &attachment.link.target,
+            &attachment_name,
+            &hashstring,
+        )?;
 
         if !response.status().is_success() {
             // Handle non-2xx responses (e.g., 400 Bad Request)

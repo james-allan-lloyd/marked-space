@@ -42,13 +42,11 @@ impl ConfluenceError {
             StatusCode::UNAUTHORIZED => {
                 String::from("Unauthorized. Check your API_USER/API_TOKEN and try again.")
             }
-            _ => {
-                let json: serde_json::Value = match response.json() {
-                    Ok(j) => j,
-                    Err(_) => todo!(),
-                };
-                json["errors"][0].to_string()
-            }
+            StatusCode::TOO_MANY_REQUESTS => String::from(
+                "Rate limited by Confluence. Retries were exhausted: \
+                 slow the sync down or allow more retries with $MARKED_SPACE_MAX_RETRIES.",
+            ),
+            _ => describe_error_body(response),
         };
         ConfluenceError::FailedRequest {
             status,
@@ -64,6 +62,33 @@ impl ConfluenceError {
             errors,
         }
         .into()
+    }
+}
+
+/// Describe the body of a failed response. Confluence answers with JSON for most errors, but
+/// gateway and rate limiting responses are often HTML or plain text, so fall back to the raw body.
+fn describe_error_body(response: Response) -> String {
+    const MAX_BODY_LENGTH: usize = 512;
+
+    let body = match response.text() {
+        Ok(body) => body,
+        Err(err) => return format!("could not read response body: {}", err),
+    };
+
+    match serde_json::from_str::<serde_json::Value>(&body) {
+        Ok(json) if !json["errors"][0].is_null() => json["errors"][0].to_string(),
+        Ok(json) if !json["message"].is_null() => json["message"].to_string(),
+        _ => {
+            let body = body.trim();
+            if body.len() > MAX_BODY_LENGTH {
+                format!(
+                    "{}...",
+                    body.chars().take(MAX_BODY_LENGTH).collect::<String>()
+                )
+            } else {
+                String::from(body)
+            }
+        }
     }
 }
 

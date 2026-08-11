@@ -10,7 +10,7 @@ pub(crate) fn parse_emoji(page: &MarkdownPage) -> Option<String> {
             emoji.as_str().chars().next().unwrap() as u32
         ))
     } else {
-        print_warning(&format!("Unknown short code '{}'", &emoji_string));
+        print_warning(&format!("Unknown short code '{}'", emoji_string));
         None
     }
 }

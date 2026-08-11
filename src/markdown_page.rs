@@ -152,19 +152,16 @@ impl<'a> MarkdownPage<'a> {
                     ));
                 }
             }
-            NodeValue::Link(node_link) => {
-                if LocalLink::is_local_link(&node_link.url) {
-                    if let Ok(local_link) = LocalLink::from_str(&node_link.url, markdown_page) {
-                        if local_link.is_page() {
-                            local_links.push(local_link);
-                        } else {
-                            attachments.push(Attachment::file(local_link));
-                        }
+            // remote links are left alone
+            NodeValue::Link(node_link) if LocalLink::is_local_link(&node_link.url) => {
+                if let Ok(local_link) = LocalLink::from_str(&node_link.url, markdown_page) {
+                    if local_link.is_page() {
+                        local_links.push(local_link);
                     } else {
-                        errors.push(format!("Failed to parse local link: {}", node_link.url));
+                        attachments.push(Attachment::file(local_link));
                     }
                 } else {
-                    // remote link
+                    errors.push(format!("Failed to parse local link: {}", node_link.url));
                 }
             }
             _ => (),

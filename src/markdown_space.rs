@@ -211,7 +211,7 @@ impl<'a> MarkdownSpace<'a> {
             return Err(ConfluenceError::generic_error(format!(
                 "{} Error(s) parsing space:\n  {}",
                 parse_errors.len(),
-                &error_string
+                error_string
             )));
         }
 

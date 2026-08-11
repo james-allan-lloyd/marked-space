@@ -91,13 +91,13 @@ pub fn sync_page_properties(
         let update_response = if property_update.value.is_null() {
             print_status(
                 Status::Deleted,
-                &format!("property {}", &property_update.key),
+                &format!("property {}", property_update.key),
             );
             confluence_client.delete_property(page_id, &property_update.id)
         } else if property_update.id.is_empty() {
             print_status(
                 Status::Created,
-                &format!("property {}", &property_update.key),
+                &format!("property {}", property_update.key),
             );
             confluence_client.create_property(
                 page_id,
@@ -106,7 +106,7 @@ pub fn sync_page_properties(
         } else {
             print_status(
                 Status::Updated,
-                &format!("property {}", &property_update.key),
+                &format!("property {}", property_update.key),
             );
             confluence_client.set_property(
                 page_id,
