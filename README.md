@@ -177,6 +177,38 @@ cargo run -- --space example/team
 cargo watch -x test
 ```
 
+## Making a Release
+
+Releases are cut from `main` by tagging the version already in `Cargo.toml`:
+
+```bash
+git checkout main && git pull
+bash scripts/tag-release.sh
+```
+
+The script refuses to run off `main`, with a dirty working tree, or when local
+`main` differs from `origin/main`. It then pushes three tags:
+
+| Tag        | Purpose                                                        |
+| ---------- | -------------------------------------------------------------- |
+| `v1.2.3`   | New and immutable. Pushing it is what triggers the release.      |
+| `v1.2`     | Moved to the new release.                                        |
+| `v1`       | Moved to the new release. This is what `@v1` users get.          |
+
+Only the full `vX.Y.Z` tag matches the trigger in `rust-release.yml`, but the
+moving tags matter just as much: consumers pin to them (`uses:
+james-allan-lloyd/marked-space@v1`, and the image tag in `action.yml`), so a
+release that leaves them behind reaches nobody.
+
+Pushing the tag runs the tests, builds the Linux and Windows binaries, publishes
+the Docker image as `v1.2.3`, `v1.2` and `v1`, and then creates the GitHub
+release **as a draft**. The last step is manual: open the draft release, add the
+notes and publish it.
+
+Afterwards, bump `version` in `Cargo.toml` for the next cycle (the "Begin 1.2.4"
+commits). Creating the version tag fails if that version was already released,
+so a forgotten bump stops the release rather than moving an existing one.
+
 ## Rate Limiting and Retries
 
 Confluence Cloud rate limits its REST API, and a sync of a larger space can run
