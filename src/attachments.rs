@@ -64,7 +64,9 @@ pub fn render_link_enter(nl: &NodeLink, output: &mut WriteWithLast) -> io::Resul
         output.write_all(format!(" ac:title=\"{}\"", nl.title).as_bytes())?;
     }
     output.write_all(b">")?;
-    if nl.url.contains("://") {
+    // Same test as the one that decides whether to collect the image as an attachment, so the
+    // renderer can't reference an attachment that was never uploaded.
+    if !LocalLink::is_local_link(&nl.url) {
         output.write_all(b"<ri:url ri:value=\"")?;
         escape_href(output, nl.url.as_bytes())?;
     } else {
@@ -244,6 +246,23 @@ mod test {
 
         assert_eq!(String::from_utf8(cursor.into_inner()).unwrap(),
             "<ac:image ac:align=\"center\" ac:title=\"some title\"><ri:attachment ri:filename=\"assets_image.png\"/></ac:image>"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_renders_images_with_a_scheme_as_external() -> TestResult {
+        // Images are classified with the same test as links, so a url that isn't collected as an
+        // attachment isn't rendered as one either.
+        let rendered_page = test_render("# Title\n\n![logo](ac:image-macro)")?;
+
+        assert!(
+            rendered_page
+                .content
+                .contains(r#"<ri:url ri:value="ac:image-macro"/>"#),
+            "expected {} to reference the url, not an attachment",
+            rendered_page.content
         );
 
         Ok(())

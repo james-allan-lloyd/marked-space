@@ -9,7 +9,7 @@ use comrak::nodes::NodeLink;
 
 use crate::{
     confluence_page::{ConfluenceNode, ConfluenceNodeType, ConfluencePageData},
-    confluence_storage_renderer::ConfluenceStorageRenderer,
+    confluence_storage_renderer::{escape_href, ConfluenceStorageRenderer},
     console::print_warning,
     error::{ConfluenceError, Result},
     local_link::LocalLink,
@@ -163,9 +163,11 @@ impl LinkGenerator {
         confluence_formatter: &mut ConfluenceStorageRenderer,
         no_children: bool,
     ) -> io::Result<()> {
-        if nl.url.contains("://") {
+        // Links Confluence resolves itself: external URLs, and mailto: links which it renders
+        // as an ordinary anchor.
+        if !LocalLink::is_local_link(&nl.url) {
             confluence_formatter.output.write_all(b"<a href=\"")?;
-            confluence_formatter.output.write_all(nl.url.as_bytes())?;
+            escape_href(&mut confluence_formatter.output, nl.url.as_bytes())?;
             confluence_formatter.output.write_all(b"\">")?;
             return Ok(());
         }
@@ -222,7 +224,7 @@ impl LinkGenerator {
         nl: &NodeLink,
         confluence_formatter: &mut ConfluenceStorageRenderer,
     ) -> io::Result<()> {
-        if nl.url.contains("://") {
+        if !LocalLink::is_local_link(&nl.url) {
             confluence_formatter.output.write_all(b"</a>")?;
         } else {
             let local_link = relative_local_link(nl, confluence_formatter);

@@ -590,6 +590,89 @@ mod tests {
     }
 
     #[test]
+    fn it_renders_mailto_links() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let page = page_from_str(
+            "page.md",
+            "# My Page Title\n\n[Contact](mailto:user@example.com)",
+            &arena,
+        )?;
+        let html_content = page.to_html_string(&LinkGenerator::default_test())?;
+
+        assert!(
+            html_content.contains(r#"<a href="mailto:user@example.com">Contact</a>"#),
+            "expected {} to contain a mailto anchor",
+            html_content
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_renders_email_autolinks() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let page = page_from_str(
+            "page.md",
+            "# My Page Title\n\nMail me at <user@example.com>.",
+            &arena,
+        )?;
+        let html_content = page.to_html_string(&LinkGenerator::default_test())?;
+
+        assert!(
+            html_content.contains(r#"<a href="mailto:user@example.com">user@example.com</a>"#),
+            "expected {} to contain a mailto anchor",
+            html_content
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_escapes_mailto_link_parameters() -> TestResult {
+        // Storage format is XHTML, so a bare & in the href would fail to parse.
+        let arena = Arena::<AstNode>::new();
+        let page = page_from_str(
+            "page.md",
+            "# My Page Title\n\n[Contact](mailto:user@example.com?subject=Hello&body=Hi)",
+            &arena,
+        )?;
+        let html_content = page.to_html_string(&LinkGenerator::default_test())?;
+
+        assert!(
+            html_content.contains(
+                r#"<a href="mailto:user@example.com?subject=Hello&amp;body=Hi">Contact</a>"#
+            ),
+            "expected {} to contain an escaped mailto anchor",
+            html_content
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn it_does_not_treat_mailto_links_as_local() -> TestResult {
+        let arena = Arena::<AstNode>::new();
+        let page = page_from_str(
+            "page.md",
+            "# My Page Title\n\n[Contact](mailto:user@example.com) or <other@example.com>",
+            &arena,
+        )?;
+
+        assert!(
+            page.attachments.is_empty(),
+            "mailto links should not be collected as attachments: {:?}",
+            page.attachments
+        );
+        assert!(
+            page.local_links.is_empty(),
+            "mailto links should not be collected as local links: {:?}",
+            page.local_links
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn it_renders_templates() -> TestResult {
         let arena = Arena::<AstNode>::new();
         let markdown_content = "# compulsory title\n{{filename}}";

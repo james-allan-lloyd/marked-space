@@ -39,8 +39,15 @@ pub fn simplify_path(p: &Path) -> Result<PathBuf> {
 
 impl LocalLink {
     // TODO: make from_str return an optional local link?
+
+    /// Whether a link resolves against the files in the space, rather than being one Confluence
+    /// follows itself. `://` covers remote urls whatever their scheme; `mailto:` has to be named
+    /// separately because it has no authority part, and `ac:` is Confluence's own link scheme.
+    ///
+    /// Everything that classifies a link - rendering, and collecting attachments and page links -
+    /// goes through here, so a link can't render one way and be collected another.
     pub fn is_local_link(text: &str) -> bool {
-        !(text.starts_with("http://") || text.starts_with("https://") || text.starts_with("ac:"))
+        !(text.contains("://") || text.starts_with("mailto:") || text.starts_with("ac:"))
     }
 
     fn split_anchor(text: &str, page_path: &Path) -> Result<(PathBuf, Option<String>)> {
@@ -116,6 +123,25 @@ mod test {
     use crate::error::TestResult;
 
     use super::LocalLink;
+
+    #[test]
+    fn it_only_treats_schemeless_links_as_local() -> TestResult {
+        assert!(LocalLink::is_local_link("test.md"));
+        assert!(LocalLink::is_local_link("../test.md#anchor"));
+        assert!(LocalLink::is_local_link("#anchor"));
+        assert!(LocalLink::is_local_link("assets/image.png"));
+
+        assert!(!LocalLink::is_local_link("http://example.com"));
+        assert!(!LocalLink::is_local_link("https://example.com"));
+        assert!(!LocalLink::is_local_link("ftp://example.com/file.txt"));
+        assert!(!LocalLink::is_local_link("ac:something"));
+        assert!(!LocalLink::is_local_link("mailto:user@example.com"));
+        assert!(!LocalLink::is_local_link(
+            "mailto:user@example.com?subject=Hello"
+        ));
+
+        Ok(())
+    }
 
     #[test]
     fn it_parses_local_links_without_anchor() -> TestResult {
