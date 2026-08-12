@@ -38,3 +38,21 @@ jobs:
     secrets: inherit
     with:
       push: false
+
+  # Runs the action as it is defined in this branch, so that a change to action.yml is checked
+  # before it's released. Forks don't get the credentials, hence the repository check.
+  test_github_action:
+    if: github.repository == 'james-allan-lloyd/marked-space'
+    needs: docker
+    runs-on: ubuntu-latest
+    name: Generate example space using github action
+    steps:
+      - uses: actions/checkout@v4
+      - name: Marked Space Test
+        id: marked-space-test
+        uses: ./
+        with:
+          space-directory: "example/team"
+          confluence-host: ${{ vars.CONFLUENCE_HOST }}
+          api-user: ${{ secrets.API_USER }}
+          api-token: ${{ secrets.API_TOKEN }}
