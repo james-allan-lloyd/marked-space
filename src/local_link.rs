@@ -40,9 +40,12 @@ pub fn simplify_path(p: &Path) -> Result<PathBuf> {
 impl LocalLink {
     // TODO: make from_str return an optional local link?
 
-    /// Links that resolve against the files in the space, as opposed to ones Confluence follows
-    /// on its own: anything with a scheme (`https://`, `mailto:`) or one of Confluence's own
-    /// `ac:` links is left alone.
+    /// Whether a link resolves against the files in the space, rather than being one Confluence
+    /// follows itself. `://` covers remote urls whatever their scheme; `mailto:` has to be named
+    /// separately because it has no authority part, and `ac:` is Confluence's own link scheme.
+    ///
+    /// Everything that classifies a link - rendering, and collecting attachments and page links -
+    /// goes through here, so a link can't render one way and be collected another.
     pub fn is_local_link(text: &str) -> bool {
         !(text.contains("://") || text.starts_with("mailto:") || text.starts_with("ac:"))
     }
