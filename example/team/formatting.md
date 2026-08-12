@@ -78,6 +78,9 @@ And a link to a section in this page: [Code](#Code)
 
 And a link to a section in another page: [Sub page section](subpages/subpage1.md#Sub-Page-Section)
 
+Email addresses become mail links, either written out as <someone@example.com> or
+with your own text: [Contact us](mailto:someone@example.com?subject=Marked%20Space)
+
 ![Alt text](image.png "A rusty crustation")
 
 ![External Image](http://confluence.atlassian.com/images/logo/confluence_48_trans.png "An external image")
