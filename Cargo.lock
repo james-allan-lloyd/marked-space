@@ -1770,7 +1770,7 @@ dependencies = [
 [[package]]
 name = "saphyr-serde"
 version = "0.1.0"
-source = "git+https://github.com/james-allan-lloyd/saphyr-serde.git#9aa5721470837f3b5d8b206bca53083a24783ce7"
+source = "git+https://github.com/james-allan-lloyd/saphyr-serde.git#17c74b4602f8c63c28c350881d649906dda43750"
 dependencies = [
  "regex",
  "saphyr-parser",
