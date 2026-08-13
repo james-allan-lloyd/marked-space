@@ -17,9 +17,9 @@ jobs:
   test:
     runs-on: ${{ inputs.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         continue-on-error: false
         with:
           path: |
@@ -41,9 +41,9 @@ jobs:
     needs:
       - test
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         continue-on-error: false
         with:
           path: |
@@ -57,7 +57,7 @@ jobs:
       - name: Build release
         run: cargo build --release
       - name: "Upload Artifact"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.os }}
           path: target/release/marked-space${{ inputs.os == 'windows-latest' && '.exe' || '' }}
