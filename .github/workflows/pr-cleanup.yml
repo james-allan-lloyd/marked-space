@@ -1,0 +1,69 @@
+name: PR Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+    branches: ["main"]
+
+jobs:
+  # Pull request builds publish an image tagged pr-<number> so that the example can run the
+  # action against the branch. Delete it once the pull request is done with. The tag is kept
+  # while the pull request is open, so a failing run can still be reproduced by pulling it.
+  delete_image_tag:
+    if: github.repository == 'james-allan-lloyd/marked-space'
+    runs-on: ubuntu-latest
+    name: Delete the image built for this pull request
+    steps:
+      - name: Delete image tag
+        env:
+          IMAGE_NAME: jamesallanlloyd/marked-space
+          TAG: pr-${{ github.event.number }}
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        # A tag left behind is not worth failing a merged pull request over, so problems are
+        # reported as warnings. Note no `set -x`: it would put the credentials in the log.
+        run: |
+          set -uo pipefail
+
+          auth=""
+          access_token=$(curl -sS -X POST https://hub.docker.com/v2/auth/token \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg i "$DOCKERHUB_USER" --arg s "$DOCKERHUB_TOKEN" \
+                  '{identifier: $i, secret: $s}')" \
+            | jq -r '.access_token // empty')
+
+          if [[ -n "$access_token" ]]; then
+            auth="Bearer $access_token"
+          else
+            # Older endpoint, in case the account still authenticates that way
+            jwt=$(curl -sS -X POST https://hub.docker.com/v2/users/login/ \
+              -H 'Content-Type: application/json' \
+              -d "$(jq -nc --arg u "$DOCKERHUB_USER" --arg p "$DOCKERHUB_TOKEN" \
+                    '{username: $u, password: $p}')" \
+              | jq -r '.token // empty')
+            [[ -n "$jwt" ]] && auth="JWT $jwt"
+          fi
+
+          if [[ -z "$auth" ]]; then
+            echo "::warning::Could not authenticate to Docker Hub, leaving $IMAGE_NAME:$TAG behind"
+            exit 0
+          fi
+
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE \
+            -H "Authorization: $auth" \
+            "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG/")
+
+          case "$status" in
+            200 | 202 | 204)
+              echo "Deleted $IMAGE_NAME:$TAG"
+              ;;
+            404)
+              echo "No $IMAGE_NAME:$TAG to delete"
+              ;;
+            401 | 403)
+              echo "::warning::Not allowed to delete $IMAGE_NAME:$TAG (HTTP $status). The access token needs the delete permission."
+              ;;
+            *)
+              echo "::warning::Deleting $IMAGE_NAME:$TAG failed with HTTP $status"
+              ;;
+          esac
