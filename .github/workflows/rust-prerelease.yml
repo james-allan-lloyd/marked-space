@@ -31,6 +31,12 @@ jobs:
     name: Generate example space using github action
     steps:
       - uses: actions/checkout@v4
+      - name: Point the action at the image just built from main
+        env:
+          IMAGE: jamesallanlloyd/marked-space:latest
+        run: |
+          sed -i "s|^  image: .*|  image: \"docker://$IMAGE\"|" action.yml
+          cat action.yml
       - name: Marked Space Test
         id: marked-space-test
         uses: ./
