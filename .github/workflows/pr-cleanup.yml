@@ -1,0 +1,43 @@
+name: PR Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+    branches: ["main"]
+
+jobs:
+  # Pull request builds publish an image tagged pr-<number> so that the example can run the
+  # action against the branch. Delete it once the pull request is done with. The tag is kept
+  # while the pull request is open, so a failing run can still be reproduced by pulling it.
+  delete_image_tag:
+    if: github.repository == 'james-allan-lloyd/marked-space'
+    runs-on: ubuntu-latest
+    name: Delete the image built for this pull request
+    steps:
+      - name: Delete image tag
+        env:
+          IMAGE_NAME: jamesallanlloyd/marked-space
+          TAG: pr-${{ github.event.number }}
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        # Docker Hub has no action for this, so it's the API. A tag left behind is not worth
+        # failing a merged pull request over, so anything unexpected is a warning. A failed login
+        # leaves the token empty and shows up as the 401 below. Note no `set -x`: it would put
+        # the credentials in the log.
+        run: |
+          set -uo pipefail
+
+          token=$(curl -sS -X POST https://hub.docker.com/v2/users/login/ \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg u "$DOCKERHUB_USER" --arg p "$DOCKERHUB_TOKEN" \
+                  '{username: $u, password: $p}')" \
+            | jq -r '.token // empty')
+
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE \
+            -H "Authorization: JWT $token" \
+            "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG/")
+
+          case "$status" in
+            2* | 404) echo "$IMAGE_NAME:$TAG is gone (HTTP $status)" ;;
+            *) echo "::warning::Could not delete $IMAGE_NAME:$TAG (HTTP $status). Check that the access token has the delete permission." ;;
+          esac

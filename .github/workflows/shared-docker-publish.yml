@@ -6,6 +6,14 @@ on:
       push:
         required: true
         type: boolean
+      tag:
+        description: >
+          Push the manifest under this tag alone instead of the release tags. Pull request builds
+          use it to publish an image of the branch that the action can then be run against,
+          without touching latest or test.
+        required: false
+        type: string
+        default: ""
 
 env:
   REGISTRY: docker.io
@@ -106,9 +114,13 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
+            # a branch build gets a tag of its own and nothing else: the rules below are all
+            # inert on a pull_request event apart from "test", which is disabled to match.
+            # The line is left empty rather than disabled so that no empty value is ever parsed
+            ${{ inputs.tag != '' && format('type=raw,value={0}', inputs.tag) || '' }}
             # set latest tag for default branch
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=test
+            type=raw,value=test,enable=${{ inputs.tag == '' }}
             type=schedule
             type=ref,event=tag
             type=semver,pattern=v{{major}}.{{minor}}

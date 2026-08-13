@@ -37,4 +37,32 @@ jobs:
     uses: ./.github/workflows/shared-docker-publish.yml
     secrets: inherit
     with:
-      push: false
+      push: true
+      # Must match the image the example job points the action at below. Reusable workflow
+      # inputs can't read the env context, so the tag can't be shared through a variable.
+      tag: pr-${{ github.event.number }}
+
+  # Runs the action as it is defined in this branch, against the image built from it, so that
+  # both are checked before release. The repository check keeps it from running in forks of
+  # the repository, which have neither the credentials nor the Confluence space.
+  test_github_action:
+    if: github.repository == 'james-allan-lloyd/marked-space'
+    needs: docker
+    runs-on: ubuntu-latest
+    name: Generate example space using github action
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point the action at the image built for this pull request
+        env:
+          IMAGE: jamesallanlloyd/marked-space:pr-${{ github.event.number }}
+        run: |
+          sed -i "s|^  image: .*|  image: \"docker://$IMAGE\"|" action.yml
+          cat action.yml
+      - name: Marked Space Test
+        id: marked-space-test
+        uses: ./
+        with:
+          space-directory: "example/team"
+          confluence-host: ${{ vars.CONFLUENCE_HOST }}
+          api-user: ${{ secrets.API_USER }}
+          api-token: ${{ secrets.API_TOKEN }}
