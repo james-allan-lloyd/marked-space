@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Generate example space using github action
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Point the action at the image just built from main
         env:
           IMAGE: jamesallanlloyd/marked-space:latest
@@ -53,21 +53,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download ubuntu
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ubuntu-latest
 
       - name: Download windows
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: windows-latest
 
-      - uses: "marvinpinto/action-automatic-releases@latest"
+      # marvinpinto/action-automatic-releases moved the `latest` tag itself. The releases API
+      # only creates a tag when it's missing, so without this the Development Build would stay
+      # pinned to wherever `latest` already points. Falls back to creating it if it's ever
+      # deleted.
+      - name: Point the latest tag at this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh api -X PATCH "repos/$REPO/git/refs/tags/latest" -f sha="$SHA" -F force=true ||
+            gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/latest" -f sha="$SHA"
+
+      - uses: softprops/action-gh-release@v3
         with:
-          repo_token: ${{ github.token }}
-          automatic_release_tag: latest
+          tag_name: latest
           prerelease: true
-          title: Development Build
+          name: Development Build
           files: |
             marked-space
             marked-space.exe
